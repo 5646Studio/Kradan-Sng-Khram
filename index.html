@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>สุวรรณภูมิ : สงครามเจ้านคร</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#0d0b08;color:#f0e6cc;font-family:'Noto Sans Thai',system-ui,sans-serif;
+  font-size:13px;min-height:100vh;
+  background-image:radial-gradient(ellipse at 50% -10%,#2a2116 0%,#0d0b08 60%)}
+.wrap{max-width:460px;margin:0 auto;padding:18px 14px 44px}
+.hero{text-align:center;padding:24px 0 14px}
+.hero h1{font-size:27px;color:#ffcf40;letter-spacing:2px;text-shadow:0 2px 14px rgba(255,207,64,.32)}
+.hero p{font-size:11.5px;color:#8a7a55;margin-top:6px}
+.srv{display:inline-block;margin-top:10px;background:#1c1710;border:1px solid #4a3a22;
+  border-radius:18px;padding:5px 16px;font-size:11px;color:#c7b78e}
+.srv b{color:#8fbf5f}
+.card{background:#14110c;border:1px solid #2f2618;border-radius:12px;padding:14px;margin-top:13px}
+.card h2{font-size:14px;color:#ffcf40;margin-bottom:10px;border-bottom:1px solid #2f2618;padding-bottom:7px}
+.card h3{font-size:12px;color:#c7b78e;margin:12px 0 5px}
+.card p,.card li{font-size:11.5px;color:#b9ac92;line-height:1.75}
+.card ul{padding-left:17px}
+input{width:100%;padding:12px;margin-top:8px;background:#1c1710;border:1px solid #4a3a22;
+  border-radius:9px;color:#f0e6cc;font-size:15px;font-family:inherit}
+input::placeholder{color:#5f553e}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;
+  margin-top:9px;border:none;border-radius:10px;font-family:inherit;font-size:14px;
+  font-weight:700;cursor:pointer}
+.btn:disabled{opacity:.5}
+.b1{background:linear-gradient(#6a8f36,#4d6b26);color:#fff}
+.b2{background:#3a2e1c;color:#ffcf40;border:1px solid #6b552f}
+.b3{background:#2a2218;color:#a89468}
+.b4{background:#4a2020;color:#ff9a9a}
+.bg{background:#fff;color:#333}
+.bf{background:#1877f2;color:#fff}
+.two{display:flex;gap:7px}.two .btn{flex:1}
+.or{text-align:center;font-size:10.5px;color:#5f553e;margin:12px 0 2px}
+.hint{font-size:10px;color:#6a5f45;margin-top:9px;line-height:1.6}
+.err{background:#3a1616;border:1px solid #7a2626;border-radius:8px;padding:9px;
+  font-size:11.5px;color:#ff9a9a;margin-top:9px}
+.ok{background:#1a2a16;border:1px solid #4a7a2e;border-radius:8px;padding:9px;
+  font-size:11.5px;color:#9fe07a;margin-top:9px}
+.warn{background:#2a1a10;border:1px solid #6b4a2e;border-radius:8px;padding:9px;
+  font-size:11px;color:#ffb08a;margin-top:10px;line-height:1.6}
+.center{text-align:center;color:#8a7a55;padding:18px;font-size:12px}
+.me{display:flex;align-items:center;gap:11px}
+.av{flex:0 0 46px;height:46px;border-radius:50%;background:#2a2218;border:2px solid #6b552f;
+  display:flex;align-items:center;justify-content:center;font-size:22px}
+.me b{display:block;font-size:16px;color:#ffcf40}
+.me i{display:block;font-style:normal;font-size:10.5px;color:#8a7a55;margin-top:2px}
+.stat{background:#100d09;border:1px solid #251e14;border-radius:8px;padding:9px;
+  margin-top:11px;font-size:11.5px;color:#b9ac92;text-align:center}
+.tabs{display:flex;gap:4px;margin-bottom:10px}
+.tab{flex:1;padding:8px 4px;background:#2a2218;border:1px solid #3a2e1c;border-radius:7px;
+  color:#8a7a55;font-size:10.5px;font-family:inherit;cursor:pointer}
+.tab.on{background:#5a4a1e;color:#ffcf40;border-color:#8a6f3a}
+.rk{display:flex;align-items:center;gap:9px;padding:7px 6px;border-bottom:1px solid #241d14}
+.rk.mine{background:#1d2616;border-radius:7px}
+.rkn{flex:0 0 26px;height:26px;border-radius:50%;background:#2a2218;display:flex;
+  align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#a89468}
+.rkn.r1{background:#8a6f1e;color:#ffe98a}.rkn.r2{background:#5a5a5a;color:#eee}
+.rkn.r3{background:#6b3a1e;color:#ffbf8a}
+.rkm{flex:1;min-width:0}
+.rkm b{display:block;font-size:12px;color:#f0e6cc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rkm i{font-style:normal;font-size:9.5px;color:#7a6c4e}
+.rkv{font-size:13px;font-weight:700;color:#ffcf40}
+.ft{text-align:center;font-size:10px;color:#4f4635;margin-top:22px;line-height:1.9}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>สุวรรณภูมิ</h1>
+    <p>สงครามเจ้านคร · เกมวางแผนสร้างอาณาจักร</p>
+    <div class="srv">เซิร์ฟเวอร์ <b id="srvname">ทวารวดี</b> · <span id="mode">กำลังตรวจสอบ…</span></div>
+  </div>
+
+  <div class="card" id="scrLoad"><p class="center">⏳ กำลังเชื่อมต่อ…</p></div>
+
+  <div class="card hide" id="scrLogin">
+    <h2>🔑 เข้าสู่ระบบ</h2>
+    <button class="btn bg" id="lgGoogle"><b style="color:#4285f4">G</b> เข้าด้วย Google</button>
+    <button class="btn bf" id="lgFb"><b>f</b> เข้าด้วย Facebook</button>
+    <div id="emailBox">
+      <div class="or">— หรือใช้อีเมล —</div>
+      <input type="email" id="em" placeholder="อีเมล" autocomplete="email">
+      <input type="password" id="pw" placeholder="รหัสผ่าน 6 ตัวขึ้นไป" autocomplete="current-password">
+      <div class="two">
+        <button class="btn b1" id="lgEmail">เข้าสู่ระบบ</button>
+        <button class="btn b2" id="rgEmail">สมัครใหม่</button>
+      </div>
+    </div>
+    <div class="or">— หรือ —</div>
+    <button class="btn b3" id="lgGuest">👤 เล่นแบบผู้เยี่ยมชม</button>
+    <div id="lgMsg"></div>
+    <div class="hint">⚠ ถ้าเปิดลิงก์จาก LINE / Messenger ให้กด ⋮ → <b>เปิดใน Chrome</b> ก่อน
+      เพราะ Google ไม่อนุญาตให้ล็อกอินจากเบราว์เซอร์ในแอป</div>
+  </div>
+
+  <div class="card hide" id="scrName">
+    <h2>✦ ตั้งชื่อเจ้านคร</h2>
+    <p>ชื่อนี้จะแสดงบนแผนที่และตารางอันดับ ใช้ซ้ำกับคนอื่นไม่ได้ และ<b>เปลี่ยนภายหลังไม่ได้</b></p>
+    <input type="text" id="nmIn" maxlength="16" placeholder="2-16 ตัวอักษร">
+    <div id="nmMsg"></div>
+    <button class="btn b1" id="nmGo">ยืนยันชื่อ</button>
+    <button class="btn b3" id="nmOut">ออกจากระบบ</button>
+  </div>
+
+  <div class="card hide" id="scrLobby">
+    <div class="me"><div class="av">🏯</div><div><b id="lbName"></b><i id="lbProv"></i></div></div>
+    <div class="stat" id="lbStat">กำลังโหลดข้อมูล…</div>
+    <button class="btn b1" id="lbPlay">▶ เข้าเล่น</button>
+    <div class="warn hide" id="lbGuest">คุณเล่นแบบ <b>ผู้เยี่ยมชม</b> — ถ้าออกจากระบบหรือล้างข้อมูลเบราว์เซอร์
+      ความคืบหน้าจะหาย ผูกกับ Google เพื่อเก็บไว้ถาวร
+      <button class="btn b2" id="lbLink">🔗 ผูกกับบัญชี Google</button></div>
+    <div id="lbMsg"></div>
+    <button class="btn b2" id="lbReset">🔄 เริ่มเกมใหม่</button>
+    <button class="btn b3" id="lbOut">🚪 ออกจากระบบ</button>
+  </div>
+
+  <div class="card hide" id="scrOff">
+    <h2>🎮 โหมดออฟไลน์</h2>
+    <p>ยังไม่ได้ตั้งค่าเซิร์ฟเวอร์ออนไลน์ — เล่นและเก็บข้อมูลในเครื่องนี้เท่านั้น</p>
+    <div class="stat" id="offStat"></div>
+    <input type="text" id="offName" maxlength="16" placeholder="ตั้งชื่อเจ้านคร">
+    <div id="offMsg"></div>
+    <button class="btn b1" id="offPlay">▶ เล่น</button>
+    <button class="btn b4 hide" id="offReset">🔄 เริ่มเกมใหม่</button>
+  </div>
+
+  <div class="card">
+    <h2>🏆 หอเกียรติยศ</h2>
+    <div class="tabs" id="rtabs"></div>
+    <div id="rlist"></div>
+  </div>
+
+  <div class="card">
+    <h2>📖 วิธีเล่น</h2>
+    <ul>
+      <li>สร้างเมือง ฝึกกองทัพ รวมกิลด์ แล้วชิง <b>เมืองหลวงโลก (0|0)</b> ภายใน 45 วัน</li>
+      <li>ทรัพยากร 4 ชนิด: 🌾 ข้าว · 🪵 ไม้ · ⛏️ เหล็ก · 🧱 โคลน · 20 หลุมต่อเมือง (สูงสุด 17/1/1/1)</li>
+      <li>22 ช่องอาคาร (21 + กำแพง) · ช่าง 2 คน · เร่งงานด้วย ⚡ ทอง</li>
+      <li>4 ดินแดน: ⛏️ อีสาน · 🪵 พายัพ · 🌾 หรดี · 🧱 อาคเนย์ — เด่นคนละทรัพยากร</li>
+      <li>โอเอซิส +25/50/75% · ส่งวีรบุรุษไปยึด ได้ไกล 30 ช่อง</li>
+      <li>วีรบุรุษ 1 คนต่อเมือง · อุปกรณ์ 5 ช่อง · ดันเจี้ยน 5 ชั้น · บาดเจ็บรักษา 3 ชม.</li>
+      <li>เสริมทัพเมืองตัวเอง/เพื่อนกิลด์ · ออกรบจากฐานได้ 3 ครั้ง · เสบียงหักจากเมืองเจ้าของ</li>
+      <li>ยึดเมืองด้วยขุนพลจากพระราชวัง · ตั้งกิลด์ 50 ทอง · ป้อม 8 แห่งเปิดวันที่ 20</li>
+    </ul>
+  </div>
+  <div class="ft">สุวรรณภูมิ : สงครามเจ้านคร · v13d</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="js/store.js?v=13d"></script>
+<script src="js/config.js?v=13d"></script>
+<script src="js/firebase-config.js?v=13d"></script>
+<script src="js/net.js?v=13d"></script>
+<script>
+(function(){
+  function $(i){ return document.getElementById(i); }
+  function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
+    return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
+  function fmt(n){ n = Math.floor(n||0);
+    if (n >= 1000000) return (n/1000000).toFixed(2)+'M';
+    if (n >= 10000) return (n/1000).toFixed(1)+'k';
+    return n.toLocaleString('en-US'); }
+  var SCR = ['scrLoad','scrLogin','scrName','scrLobby','scrOff'];
+  function show(id){ SCR.forEach(function(k){ $(k).classList.toggle('hide', k !== id); }); }
+  function msg(id, t, ok){ $(id).innerHTML = t ? '<div class="'+(ok?'ok':'err')+'">'+esc(t)+'</div>' : ''; }
+  function busy(on){ ['lgGoogle','lgFb','lgEmail','rgEmail','lgGuest'].forEach(function(k){ $(k).disabled = on; }); }
+
+  $('srvname').textContent = CFG.SERVER_NAME;
+  var ONLINE = Net.enabled();
+  $('mode').textContent = ONLINE ? '🌐 ออนไลน์' : '📴 ออฟไลน์';
+  var profile = null, hasSave = false;
+
+  /* ================= ออนไลน์ ================= */
+  if (ONLINE){
+    $('lgGoogle').classList.toggle('hide', !Net.feature('google'));
+    $('lgFb').classList.toggle('hide', !Net.feature('facebook'));
+    $('emailBox').classList.toggle('hide', !Net.feature('email'));
+    $('lgGuest').classList.toggle('hide', !Net.feature('guest'));
+
+    Net.onAuth(function(u){
+      busy(false);
+      if (!u){ show('scrLogin'); paintHof(); return; }
+      show('scrLoad');
+      Net.getProfile(function(p, err){
+        if (err){ show('scrName'); msg('nmMsg', err); return; }
+        profile = p;
+        if (!p || !p.name){
+          show('scrName');
+          $('nmIn').value = (u.displayName || '').slice(0, 16);
+          return;
+        }
+        lobby();
+      });
+    });
+
+    function after(err){ busy(false); if (err) msg('lgMsg', err); }
+    $('lgGoogle').onclick = function(){ busy(true); msg('lgMsg','กำลังเข้าสู่ระบบ…',1); Net.loginWith('google', after); };
+    $('lgFb').onclick     = function(){ busy(true); msg('lgMsg','กำลังเข้าสู่ระบบ…',1); Net.loginWith('facebook', after); };
+    $('lgGuest').onclick  = function(){ busy(true); msg('lgMsg','กำลังเข้าสู่ระบบ…',1); Net.loginGuest(after); };
+    $('lgEmail').onclick  = function(){ busy(true); Net.loginEmail($('em').value, $('pw').value, after); };
+    $('rgEmail').onclick  = function(){ busy(true); Net.registerEmail($('em').value, $('pw').value, after); };
+    $('pw').onkeydown = function(e){ if (e.key === 'Enter') $('lgEmail').click(); };
+
+    $('nmGo').onclick = function(){
+      $('nmGo').disabled = true; msg('nmMsg', 'กำลังบันทึก…', 1);
+      Net.claimName($('nmIn').value, function(err){
+        $('nmGo').disabled = false;
+        if (err) return msg('nmMsg', err);
+        profile = { name: $('nmIn').value.trim() };
+        lobby();
+      });
+    };
+    $('nmOut').onclick = function(){ Net.logout(function(){ location.reload(); }); };
+
+    function lobby(){
+      show('scrLobby');
+      var u = Net.me();
+      $('lbName').textContent = profile.name;
+      $('lbProv').textContent = Net.providerLabel();
+      $('lbGuest').classList.toggle('hide', !u.isAnonymous);
+      $('lbStat').textContent = 'กำลังโหลดข้อมูล…';
+      msg('lbMsg', '');
+      Net.peekSave(function(s){
+        hasSave = !!s;
+        $('lbStat').innerHTML = s
+          ? 'วันที่ <b>' + s.day + '</b> · 🏘 ' + s.vills + ' เมือง · 👥 ' + fmt(s.pop) + ' · 💰 ' + s.gold
+          : 'ยังไม่ได้เริ่มเล่น';
+        $('lbPlay').textContent = s ? '▶ เล่นต่อ' : '▶ เริ่มเกม';
+        $('lbReset').classList.toggle('hide', !s);
+      });
+      paintHof();
+    }
+    $('lbPlay').onclick = function(){
+      Store.set('sw_s1_name', profile.name);
+      location.href = hasSave ? 'game.html' : 'game.html?new=1';
+    };
+    $('lbLink').onclick = function(){
+      Net.linkGoogle(function(err){
+        if (err) return msg('lbMsg', err);
+        msg('lbMsg', 'ผูกบัญชี Google สำเร็จ ข้อมูลจะไม่หายแล้ว', 1);
+        $('lbGuest').classList.add('hide');
+        $('lbProv').textContent = Net.providerLabel();
+      });
+    };
+    $('lbReset').onclick = function(){
+      if (!confirm('เริ่มเกมใหม่? เมืองและกองทัพทั้งหมดจะหาย')) return;
+      if (!confirm('ยืนยันอีกครั้ง — กู้คืนไม่ได้')) return;
+      Net.resetSave(function(err){ if (err) return msg('lbMsg', err); lobby(); });
+    };
+    $('lbOut').onclick = function(){
+      if (Net.me() && Net.me().isAnonymous &&
+          !confirm('คุณเป็นผู้เยี่ยมชม ออกแล้วจะเข้าบัญชีนี้ไม่ได้อีก ยืนยัน?')) return;
+      Net.logout(function(){ location.reload(); });
+    };
+  }
+
+  /* ================= ออฟไลน์ ================= */
+  else {
+    show('scrOff');
+    var acc = Account.current() || Account.all()[0] || null;
+    function paintOff(){
+      var p = acc ? Account.peek(acc.id) : null;
+      $('offName').classList.toggle('hide', !!acc);
+      $('offReset').classList.toggle('hide', !p);
+      $('offStat').innerHTML = acc
+        ? '<b>' + esc(acc.name) + '</b><br>' + (p ? 'วันที่ ' + p.day + ' · 🏘 ' + p.vills +
+          ' · 👥 ' + fmt(p.pop) : 'ยังไม่ได้เริ่มเล่น')
+        : 'ยังไม่มีบัญชีในเครื่องนี้';
+      $('offPlay').textContent = p ? '▶ เล่นต่อ' : '▶ เริ่มเกม';
+    }
+    paintOff();
+    $('offPlay').onclick = function(){
+      if (!acc){
+        var r = Account.register($('offName').value, '');
+        if (r.err) return msg('offMsg', r.err);
+        acc = r.acc;
+      } else Account.login(acc.id, '');
+      Store.set('sw_s1_name', acc.name);
+      location.href = Account.hasSave(acc.id) ? 'game.html' : 'game.html?new=1';
+    };
+    $('offReset').onclick = function(){
+      if (!confirm('เริ่มเกมใหม่? ข้อมูลเดิมจะหาย')) return;
+      Account.resetSave(acc.id); paintOff();
+    };
+  }
+
+  /* ================= หอเกียรติยศ ================= */
+  var TABS = [{k:'pop',n:'👥 ประชากร'},{k:'atk',n:'⚔️ โจมตี'},{k:'def',n:'🛡️ ป้องกัน'}];
+  var cur = 'pop';
+  function rows(L, myId){
+    if (!L.length) return '<p class="center">ยังไม่มีข้อมูล</p>';
+    return L.map(function(r, i){
+      return '<div class="rk' + (r.uid === myId ? ' mine' : '') + '"><div class="rkn r' + (i+1) +
+        '">' + (i+1) + '</div><div class="rkm"><b>' + esc(r.name) +
+        (r.tag ? ' [' + esc(r.tag) + ']' : '') + (r.uid === myId ? ' ★' : '') +
+        '</b><i>🏘 ' + ((r.vills||[]).length || r.vil || 0) + ' เมือง</i></div><div class="rkv">' +
+        fmt(r[cur] || 0) + '</div></div>';
+    }).join('');
+  }
+  function paintHof(){
+    $('rtabs').innerHTML = TABS.map(function(t){
+      return '<button class="tab' + (t.k === cur ? ' on' : '') + '" data-t="' + t.k + '">' + t.n + '</button>';
+    }).join('');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-t]'), function(b){
+      b.onclick = function(){ cur = b.dataset.t; paintHof(); };
+    });
+    var el = $('rlist');
+    if (ONLINE){
+      if (!Net.me()){ el.innerHTML = '<p class="center">เข้าสู่ระบบเพื่อดูอันดับผู้เล่น</p>'; return; }
+      el.innerHTML = '<p class="center">กำลังโหลด…</p>';
+      Net.rank(cur, 30, function(L, err){
+        el.innerHTML = err ? '<p class="center">' + esc(err) + '</p>' : rows(L, Net.uid());
+      });
+      return;
+    }
+    var a = Account.current() || Account.all()[0];
+    var S = a ? Store.json(Account.saveKeyOf(a.id), null) : null;
+    if (!S || !S.villages){ el.innerHTML = '<p class="center">ยังไม่มีข้อมูล</p>'; return; }
+    var L = (S.bots||[]).filter(function(b){ return !b.dead; }).map(function(b){
+      return { uid:'b'+b.id, name:b.name, pop:b.pop||0, atk:b.atkPts||0, def:b.defPts||0,
+        vil:(b.vills||[]).length };
+    });
+    var pop = 0;
+    S.villages.forEach(function(v){
+      var p = 2;
+      (v.fields||[]).forEach(function(f){ p += (f.level||0)*2; });
+      (v.city||[]).forEach(function(c){ if (c.b) p += (c.level||0)*2; });
+      pop += p;
+    });
+    var st = S.stats || {};
+    L.push({ uid:'me', name:(S.player && S.player.name) || 'เจ้านคร', pop:pop,
+      atk:st.atkPts||0, def:st.defPts||0, vil:S.villages.length });
+    L.sort(function(x, y){ return (y[cur]||0) - (x[cur]||0); });
+    el.innerHTML = rows(L.slice(0, 30), 'me');
+  }
+  if (!ONLINE) paintHof();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>สุวรรณภูมิ : สงครามเจ้านคร</title>
+<link rel="stylesheet" href="css/style.css?v=13d">
+</head>
+<body>
+
+<header id="topbar">
+  <div class="rbox" data-res="wheat"><label>ข้าว</label><span>0</span><i>+0</i></div>
+  <div class="rbox" data-res="wood"><label>ไม้</label><span>0</span><i>+0</i></div>
+  <div class="rbox" data-res="iron"><label>เหล็ก</label><span>0</span><i>+0</i></div>
+  <div class="rbox" data-res="clay"><label>โคลน</label><span>0</span><i>+0</i></div>
+  <div class="rbox sm" id="goldbox"><label>ทอง</label><span id="r-gold">0</span></div>
+  <div class="rbox sm" id="popbox"><label>ปชก.</label><span id="r-pop">0</span></div>
+  <button id="vilbtn">🏘</button>
+  <button id="setbtn">⚙</button>
+</header>
+
+<div id="loybar" class="loybar hidden"></div>
+
+<main id="pages">
+  <section id="page-village" class="page active">
+    <div class="scene" id="scene-village"></div>
+  </section>
+  <section id="page-fields" class="page">
+    <div class="scene" id="scene-fields"></div>
+  </section>
+  <section id="page-world" class="page">
+    <canvas id="map"></canvas>
+    <canvas id="minimap" width="320" height="320"></canvas>
+    <div id="searchbar">
+      <input type="number" id="sx" value="0">
+      <input type="number" id="sy" value="0">
+      <button id="sgo">🔍</button>
+      <button id="shome">⌂</button>
+    </div>
+    <div id="zoomctl"><button id="zin">+</button><button id="zout">−</button></div>
+    <div id="legend"></div>
+    <div id="tileinfo" class="hidden"></div>
+  </section>
+  <section id="page-reports" class="page">
+    <div id="reportlist"></div>
+  </section>
+</main>
+
+<div id="taskpanel" class="hidden"></div>
+
+<nav id="navbar">
+  <button data-page="village" class="active">เมือง</button>
+  <button data-page="fields">ทรัพยากร</button>
+  <button data-page="world">แผนที่</button>
+  <button data-page="reports">รายงาน<span id="rptbadge" class="badge hidden">0</span></button>
+</nav>
+
+<div id="modal" class="hidden"><div id="modalbox"></div></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="js/store.js?v=13d"></script>
+<script src="js/config.js?v=13d"></script>
+<script src="js/firebase-config.js?v=13d"></script>
+<script src="js/net.js?v=13d"></script>
+<script>
+(function(){
+  if (typeof Net !== 'undefined' && Net.enabled()){
+    window.NET_WAIT = true;
+    Net.prepareGame(function(ok){
+      if (!ok){ location.replace('index.html'); return; }
+      window.NET_WAIT = false;
+      if (window.__bootRetry) window.__bootRetry();
+    });
+  } else if (typeof Account !== 'undefined'){
+    if (!Account.current()) location.replace('index.html');
+    else CFG.SAVE_KEY = Account.saveKey();
+  }
+})();
+</script>
+<script src="js/noise.js?v=13d"></script>
+<script src="js/world.js?v=13d"></script>
+<script src="js/assets.js?v=13d"></script>
+<script src="js/units.js?v=13d"></script>
+<script src="js/hero.js?v=13d"></script>
+<script src="js/dungeon.js?v=13d"></script>
+<script src="js/state.js?v=13d"></script>
+<script src="js/combat.js?v=13d"></script>
+<script src="js/conquest.js?v=13d"></script>
+<script src="js/bots.js?v=13d"></script>
+<script src="js/market.js?v=13d"></script>
+<script src="js/military.js?v=13d"></script>
+<script src="js/station.js?v=13d"></script>
+<script src="js/schedule.js?v=13d"></script>
+<script src="js/guild.js?v=13d"></script>
+<script src="js/render.js?v=13d"></script>
+<script src="js/ui.js?v=13d"></script>
+<script src="js/military_ui.js?v=13d"></script>
+<script src="js/hud.js?v=13d"></script>
+<script src="js/hof.js?v=13d"></script>
+<script src="js/bookmark.js?v=13d"></script>
+<script src="js/botai.js?v=13d"></script>
+<script src="js/quests.js?v=13d"></script>
+<script src="js/settings.js?v=13d"></script>
+<script src="js/main.js?v=13d"></script>
+</body>
+</html>
