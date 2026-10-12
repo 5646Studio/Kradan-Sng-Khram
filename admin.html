@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>แผงผู้พัฒนา · สุวรรณภูมิ</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d0b08;color:#f0e6cc;font-family:'Noto Sans Thai',system-ui,sans-serif;font-size:13px}
+.wrap{max-width:720px;margin:0 auto;padding:14px 12px 40px}
+h1{font-size:19px;color:#ffcf40;margin:6px 0 12px}
+.card{background:#14110c;border:1px solid #2f2618;border-radius:11px;padding:12px;margin-bottom:10px}
+.btn{display:block;width:100%;padding:12px;margin-top:8px;border:none;border-radius:9px;
+  font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
+.bg{background:#fff;color:#333}.b1{background:#5a7a2e;color:#fff}.b3{background:#2a2218;color:#a89468}
+.sm{display:inline-block;width:auto;padding:6px 10px;margin:0 4px 0 0;font-size:11px;border-radius:6px}
+.red{background:#4a2020;color:#ff9a9a}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:10px}
+.tab{padding:9px 2px;background:#2a2218;border:1px solid #3a2e1c;border-radius:7px;color:#8a7a55;
+  font-size:11px;font-family:inherit;cursor:pointer}
+.tab.on{background:#5a4a1e;color:#ffcf40;border-color:#8a6f3a}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+.kpi{background:#100d09;border:1px solid #251e14;border-radius:9px;padding:10px;text-align:center}
+.kpi b{display:block;font-size:22px;color:#ffcf40}.kpi i{font-style:normal;font-size:10.5px;color:#8a7a55}
+.row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #241d14}
+.row .m{flex:1;min-width:0}
+.row .m b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .m i{display:block;font-style:normal;font-size:10px;color:#7a6c4e;margin-top:2px}
+.dot{width:9px;height:9px;border-radius:50%;background:#3a2e1c;flex:0 0 9px}.dot.on{background:#6fd35a}
+.v{font-size:12px;font-weight:700;color:#ffcf40;text-align:right}
+input,select,textarea{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1px solid #4a3a22;
+  border-radius:8px;color:#f0e6cc;font-size:13px;font-family:inherit}
+.bug{background:#100d09;border:1px solid #2f2618;border-left:3px solid #ffcf40;border-radius:8px;
+  padding:9px;margin-bottom:7px}
+.bug.done{border-left-color:#3a5a2e;opacity:.6}
+.bug .t{font-size:12.5px;line-height:1.6;margin:5px 0;white-space:pre-wrap;word-break:break-word}
+.bug .s{font-size:10px;color:#7a6c4e}
+.bug pre{font-size:9.5px;color:#ff9a9a;background:#1a0f0f;border-radius:5px;padding:6px;
+  white-space:pre-wrap;word-break:break-all;margin:5px 0}
+.msg{font-size:11.5px;margin-top:8px;padding:8px;border-radius:7px}
+.ok{background:#1a2a16;color:#9fe07a}.err{background:#3a1616;color:#ff9a9a}
+.hide{display:none!important}
+.uid{font-family:monospace;background:#1c1710;padding:8px;border-radius:6px;word-break:break-all;
+  margin:8px 0;font-size:11.5px;color:#ffcf40;-webkit-user-select:all;user-select:all}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🛠 แผงผู้พัฒนา</h1>
+
+  <div class="card" id="gate">
+    <p id="gmsg">กำลังตรวจสอบ…</p>
+    <button class="btn bg hide" id="glogin"><b style="color:#4285f4">G</b> เข้าด้วย Google</button>
+    <button class="btn b3 hide" id="gout">ออกจากระบบ</button>
+  </div>
+
+  <div id="main" class="hide">
+    <div class="tabs">
+      <button class="tab on" data-t="ov">📊 ภาพรวม</button>
+      <button class="tab" data-t="pl">👥 ผู้เล่น</button>
+      <button class="tab" data-t="bg">🐞 แจ้งปัญหา</button>
+      <button class="tab" data-t="gd">💰 เติมทอง</button>
+    </div>
+
+    <div class="pane" id="p-ov"></div>
+
+    <div class="pane hide" id="p-pl">
+      <div class="card">
+        <input id="plq" placeholder="🔍 ค้นหาชื่อผู้เล่น">
+        <select id="pls">
+          <option value="at">เรียง: เข้าเล่นล่าสุด</option>
+          <option value="pop">เรียง: ประชากร</option>
+          <option value="created">เรียง: สมัครใหม่สุด</option>
+        </select>
+      </div>
+      <div class="card" id="pllist"></div>
+    </div>
+
+    <div class="pane hide" id="p-bg">
+      <div class="card">
+        <select id="bgf"><option value="open">เฉพาะที่ยังไม่แก้</option><option value="all">ทั้งหมด</option></select>
+      </div>
+      <div id="bglist"></div>
+    </div>
+
+    <div class="pane hide" id="p-gd">
+      <div class="card">
+        <b style="color:#ffcf40">ส่งทองให้ผู้เล่น</b>
+        <input id="gname" placeholder="ชื่อผู้เล่น (ตรงตามที่ตั้งในเกม)">
+        <input id="gamt" type="number" placeholder="จำนวนทอง" min="1">
+        <input id="gnote" placeholder="หมายเหตุ เช่น โอน PromptPay 100 บาท">
+        <button class="btn b1" id="gsend">💰 ส่งทอง</button>
+        <div id="gmsg2"></div>
+        <p style="font-size:10.5px;color:#7a6c4e;margin-top:8px;line-height:1.6">
+          ผู้เล่นจะได้รับทองภายใน 2 นาทีระหว่างที่อยู่ในเกม หรือทันทีที่เข้าเกมครั้งถัดไป
+          พร้อมรายงานแจ้งในหมวด 🔨 บ้านเมือง</p>
+      </div>
+      <div class="card"><b style="color:#ffcf40">ประวัติการเติม</b><div id="glog"></div></div>
+    </div>
+
+    <button class="btn b3" id="refresh">🔄 โหลดข้อมูลใหม่</button>
+    <button class="btn b3" id="out">ออกจากระบบ</button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js?v=13e"></script>
+<script>
+(function(){
+  function $(i){ return document.getElementById(i); }
+  function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
+    return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
+  function fmt(n){ return Math.floor(n||0).toLocaleString('en-US'); }
+  function ago(t){
+    if (!t) return '—';
+    var s = (Date.now() - t)/1000;
+    if (s < 90) return 'เมื่อกี้';
+    if (s < 3600) return Math.floor(s/60) + ' นาทีที่แล้ว';
+    if (s < 86400) return Math.floor(s/3600) + ' ชม.ที่แล้ว';
+    return Math.floor(s/86400) + ' วันที่แล้ว';
+  }
+  function dt(t){ return t ? new Date(t).toLocaleString('th-TH') : '—'; }
+  var PROV = { guest:'👤 ผู้เยี่ยมชม', google:'G Google', facebook:'f Facebook', email:'✉ อีเมล' };
+  var CATN = { bug:'🐞 บั๊ก', display:'🖼 แสดงผล', balance:'⚖ สมดุล', idea:'💡 ไอเดีย',
+               other:'📝 อื่นๆ', lobby:'🏠 หน้าหลัก' };
+  var ONLINE_MS = 3 * 60000;
+
+  firebase.initializeApp(FIREBASE_CONFIG);
+  var auth = firebase.auth(), db = firebase.firestore();
+  var PL = [], BUGS = [];
+
+  auth.onAuthStateChanged(function(u){
+    if (!u){
+      $('gmsg').textContent = 'เข้าสู่ระบบด้วยบัญชีผู้พัฒนา';
+      $('glogin').classList.remove('hide'); $('gout').classList.add('hide');
+      return;
+    }
+    $('gmsg').textContent = 'กำลังตรวจสิทธิ์…';
+    db.collection('bugs').limit(1).get().then(function(){
+      $('gate').classList.add('hide'); $('main').classList.remove('hide');
+      loadAll();
+    }).catch(function(){
+      $('gmsg').innerHTML = '⛔ บัญชีนี้ยังไม่มีสิทธิ์ผู้พัฒนา<br>' +
+        'คัดลอก UID ด้านล่างไปใส่ใน Firestore Rules (ฟังก์ชัน isAdmin)' +
+        '<div class="uid">' + esc(u.uid) + '</div>';
+      $('glogin').classList.add('hide'); $('gout').classList.remove('hide');
+    });
+  });
+  $('glogin').onclick = function(){
+    var p = new firebase.auth.GoogleAuthProvider();
+    p.setCustomParameters({ prompt:'select_account' });
+    auth.signInWithPopup(p).catch(function(e){ $('gmsg').textContent = e.message; });
+  };
+  $('gout').onclick = $('out').onclick = function(){ auth.signOut(); };
+  $('refresh').onclick = loadAll;
+
+  document.querySelectorAll('[data-t]').forEach(function(b){
+    b.onclick = function(){
+      document.querySelectorAll('[data-t]').forEach(function(x){ x.classList.toggle('on', x === b); });
+      document.querySelectorAll('.pane').forEach(function(p){
+        p.classList.toggle('hide', p.id !== 'p-' + b.dataset.t); });
+    };
+  });
+
+  function loadAll(){
+    $('p-ov').innerHTML = '<div class="card">กำลังโหลด…</div>';
+    Promise.all([
+      db.collection('players').orderBy('at', 'desc').limit(1000).get(),
+      db.collection('bugs').orderBy('at', 'desc').limit(150).get(),
+      db.collection('grantlog').orderBy('at', 'desc').limit(100).get()
+    ]).then(function(r){
+      PL = []; r[0].forEach(function(d){ var o = d.data(); o.uid = d.id; if (o.name) PL.push(o); });
+      BUGS = []; r[1].forEach(function(d){ var o = d.data(); o.id = d.id; BUGS.push(o); });
+      var GL = []; r[2].forEach(function(d){ GL.push(d.data()); });
+      paintOv(GL); paintPl(); paintBugs(); paintGrants(GL);
+    }).catch(function(e){
+      $('p-ov').innerHTML = '<div class="card err msg">โหลดไม่สำเร็จ: ' + esc(e.message) + '</div>';
+    });
+  }
+
+  function paintOv(GL){
+    var now = Date.now(), d0 = new Date(); d0.setHours(0,0,0,0);
+    var on = PL.filter(function(p){ return now - (p.at||0) < ONLINE_MS; }).length;
+    var day = PL.filter(function(p){ return now - (p.at||0) < 86400000; }).length;
+    var nw = PL.filter(function(p){ return (p.created||0) >= d0.getTime(); }).length;
+    var pv = {};
+    PL.forEach(function(p){ var k = p.prov || '?'; pv[k] = (pv[k]||0) + 1; });
+    var ob = BUGS.filter(function(b){ return b.status !== 'done'; }).length;
+    var g7 = 0;
+    GL.forEach(function(g){ if (now - g.at < 7*86400000) g7 += (+g.gold||0); });
+    var h = '<div class="grid">' +
+      kpi(PL.length, 'ผู้สมัครทั้งหมด') + kpi(on, '🟢 ออนไลน์ตอนนี้') +
+      kpi(day, 'เข้าเล่นใน 24 ชม.') + kpi(nw, 'สมัครใหม่วันนี้') +
+      kpi(ob, '🐞 บั๊กที่ยังไม่แก้') + kpi(fmt(g7), '💰 ทองที่เติม 7 วัน') + '</div>';
+    h += '<div class="card" style="margin-top:10px"><b style="color:#ffcf40">วิธีล็อกอิน</b>';
+    for (var k in pv) h += '<div class="row"><div class="m"><b>' + (PROV[k] || k) +
+      '</b></div><div class="v">' + pv[k] + ' คน</div></div>';
+    h += '</div><div class="card"><b style="color:#ffcf40">🟢 ออนไลน์อยู่</b>';
+    var L = PL.filter(function(p){ return now - (p.at||0) < ONLINE_MS; });
+    if (!L.length) h += '<p style="color:#6a5f45;padding:8px">ไม่มีใครออนไลน์</p>';
+    L.forEach(function(p){ h += plRow(p); });
+    $('p-ov').innerHTML = h + '</div>';
+  }
+  function kpi(v, l){ return '<div class="kpi"><b>' + v + '</b><i>' + l + '</i></div>'; }
+  function plRow(p){
+    var on = Date.now() - (p.at||0) < ONLINE_MS;
+    return '<div class="row"><span class="dot' + (on ? ' on' : '') + '"></span><div class="m"><b>' +
+      esc(p.name) + (p.tag ? ' [' + esc(p.tag) + ']' : '') + '</b><i>' + (PROV[p.prov] || '') +
+      ' · ' + ((p.vills||[]).length) + ' เมือง · ล่าสุด ' + ago(p.at) +
+      ' · สมัคร ' + (p.created ? new Date(p.created).toLocaleDateString('th-TH') : '—') +
+      '</i></div><div class="v">👥 ' + fmt(p.pop) + '<br><button class="btn b3 sm" data-gift="' +
+      esc(p.name) + '">💰</button></div></div>';
+  }
+
+  function paintPl(){
+    var q = ($('plq').value || '').trim().toLowerCase(), s = $('pls').value;
+    var L = PL.filter(function(p){ return !q || String(p.name).toLowerCase().indexOf(q) >= 0; });
+    L.sort(function(a, b){ return (b[s]||0) - (a[s]||0); });
+    $('pllist').innerHTML = '<p style="font-size:11px;color:#8a7a55">พบ ' + L.length + ' คน</p>' +
+      L.slice(0, 300).map(plRow).join('');
+    bindGift();
+  }
+  $('plq').oninput = paintPl; $('pls').onchange = paintPl;
+  function bindGift(){
+    document.querySelectorAll('[data-gift]').forEach(function(b){
+      b.onclick = function(){
+        $('gname').value = b.dataset.gift;
+        document.querySelector('[data-t="gd"]').click();
+        $('gamt').focus();
+      };
+    });
+  }
+
+  function paintBugs(){
+    var f = $('bgf').value;
+    var L = BUGS.filter(function(b){ return f === 'all' || b.status !== 'done'; });
+    if (!L.length){ $('bglist').innerHTML = '<div class="card">ไม่มีรายงาน 🎉</div>'; return; }
+    $('bglist').innerHTML = L.map(function(b){
+      return '<div class="bug' + (b.status === 'done' ? ' done' : '') + '">' +
+        '<div class="s">' + (CATN[b.cat] || b.cat) + ' · <b>' + esc(b.name || '?') + '</b> · หน้า ' +
+        esc(b.page) + ' · v' + esc(b.ver) + ' · ' + dt(b.at) + '</div>' +
+        '<div class="t">' + esc(b.text) + '</div>' +
+        (b.pos ? '<div class="s">📍 ' + esc(b.pos) + ' · 📱 ' + esc(b.scr || '') + '</div>' : '') +
+        (b.errs ? '<pre>' + esc(b.errs) + '</pre>' : '') +
+        '<div class="s" style="margin:4px 0">' + esc((b.ua || '').slice(0, 120)) + '</div>' +
+        (b.status !== 'done' ? '<button class="btn b1 sm" data-done="' + b.id + '">✔ แก้แล้ว</button>' : '') +
+        '<button class="btn red sm" data-del="' + b.id + '">🗑 ลบ</button></div>';
+    }).join('');
+    document.querySelectorAll('[data-done]').forEach(function(x){
+      x.onclick = function(){
+        db.collection('bugs').doc(x.dataset.done).update({ status:'done', doneAt:Date.now() })
+          .then(function(){
+            BUGS.forEach(function(b){ if (b.id === x.dataset.done) b.status = 'done'; });
+            paintBugs();
+          });
+      };
+    });
+    document.querySelectorAll('[data-del]').forEach(function(x){
+      x.onclick = function(){
+        if (!confirm('ลบรายงานนี้?')) return;
+        db.collection('bugs').doc(x.dataset.del).delete().then(function(){
+          BUGS = BUGS.filter(function(b){ return b.id !== x.dataset.del; }); paintBugs();
+        });
+      };
+    });
+  }
+  $('bgf').onchange = paintBugs;
+
+  function paintGrants(GL){
+    $('glog').innerHTML = GL.length ? GL.map(function(g){
+      return '<div class="row"><div class="m"><b>' + esc(g.name) + '</b><i>' + dt(g.at) +
+        (g.note ? ' · ' + esc(g.note) : '') + '</i></div><div class="v">+' + fmt(g.gold) + '</div></div>';
+    }).join('') : '<p style="color:#6a5f45;padding:8px">ยังไม่มีประวัติ</p>';
+  }
+  function gmsg(t, ok){ $('gmsg2').innerHTML = '<div class="msg ' + (ok ? 'ok' : 'err') + '">' + esc(t) + '</div>'; }
+  $('gsend').onclick = function(){
+    var nm = ($('gname').value || '').trim(), amt = parseInt($('gamt').value, 10);
+    var note = ($('gnote').value || '').trim().slice(0, 120);
+    if (!nm) return gmsg('ใส่ชื่อผู้เล่น');
+    if (!(amt > 0) || amt > 100000) return gmsg('จำนวนทองต้องอยู่ระหว่าง 1 - 100,000');
+    if (!confirm('ส่ง ' + amt + ' ทอง ให้ ' + nm + ' ?')) return;
+    $('gsend').disabled = true;
+    db.collection('names').doc(nm.toLowerCase()).get().then(function(d){
+      if (!d.exists) throw new Error('ไม่พบผู้เล่นชื่อนี้');
+      var uid = d.data().uid, now = Date.now();
+      return Promise.all([
+        db.collection('grants').add({ uid:uid, gold:amt, note:note, at:now }),
+        db.collection('grantlog').add({ uid:uid, name:d.data().name, gold:amt, note:note,
+          at:now, by:auth.currentUser.uid })
+      ]);
+    }).then(function(){
+      gmsg('✔ ส่ง ' + amt + ' ทองแล้ว', true);
+      $('gamt').value = ''; $('gnote').value = '';
+      loadAll();
+    }).catch(function(e){ gmsg(e.message); })
+      .then(function(){ $('gsend').disabled = false; });
+  };
+})();
+</script>
+</body>
+</html>

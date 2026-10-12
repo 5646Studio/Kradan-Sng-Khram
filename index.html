@@ -149,16 +149,17 @@ input::placeholder{color:#5f553e}
       <li>ยึดเมืองด้วยขุนพลจากพระราชวัง · ตั้งกิลด์ 50 ทอง · ป้อม 8 แห่งเปิดวันที่ 20</li>
     </ul>
   </div>
-  <div class="ft">สุวรรณภูมิ : สงครามเจ้านคร · v13d</div>
+    <div class="ft">สุวรรณภูมิ : สงครามเจ้านคร · v13e<br>
+    <a href="#" id="bugLink" style="color:#8a7a55">🐞 แจ้งปัญหา</a></div>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="js/store.js?v=13d"></script>
-<script src="js/config.js?v=13d"></script>
-<script src="js/firebase-config.js?v=13d"></script>
-<script src="js/net.js?v=13d"></script>
+<script src="js/store.js?v=13e"></script>
+<script src="js/config.js?v=13e"></script>
+<script src="js/firebase-config.js?v=13e"></script>
+<script src="js/net.js?v=13e"></script>
 <script>
 (function(){
   function $(i){ return document.getElementById(i); }
@@ -341,6 +342,15 @@ input::placeholder{color:#5f553e}
     L.sort(function(x, y){ return (y[cur]||0) - (x[cur]||0); });
     el.innerHTML = rows(L.slice(0, 30), 'me');
   }
+    $('bugLink').onclick = function(e){
+    e.preventDefault();
+    if (!ONLINE || !Net.me()) return alert('กรุณาเข้าสู่ระบบก่อนแจ้งปัญหา');
+    var t = prompt('เล่าปัญหาที่พบ (5-1000 ตัวอักษร)');
+    if (!t || t.trim().length < 5) return;
+    Net.report({ cat:'lobby', text:t.trim().slice(0, 1000), page:'lobby', ver:'13e',
+      name: profile ? profile.name : '', ua:navigator.userAgent.slice(0, 200), errs:'' },
+      function(err){ alert(err || 'ส่งเรียบร้อย ขอบคุณครับ'); });
+  };
   if (!ONLINE) paintHof();
 })();
 </script>
