@@ -120,7 +120,9 @@ var Net = (function(){
         if (d.exists && d.data().uid !== user.uid) throw { code:'taken' };
         tx.set(nref, { uid:user.uid, name:name, at:Date.now() });
         tx.set(pref, { uid:user.uid, name:name, pop:0, atk:0, def:0,
-          vills:[], tag:null, at:Date.now() }, { merge:true });
+        vills:[], tag:null, at:Date.now(), created:Date.now(), prov:provKey() },
+          { merge:true });
+
       });
     }).then(function(){ cb(null); })
       .catch(function(e){
@@ -217,7 +219,7 @@ var Net = (function(){
     return db.collection('players').doc(user.uid).set({
       uid:user.uid, name:Game.player.name, tribe:Game.player.tribe || 0,
       tag: Game.guild ? Game.guild.tag : null, vills:vills, pop:pop,
-      atk: st.atkPts || 0, def: st.defPts || 0, at:Date.now()
+      atk: st.atkPts || 0, def: st.defPts || 0, at:Date.now(), prov:provKey()
     }, { merge:true });
   }
   function flush(cb){
@@ -271,6 +273,8 @@ var Net = (function(){
       if (document.visibilityState === 'hidden') flush();
     });
     window.addEventListener('pagehide', function(){ flush(); });
+    setTimeout(claimGrants, 6000);
+    setInterval(claimGrants, 120000);
   }
   function at(x, y){ return idx[x + ',' + y] || null; }
   function occupied(x, y){ return !!idx[x + ',' + y]; }
@@ -283,11 +287,53 @@ var Net = (function(){
       cb(L);
     }).catch(function(e){ log('rank', e); cb([], errText(e)); });
   }
+    /* ---------- v13e: วิธีล็อกอิน / แจ้งบั๊ก / รับทอง ---------- */
+  function provKey(){
+    if (!user) return '';
+    if (user.isAnonymous) return 'guest';
+    var p = (user.providerData && user.providerData[0]) ? user.providerData[0].providerId : '';
+    return p === 'google.com' ? 'google' : p === 'facebook.com' ? 'facebook'
+         : p === 'password' ? 'email' : 'other';
+  }
+  function report(d, cb){
+    if (!db || !user) return cb('ยังไม่ได้เข้าสู่ระบบ');
+    d.uid = user.uid;
+    d.name = d.name || ((typeof Game !== 'undefined' && Game.player) ? Game.player.name : '');
+    d.at = Date.now(); d.status = 'open';
+    db.collection('bugs').add(d).then(function(){ cb(null); })
+      .catch(function(e){ log('report', e); cb(errText(e)); });
+  }
+  function claimGrants(){
+    if (!db || !user || typeof Game === 'undefined' || !Game.villages || !Game.villages.length) return;
+    db.collection('grants').where('uid', '==', user.uid).get().then(function(s){
+      if (s.empty) return;
+      var total = 0, notes = [], dels = [];
+      s.forEach(function(d){
+        var g = d.data();
+        total += (+g.gold || 0);
+        if (g.note) notes.push(g.note);
+        dels.push(d.ref.delete());
+      });
+      return Promise.all(dels).then(function(){
+        Game.player.gold += total;
+        try {
+          Military.pushReport({ at:now(), x:V().x, y:V().y, cat:'city', mission:'gold',
+            read:false, open:false, title:'💰 ได้รับทอง +' + total,
+            body:'ทีมงานส่งทอง <b>' + total + '</b> ให้คุณ' +
+              (notes.length ? '<br>' + notes.join('<br>') : '') });
+        } catch(e){}
+        save();
+        try { UI.refreshAll(); } catch(e){}
+        alert('💰 ได้รับทอง +' + total);
+      });
+    }).catch(function(e){ log('grants', e); });
+  }
 
-  return { enabled:enabled, feature:feature, init:init, onAuth:onAuth, me:me, uid:uid,
+    return { enabled:enabled, feature:feature, init:init, onAuth:onAuth, me:me, uid:uid,
     providerLabel:providerLabel, loginWith:loginWith, loginGuest:loginGuest,
     loginEmail:loginEmail, registerEmail:registerEmail, linkGoogle:linkGoogle,
     logout:logout, getProfile:getProfile, claimName:claimName, peekSave:peekSave,
     resetSave:resetSave, prepareGame:prepareGame, queueSave:queueSave, flush:flush,
-    refreshOthers:refreshOthers, at:at, occupied:occupied, list:list, rank:rank };
+    refreshOthers:refreshOthers, at:at, occupied:occupied, list:list, rank:rank,
+    report:report, claimGrants:claimGrants, provKey:provKey };
 })();

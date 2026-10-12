@@ -1,5 +1,5 @@
 /* ============ สุวรรณภูมิ : สงครามเจ้านคร — v12 ============ */
-var DEV_MODE = true;
+var DEV_MODE = false;
 
 function qs(k){
   var m = location.search.match(new RegExp('[?&]' + k + '=([^&]*)'));
