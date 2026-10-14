@@ -1,0 +1,24 @@
+# ===== wrangler.toml — สุวรรณภูมิ Game Server =====
+# วางไฟล์นี้ไว้หน้าแรกของ repo (ข้างนอกโฟลเดอร์ server)
+
+# แก้ 1: ต้องตรงกับชื่อ Worker ใน Cloudflare เป๊ะ
+name = "suwannaphum-api"
+
+main = "server/worker.js"
+compatibility_date = "2024-09-01"
+
+# ให้ค่า Variables / Secrets ที่ตั้งไว้ในหน้าเว็บ Cloudflare อยู่ต่อ
+# (FIREBASE_PROJECT_ID, ADMIN_UIDS, ALLOW_ORIGIN, PAYMENT_ENABLED)
+keep_vars = true
+
+# Cron ทุก 5 นาที (เหมือนที่ตั้งไว้เดิม)
+[triggers]
+crons = ["*/5 * * * *"]
+
+# ฐานข้อมูล D1 (โค้ดเรียกใช้ env.DB)
+[[d1_databases]]
+binding = "DB"
+# แก้ 2: ชื่อฐานข้อมูล D1 ของคุณ
+database_name = "suwannaphum"
+# แก้ 3: Database ID (รูปแบบ xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+database_id = "39055c37-f347-401c-a5f4-fe63579cb0b2"
