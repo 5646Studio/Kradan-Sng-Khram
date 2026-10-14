@@ -1,5 +1,5 @@
 /* ============ Api v14 — คุยกับเซิร์ฟเวอร์เกม ============ */
-var API_BASE = 'https://suwannaphum-api-272.anupong-uun.workers.dev';
+var API_BASE = 'https://suwannaphum-api.anupong-uun-272.workers.dev';
 
 var Api = (function(){
   var TIMEOUT = 15000;
