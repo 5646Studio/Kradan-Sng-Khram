@@ -637,3 +637,27 @@ body.tiopen #fabwrap,body.tiopen #herobtn{display:none!important}
   border:1px solid #3a2e1c;border-radius:8px;color:#f0e6cc;font-size:12.5px;
   font-family:inherit;resize:vertical;-webkit-user-select:text;user-select:text}
 
+/* ===== v14b ===== */
+/* หน้าเมือง/ทรัพยากรแสดงครึ่งเดียว: บังคับให้ฉากจบเหนือแผงงานเสมอ ไม่ต้องรอเปลี่ยนหน้า */
+#page-village .scene,#page-fields .scene{bottom:var(--panelH)!important}
+#page-village,#page-fields{overflow:hidden}
+
+/* ไอคอนรูปภาพ */
+.uic{height:1.2em;width:auto;vertical-align:-0.25em;display:inline-block;pointer-events:none;
+  -webkit-user-drag:none;user-select:none}
+.uicu{height:1.6em;vertical-align:-0.4em}
+.tic .uic{height:22px}
+.hb-ic .uic{height:24px}
+.rbox label .uic{height:11px;vertical-align:-1px;margin-right:2px}
+#navbar button.hasic{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:1px;font-size:10.5px}
+#navbar .navic{height:20px}
+.fabitem span .uic{height:20px}
+
+/* หน้าทหาร */
+.ucard.lockcard{opacity:.55}
+.ustat{line-height:1.5}
+.rpt-g .ttab{font-size:10.5px}
+.rpt-g .ttab td,.rpt-g .ttab th{padding:3px 5px}
+#sdInfo{margin-top:6px}
+
