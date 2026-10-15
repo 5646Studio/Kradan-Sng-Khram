@@ -1,7 +1,7 @@
 # ===== wrangler.toml — สุวรรณภูมิ Game Server =====
 # วางไฟล์นี้ไว้หน้าแรกของ repo (ระดับเดียวกับ index.html)
 
-name = "suwannaphum-api"
+name = "suwannaphum-war"
 main = "server/worker.js"
 compatibility_date = "2026-10-12"
 
