@@ -604,12 +604,12 @@ body.tiopen #fabwrap,body.tiopen #herobtn{display:none!important}
 
 /* ปุ่มกลางหน้าทรัพยากร — เข้าเมือง */
 #cityhub{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-  width:30px;height:30px;border-radius:12px;padding:0;
+  width:50px;height:50px;border-radius:12px;padding:0;
   background:none;border:none;
   box-shadow:none;
   display:flex;align-items:center;justify-content:center;z-index:6}
 #cityhub:active{transform:translate(-50%,-50%) scale(.93)}
-#cityhub img{width:30px;height:30px;object-fit:contain;
+#cityhub img{width:50px;height:50px;object-fit:contain;
   filter:drop-shadow(0 2px 4px rgba(0,0,0,.8))}
 .hubn{position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);
   max-width:50px;padding:1px 9px;border-radius:9px;
@@ -660,4 +660,55 @@ body.tiopen #fabwrap,body.tiopen #herobtn{display:none!important}
 .rpt-g .ttab{font-size:10.5px}
 .rpt-g .ttab td,.rpt-g .ttab th{padding:3px 5px}
 #sdInfo{margin-top:6px}
+
+/* ===== v14c ===== */
+/* แถบบน: ถ้ามีรูป ให้แสดงแค่รูปแทนตัวหนังสือ */
+.rbox label:has(.uic){font-size:0!important;line-height:0;height:20px;display:flex;
+  align-items:center;justify-content:center}
+.rbox label .uic{height:20px!important;margin:0!important;vertical-align:middle}
+.rbox:has(label .uic) span{font-size:13px}
+
+/* ปุ่มกล่องข้อความ */
+#msgbtn{position:relative}
+.mbadge{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;
+  border-radius:8px;background:#c0392b;color:#fff;font-size:9px;font-weight:700;
+  display:flex;align-items:center;justify-content:center}
+.mbadge.hidden{display:none}
+
+/* รายการบทสนทนา */
+.cvrow{display:flex;align-items:center;gap:8px;background:#100d09;border:1px solid #2f2618;
+  border-left:3px solid #3a2e1c;border-radius:8px;padding:8px;margin-bottom:5px;cursor:pointer}
+.cvrow.new{border-left-color:#ffcf40;background:#1a1510}
+.cvav{flex:0 0 34px;height:34px;border-radius:50%;background:#2a2218;display:flex;
+  align-items:center;justify-content:center;font-size:16px}
+.cvm{flex:1;min-width:0}
+.cvm b{display:block;font-size:12.5px;color:#f0e6cc}
+.cvm i{display:block;font-style:normal;font-size:10.5px;color:#8a7a55;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.cvr{flex:0 0 auto;text-align:right}
+.cvr i{display:block;font-style:normal;font-size:9px;color:#6a5f45}
+.cvr em{display:inline-block;margin-top:3px;background:#c0392b;color:#fff;font-style:normal;
+  font-size:9px;border-radius:8px;padding:0 6px}
+
+/* ห้องแชต */
+.chatbox{height:46vh;overflow-y:auto;background:#0f0c08;border:1px solid #2f2618;border-radius:8px;
+  padding:8px;margin-bottom:6px;-webkit-user-select:text;user-select:text}
+.cmsg{display:flex;flex-direction:column;align-items:flex-start;margin-bottom:7px}
+.cmsg.me{align-items:flex-end}
+.cmsg .cb{max-width:80%;background:#2a2218;color:#f0e6cc;padding:7px 10px;
+  border-radius:12px 12px 12px 3px;font-size:12.5px;line-height:1.5;word-break:break-word}
+.cmsg.me .cb{background:#5a4a1e;color:#fff3c8;border-radius:12px 12px 3px 12px}
+.cmsg i{font-style:normal;font-size:9px;color:#6a5f45;margin-top:2px}
+.cmsg i a{color:#c08070;cursor:pointer}
+.chatin{display:flex;gap:6px;align-items:stretch}
+.chatin textarea{flex:1;min-height:42px;max-height:110px;padding:8px;background:#1c1710;
+  border:1px solid #4a3a22;border-radius:8px;color:#f0e6cc;font-size:13px;font-family:inherit;
+  resize:none;-webkit-user-select:text;user-select:text}
+#modalbox .chatin button{width:auto!important;margin:0!important;padding:0 16px!important;
+  background:#5a7a2e;color:#fff;border-radius:8px}
+
+/* ปุ่ม ✎ ในรายการเมือง */
+#modalbox .vrn{width:auto!important;margin:0 0 0 6px!important;padding:1px 8px!important;
+  font-size:11px!important;background:#2a2218;color:#ffcf40;border-radius:6px;vertical-align:middle}
+input[type=datetime-local].selbox{margin-top:4px;color-scheme:dark}
 
