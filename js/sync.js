@@ -133,6 +133,7 @@ var Sync = (function(){
         departAt:m.depart, arriveAt:m.arrive, hostile:true };
     });
     S.unread = r.unread || 0;
+    if (typeof Social !== 'undefined') Social.onState(r);
     if (S.ran){
       try { UI.refreshAll(); if (typeof MilUI !== 'undefined') MilUI.updateBadge(); }
       catch(e){ logErr('Sync.apply', e); }
@@ -264,6 +265,7 @@ var Sync = (function(){
     if (typeof UI !== 'undefined') UI.openGold = openGold;
     if (typeof HOF !== 'undefined') HOF.open = openRank;
     window.Shop = { open:openShop };
+    if (typeof Social !== 'undefined') Social.install();
 
     lock('MilUI', 'openTrain', 'military', 'ฝึกทหาร');
     lock('MilUI', 'openRally', 'military', 'ส่งกองทัพ');

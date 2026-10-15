@@ -89,7 +89,7 @@ var UI = (function(){
       if (!c.b){
         h += '<div class="slot empty" style="left:' + p.x + '%;top:' + p.y +
           '%" data-c="' + i + '" title="ช่องว่าง ' + (i+1) +
-          '"><span class="dot">➕</span></div>';
+          '"><span class="dot"></span></div>';
       } else {
         var b = BUILDINGS[c.b];
         h += '<div class="slot' + (q ? ' building' : '') + '" style="left:' + p.x +
