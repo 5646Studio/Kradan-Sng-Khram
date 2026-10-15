@@ -15,7 +15,8 @@ const RTH = { wheat:'ข้าว', wood:'ไม้', iron:'เหล็ก', cl
 const RUIN_UID = '__ruins__', RUIN_NAME = 'เมืองร้าง';
 
 const FEATURES = { build:true, gold:true, military:true, hero:false, dungeon:false, market:false,
-  guild:false, oasis:false, settle:false, station:false, quest:false, schedule:false, endgame:false };
+  guild:false, oasis:false, settle:false, station:false, quest:false, schedule:true, endgame:false,
+  chat:true, rename:true };
 
 const PACKAGES = [
   { id:'g100',  name:'ถุงทองเล็ก',  gold:100,  bonus:0,   price:35,  cur:'THB' },
@@ -559,8 +560,12 @@ export default {
   async scheduled(ev, env, ctx){
     ctx.waitUntil((async () => {
       try { await resolveDue(env, Date.now(), 60); } catch (e){ console.log('resolve', e && e.message); }
+      try { await firePlans(env, Date.now()); } catch (e){ console.log('plan', e && e.message); }
+      if (new Date(ev.scheduledTime).getUTCMinutes() === 30){
+      try { await socialCleanup(env, Date.now()); } catch (e){ console.log('clean', e && e.message); }
+      }
       if (new Date(ev.scheduledTime).getUTCMinutes() % 5 === 0){
-        try { await botTick(env); } catch (e){ console.log('bot', e && e.message); }
+      try { await botTick(env); } catch (e){ console.log('bot', e && e.message); }
       }
     })());
   }
@@ -616,6 +621,9 @@ async function route(req, env){
     return json({ ok:true }, 200, env);
   }
 
+  const SOC = await social(p, b, env, uid);
+  if (SOC) return SOC;
+
   const ACT = {
     '/me': null,
     '/build': ctx => { const V = findV(ctx, b.vid); enqueue(V.d, ctx.P, ctx.VS, ctx.t, b.kind, b.slot, b.key); V.dirty = true; },
@@ -655,6 +663,15 @@ function spend(ctx, g, reason, extraSet, extraBind){
 }
 function goldItem(ctx, b){
   const t = ctx.t;
+
+    if (b.item === 'sched'){
+    const until = Math.max(t, ctx.P.sched_until || 0) + SCHED_DAYS * 86400000;
+    spend(ctx, SCHED_GOLD, 'sched', ', sched_until=?', [until]);
+    ctx.P.sched_until = until;
+    for (const V of ctx.VS) V.dirty = true;
+    return;
+  }
+
   if (b.item === 'builder'){
     if (bCount(ctx.P, t) >= 3) throw ue('มีช่างคนที่ 3 อยู่แล้ว');
     const until = t + 86400000;
@@ -755,6 +772,8 @@ async function session(env, uid, act){
       await env.DB.prepare('UPDATE players SET seen=? WHERE uid=?').bind(t, uid).run();
     }
     ctx.unread = ((await env.DB.prepare('SELECT COUNT(*) n FROM reports WHERE uid=? AND read=0').bind(uid).first()) || {}).n || 0;
+    ctx.msgUnread = ((await env.DB.prepare('SELECT COUNT(*) n FROM msgs WHERE to_uid=? AND read=0').bind(uid).first()) || {}).n || 0;
+
     return stateOf(ctx, err);
   }
   throw ue('มีการทำรายการซ้อนกัน ลองใหม่อีกครั้ง');
@@ -803,7 +822,11 @@ function stateOf(ctx, err){
   return {
     ok:!err, err:err || undefined, msg:ctx.msg || undefined, now:t, features:FEATURES, unread:ctx.unread || 0,
     player:{ uid:P.uid, name:P.name, gold:P.gold, cp:cpNow(P, VS, t), cpRate:cpPerDay(VS), tribe:P.tribe, zone:P.zone,
-      builders:bCount(P, t), builderUntil:P.builder_until, protectUntil:P.protect_until, created:P.created },
+    builders:bCount(P, t), builderUntil:P.builder_until, protectUntil:P.protect_until, created:P.created,
+    renameN:P.rename_n | 0, renameAt:P.rename_at || 0, oldName:P.old_name || null,
+    schedUntil:P.sched_until || 0 },
+    msgUnread:ctx.msgUnread || 0,
+
     villages:VS.map(V => {
       const d = V.d;
       return { id:V.row.id, x:V.row.x, y:V.row.y, name:V.row.name, first:!!d.first, bio:d.bio, fields:d.fields,
@@ -1025,6 +1048,9 @@ async function deleteAccount(env, uid, b){
   st.push(DB.prepare('DELETE FROM moves WHERE uid=?').bind(uid));
   st.push(DB.prepare('UPDATE moves SET to_uid=? WHERE to_uid=?').bind(RUIN_UID, uid));
   st.push(DB.prepare('DELETE FROM reports WHERE uid=?').bind(uid));
+  st.push(DB.prepare('DELETE FROM plans WHERE uid=?').bind(uid));
+  st.push(DB.prepare('DELETE FROM msgs WHERE from_uid=? OR to_uid=?').bind(uid, uid));
+  st.push(DB.prepare('DELETE FROM blocks WHERE uid=? OR target=?').bind(uid, uid));
   st.push(DB.prepare('INSERT INTO ledger(uid,delta,reason,note,at) VALUES(?,?,?,?,?)').bind(uid, -(P.gold | 0), 'delete', P.name, t));
   st.push(DB.prepare('DELETE FROM players WHERE uid=?').bind(uid));
   await DB.batch(st);
@@ -1254,4 +1280,178 @@ async function botTick(env){
     st.push(vUpd(env, r, d, t));
   }
   if (st.length) await env.DB.batch(st);
+}
+
+/* =====================================================================
+   B2.5 : แชต · บล็อก · เปลี่ยนชื่อ · แผนการรบ
+   ===================================================================== */
+const CHAT_MAX = 500, CHAT_GAP = 2000, CHAT_HOUR = 120, CHAT_KEEP = 30 * 86400000;
+const RENAME_COST = 100, RENAME_GAP = 7 * 86400000;
+const SCHED_GOLD = 40, SCHED_DAYS = 7, PLAN_MAX = 20;
+
+function convKey(a, b){ return a < b ? a + '|' + b : b + '|' + a; }
+function cleanName(n){
+  n = String(n || '').trim();
+  if (n.length < 2 || n.length > 16) throw ue('ชื่อต้องยาว 2-16 ตัวอักษร');
+  if (/[\/\\<>]/.test(n) || /^bot/i.test(n) || n.indexOf(RUIN_NAME) >= 0) throw ue('ชื่อนี้ใช้ไม่ได้');
+  return n;
+}
+async function whoOf(env, b, me){
+  let o = null;
+  if (b.uid) o = await env.DB.prepare('SELECT uid, name, is_bot FROM players WHERE uid=?').bind(String(b.uid)).first();
+  else if (b.name) o = await env.DB.prepare('SELECT uid, name, is_bot FROM players WHERE name=?').bind(String(b.name).trim()).first();
+  if (!o) throw ue('ไม่พบผู้เล่นชื่อนี้');
+  if (o.uid === me.uid) throw ue('ส่งข้อความหาตัวเองไม่ได้');
+  if (o.is_bot === 2) throw ue('เมืองร้างไม่มีเจ้าของ');
+  return o;
+}
+
+async function social(p, b, env, uid){
+  if (p !== '/account/rename' && p.indexOf('/chat/') !== 0 && p.indexOf('/plan/') !== 0) return null;
+  const DB = env.DB, t = Date.now();
+  const ok = o => json(Object.assign({ ok:true }, o || {}), 200, env);
+  const me = await getP(env, uid);
+  if (!me) throw ue('ยังไม่ได้ลงทะเบียน');
+  if (me.banned) throw ue('บัญชีนี้ถูกระงับ');
+
+  /* ---------- เปลี่ยนชื่อผู้เล่น ---------- */
+  if (p === '/account/rename'){
+    const nm = cleanName(b.name);
+    if (nm === me.name) throw ue('เป็นชื่อเดิมอยู่แล้ว');
+    const n = me.rename_n | 0, cost = n > 0 ? RENAME_COST : 0;
+    if (n > 0 && t - (me.rename_at || 0) < RENAME_GAP)
+      throw ue('เปลี่ยนชื่อได้อีกครั้งใน ' + Math.ceil((RENAME_GAP - (t - me.rename_at)) / 86400000) + ' วัน');
+    if ((me.gold | 0) < cost) throw ue('ทองไม่พอ (ต้องใช้ ' + cost + ')');
+    if (await DB.prepare('SELECT uid FROM players WHERE name=? AND uid<>?').bind(nm, uid).first())
+      throw ue('ชื่อนี้มีผู้เล่นใช้แล้ว');
+    let r;
+    try {
+      r = await DB.prepare('UPDATE players SET name=?, old_name=?, rename_n=rename_n+1, rename_at=?, gold=gold-? WHERE uid=? AND gold>=? AND rename_n=?')
+        .bind(nm, me.name, t, cost, uid, cost, n).run();
+    } catch (e){
+      if (/UNIQUE/i.test(String(e && e.message))) throw ue('ชื่อนี้มีผู้เล่นใช้แล้ว');
+      throw e;
+    }
+    if (!r.meta.changes) throw ue('ลองใหม่อีกครั้ง');
+    if (cost) await DB.prepare('INSERT INTO ledger(uid,delta,reason,note,at) VALUES(?,?,?,?,?)')
+      .bind(uid, -cost, 'rename', me.name + ' → ' + nm, t).run();
+    return ok({ name:nm, cost });
+  }
+
+  /* ---------- แชต ---------- */
+  if (p === '/chat/inbox'){
+    const rows = (await DB.prepare('SELECT m.conv, m.from_uid, m.to_uid, m.text, m.at, (SELECT COUNT(*) FROM msgs u WHERE u.conv=m.conv AND u.to_uid=? AND u.read=0) AS unread FROM msgs m WHERE m.id IN (SELECT MAX(id) FROM msgs WHERE from_uid=? OR to_uid=? GROUP BY conv) ORDER BY m.id DESC LIMIT 50')
+      .bind(uid, uid, uid).all()).results || [];
+    const others = rows.map(x => x.from_uid === uid ? x.to_uid : x.from_uid), names = {};
+    if (others.length){
+      const q = await DB.prepare('SELECT uid, name FROM players WHERE uid IN (' + others.map(() => '?').join(',') + ')').bind(...others).all();
+      for (const r of (q.results || [])) names[r.uid] = r.name;
+    }
+    const bl = new Set(((await DB.prepare('SELECT target FROM blocks WHERE uid=?').bind(uid).all()).results || []).map(r => r.target));
+    return ok({ list:rows.map((x, i) => ({ uid:others[i], name:names[others[i]] || '(ลบบัญชีแล้ว)', text:x.text,
+      at:x.at, mine:x.from_uid === uid, unread:x.unread | 0, blocked:bl.has(others[i]) })) });
+  }
+  if (p === '/chat/thread'){
+    const o = await whoOf(env, b, me), conv = convKey(uid, o.uid);
+    const rows = ((await DB.prepare('SELECT id, from_uid, text, at FROM msgs WHERE conv=? AND id>? ORDER BY id DESC LIMIT 100')
+      .bind(conv, b.after | 0).all()).results || []).reverse();
+    const rd = await DB.prepare('UPDATE msgs SET read=1 WHERE conv=? AND to_uid=? AND read=0').bind(conv, uid).run();
+    const blocked = !!(await DB.prepare('SELECT 1 x FROM blocks WHERE uid=? AND target=?').bind(uid, o.uid).first());
+    return ok({ with:{ uid:o.uid, name:o.name }, blocked, readN:rd.meta.changes || 0,
+      list:rows.map(m => ({ id:m.id, mine:m.from_uid === uid, text:m.text, at:m.at })) });
+  }
+  if (p === '/chat/send'){
+    const o = await whoOf(env, b, me);
+    const text = String(b.text || '').replace(/\r/g, '').trim();
+    if (!text) throw ue('พิมพ์ข้อความก่อน');
+    if (text.length > CHAT_MAX) throw ue('ข้อความยาวเกิน ' + CHAT_MAX + ' ตัวอักษร');
+    const last = await DB.prepare('SELECT at FROM msgs WHERE from_uid=? ORDER BY id DESC LIMIT 1').bind(uid).first();
+    if (last && t - last.at < CHAT_GAP) throw ue('ส่งเร็วเกินไป รอสักครู่');
+    const hr = ((await DB.prepare('SELECT COUNT(*) n FROM msgs WHERE from_uid=? AND at>?').bind(uid, t - 3600000).first()) || {}).n || 0;
+    if (hr >= CHAT_HOUR) throw ue('ส่งครบ ' + CHAT_HOUR + ' ข้อความในชั่วโมงนี้แล้ว');
+    if (await DB.prepare('SELECT 1 x FROM blocks WHERE uid=? AND target=?').bind(uid, o.uid).first())
+      throw ue('คุณบล็อกผู้เล่นนี้อยู่ ปลดบล็อกก่อนจึงจะส่งได้');
+    if (await DB.prepare('SELECT 1 x FROM blocks WHERE uid=? AND target=?').bind(o.uid, uid).first())
+      throw ue('ผู้เล่นนี้ไม่รับข้อความจากคุณ');
+    const r = await DB.prepare('INSERT INTO msgs(conv,from_uid,to_uid,text,at,read,reported) VALUES(?,?,?,?,?,0,0)')
+      .bind(convKey(uid, o.uid), uid, o.uid, text, t).run();
+    return ok({ id:r.meta.last_row_id, to:o.uid });
+  }
+  if (p === '/chat/block'){
+    const o = await whoOf(env, b, me);
+    if (b.on){
+      await DB.prepare('INSERT OR IGNORE INTO blocks(uid,target,at) VALUES(?,?,?)').bind(uid, o.uid, t).run();
+      await DB.prepare('UPDATE msgs SET read=1 WHERE conv=? AND to_uid=?').bind(convKey(uid, o.uid), uid).run();
+    } else await DB.prepare('DELETE FROM blocks WHERE uid=? AND target=?').bind(uid, o.uid).run();
+    return ok({ blocked:!!b.on });
+  }
+  if (p === '/chat/blocks'){
+    const r = await DB.prepare('SELECT b.target AS uid, p.name FROM blocks b LEFT JOIN players p ON p.uid=b.target WHERE b.uid=? ORDER BY b.at DESC').bind(uid).all();
+    return ok({ list:r.results || [] });
+  }
+  if (p === '/chat/report'){
+    const m = await DB.prepare('SELECT m.id, m.from_uid, m.text, m.at, p.name FROM msgs m LEFT JOIN players p ON p.uid=m.from_uid WHERE m.id=? AND m.to_uid=?')
+      .bind(b.id | 0, uid).first();
+    if (!m) throw ue('ไม่พบข้อความ');
+    await DB.prepare('UPDATE msgs SET reported=1 WHERE id=?').bind(m.id).run();
+    return ok({ msg:m });
+  }
+
+  /* ---------- แผนการรบ ---------- */
+  if (p === '/plan/list'){
+    const r = await DB.prepare('SELECT id, vid, tx, ty, mission, troops, fire_at FROM plans WHERE uid=? ORDER BY fire_at').bind(uid).all();
+    return ok({ until:me.sched_until || 0,
+      list:(r.results || []).map(x => Object.assign(x, { troops:JSON.parse(x.troops || '{}') })) });
+  }
+  if (p === '/plan/add'){
+    if ((me.sched_until || 0) <= t) throw ue('ต้องซื้อสิทธิ์แผนการรบก่อน');
+    const fire = Math.floor(+b.fireAt || 0);
+    if (fire < t + 60000) throw ue('ต้องตั้งเวลาล่วงหน้าอย่างน้อย 1 นาที');
+    if (fire > me.sched_until) throw ue('เวลาที่ตั้งเกินวันหมดสิทธิ์แผนการรบ');
+    if (!['attack', 'raid', 'scout'].includes(b.mission)) throw ue('ภารกิจไม่ถูกต้อง');
+    const n = ((await DB.prepare('SELECT COUNT(*) n FROM plans WHERE uid=?').bind(uid).first()) || {}).n || 0;
+    if (n >= PLAN_MAX) throw ue('ตั้งแผนได้สูงสุด ' + PLAN_MAX + ' แผน');
+    if (!(await DB.prepare('SELECT id FROM villages WHERE id=? AND uid=?').bind(b.vid | 0, uid).first()))
+      throw ue('ไม่พบเมืองนี้');
+    const tr = {};
+    let c = 0;
+    for (const k in (b.troops || {})){
+      const v = Math.floor(b.troops[k]), u = UNITS[k];
+      if (v > 0 && u && u.tribe === me.tribe){ tr[k] = v; c += v; }
+    }
+    if (!c) throw ue('ยังไม่ได้เลือกทหาร');
+    const tx = b.tx | 0, ty = b.ty | 0;
+    if (Math.abs(tx) > MAP_R || Math.abs(ty) > MAP_R) throw ue('พิกัดอยู่นอกแผนที่');
+    await DB.prepare('INSERT INTO plans(uid,vid,tx,ty,mission,troops,fire_at,created) VALUES(?,?,?,?,?,?,?,?)')
+      .bind(uid, b.vid | 0, tx, ty, b.mission, JSON.stringify(tr), fire, t).run();
+    return ok({});
+  }
+  if (p === '/plan/del'){
+    await DB.prepare('DELETE FROM plans WHERE id=? AND uid=?').bind(b.id | 0, uid).run();
+    return ok({});
+  }
+  return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
+}
+
+/* ส่งทัพตามแผน — เรียกจาก Cron ทุก 1 นาที */
+async function firePlans(env, t){
+  const rows = (await env.DB.prepare('SELECT * FROM plans WHERE fire_at<=? ORDER BY fire_at LIMIT 25').bind(t).all()).results || [];
+  for (const r of rows){
+    const d = await env.DB.prepare('DELETE FROM plans WHERE id=?').bind(r.id).run();
+    if (!d.meta.changes) continue;
+    let err = null;
+    try {
+      const out = await session(env, r.uid, ctx => sendArmy(ctx, env,
+        { vid:r.vid, tx:r.tx, ty:r.ty, mission:r.mission, troops:JSON.parse(r.troops || '{}') }));
+      if (!out) err = 'ไม่พบบัญชี';
+      else if (!out.ok) err = out.err || 'ไม่ทราบสาเหตุ';
+    } catch (e){ err = (e && e.user) ? e.message : 'ระบบผิดพลาด'; }
+    const title = err ? '⏰ แผนการรบล้มเหลว — ' + err
+                      : '⏰ แผนการรบออกเดินทางแล้ว → (' + r.tx + '|' + r.ty + ')';
+    await env.DB.prepare('INSERT INTO reports(uid,at,kind,title,data,read) VALUES(?,?,?,?,?,0)')
+      .bind(r.uid, t, 'war', title, JSON.stringify({ plan:{ tx:r.tx, ty:r.ty, mission:r.mission } })).run();
+  }
+}
+async function socialCleanup(env, t){
+  await env.DB.prepare('DELETE FROM msgs WHERE at<?').bind(t - CHAT_KEEP).run();
 }
