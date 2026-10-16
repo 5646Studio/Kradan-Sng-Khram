@@ -712,3 +712,11 @@ body.tiopen #fabwrap,body.tiopen #herobtn{display:none!important}
   font-size:11px!important;background:#2a2218;color:#ffcf40;border-radius:6px;vertical-align:middle}
 input[type=datetime-local].selbox{margin-top:4px;color-scheme:dark}
 
+/* ===== v14d ===== */
+#cityhub{width:50px!important;height:50px!important;background:none!important;border:none!important;
+  box-shadow:none!important;border-radius:0!important}
+#cityhub img{width:50px!important;height:50px!important;filter:drop-shadow(0 3px 6px rgba(0,0,0,.75))}
+#cityhub .hubn{bottom:-6px}
+.hof-main .gt{color:#4db8ff;font-size:10px;font-weight:400}
+.hoftabs{grid-template-columns:repeat(3,1fr)}
+
