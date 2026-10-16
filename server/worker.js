@@ -643,8 +643,10 @@ async function route(req, env){
       V.row.name = nm; V.dirty = true;
     },
     '/train': ctx => { const V = findV(ctx, b.vid); trainUnits(V.d, ctx.P.tribe, ctx.t, String(b.u || ''), b.n); V.dirty = true; },
-    '/send': ctx => sendArmy(ctx, env, b)
+    '/send': ctx => sendArmy(ctx, env, b),
+    '/quest/claim': ctx => questClaim(ctx, env, b)
   };
+  
   if (!(p in ACT)) return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
   const out = await session(env, uid, ACT[p]);
   if (!out) return json({ ok:true, player:null, villages:[], features:FEATURES, now:Date.now() }, 200, env);
@@ -773,6 +775,7 @@ async function session(env, uid, act){
     }
     ctx.unread = ((await env.DB.prepare('SELECT COUNT(*) n FROM reports WHERE uid=? AND read=0').bind(uid).first()) || {}).n || 0;
     ctx.msgUnread = ((await env.DB.prepare('SELECT COUNT(*) n FROM msgs WHERE to_uid=? AND read=0').bind(uid).first()) || {}).n || 0;
+    ctx.qReady = await questReady(env, ctx);
 
     return stateOf(ctx, err);
   }
@@ -826,6 +829,7 @@ function stateOf(ctx, err){
     renameN:P.rename_n | 0, renameAt:P.rename_at || 0, oldName:P.old_name || null,
     schedUntil:P.sched_until || 0 },
     msgUnread:ctx.msgUnread || 0,
+    quest:questOut(P, ctx),
 
     villages:VS.map(V => {
       const d = V.d;
@@ -909,7 +913,7 @@ async function doArrive(env, m){
     a:{ name:aP ? aP.name : '?', v:aV ? aV.name : '?', x:m.fx, y:m.fy, sent:tr, lost:{} },
     d:{ name:RUIN_NAME, v:'', x:m.tx, y:m.ty, troops:null, lost:{} }, loot:null, win:false };
   const st = [];
-  let left = tr, loot = { wheat:0, wood:0, iron:0, clay:0 }, guardV = null, defUid = null;
+  let left = tr, loot = { wheat:0, wood:0, iron:0, clay:0 }, guardV = null, defUid = null, botTaunt = null;
 
   if (m.to_vid){
     const dr = await getV(env, m.to_vid);
@@ -944,7 +948,14 @@ async function doArrive(env, m){
         }
         rep.loot = loot;
       }
+        if (dP.is_bot === 1 && aP && m.mission !== 'scout'){
+        if (!dd.grudge) dd.grudge = {};
+        const g0 = dd.grudge[m.uid] || { n:0, at:0 };
+        dd.grudge[m.uid] = { n:Math.min(9, g0.n + 1), at };
+        if (aP.is_bot === 0 && Math.random() < 0.6) botTaunt = { bot:dr.uid, to:m.uid, kind:rep.win ? 'hit' : 'held' };
+      }
       st.push(vUpd(env, dr, dd, t)); guardV = dr;
+
       if (seen && dP.is_bot === 0) defUid = dr.uid;
     }
   } else {
@@ -990,6 +1001,7 @@ async function doArrive(env, m){
     st.push(repIns(env, defUid, at, titleD(rep), dr2, g, gb));
   }
   const res = await env.DB.batch(st);
+  if (botTaunt && (!guardV || res[0].meta.changes > 0)) await botMsg(env, botTaunt.bot, botTaunt.to, botTaunt.kind, Date.now());
   return guardV ? res[0].meta.changes > 0 : true;
 }
 
@@ -1067,15 +1079,7 @@ async function health(env){
     moves:await one('SELECT COUNT(*) n FROM moves'),
     payment:env.PAYMENT_ENABLED === '1' }, 200, env);
 }
-async function world(env){
-  const r = await env.DB.prepare('SELECT v.id, v.x, v.y, v.name AS vn, v.pop, v.uid, p.name AS pn, p.is_bot AS bot FROM villages v JOIN players p ON p.uid=v.uid WHERE p.banned=0 LIMIT 5000').all();
-  return json({ ok:true, now:Date.now(), v:r.results || [] }, 200, env);
-}
-async function rank(env, q){
-  const f = q.f === 'vc' ? 'vc' : 'pop';
-  const r = await env.DB.prepare('SELECT p.name, COUNT(v.id) AS vc, COALESCE(SUM(v.pop),0) AS pop FROM players p LEFT JOIN villages v ON v.uid=p.uid WHERE p.banned=0 AND p.is_bot<2 GROUP BY p.uid ORDER BY ' + f + ' DESC LIMIT 50').all();
-  return json({ ok:true, list:r.results || [] }, 200, env);
-}
+
 
 /* ---------- ร้านค้า (โครง) ---------- */
 async function shopOrder(env, uid, b){
@@ -1162,7 +1166,9 @@ async function admin(p, b, q, env, by){
       await DB.batch([
         DB.prepare('UPDATE moves SET to_vid=NULL, to_uid=NULL WHERE to_uid IN (SELECT uid FROM players WHERE is_bot=1)'),
         DB.prepare('DELETE FROM villages WHERE uid IN (SELECT uid FROM players WHERE is_bot=1)'),
-        DB.prepare('DELETE FROM players WHERE is_bot=1')
+        DB.prepare('DELETE FROM players WHERE is_bot=1'),
+        DB.prepare('DELETE FROM guilds WHERE is_bot=1')
+
       ]);
       return json({ ok:true }, 200, env);
     }
@@ -1255,32 +1261,7 @@ function botBuild(d, P, VS, t, uid){
     if (!done) break;
   }
 }
-function botTrain(d, tribe, t, uid){
-  if (lvl(d, 'barracks') < 1 || (d.train && d.train.barracks && d.train.barracks.length)) return;
-  const cap = persona(uid) === 'turt' ? 0.9 : persona(uid) === 'war' ? 0.7 : 0.45;
-  if (tcount(d.troops) > population(d) * cap || rate(d, 'wheat') < 10) return;
-  const id = 'u' + tribe + '_inf_d', u = UNITS[id];
-  if (!u) return;
-  let n = Math.floor(Math.min(...RES.map(r => (d.res[r] - 300) / Math.max(1, u.cost[r]))) * 0.5);
-  n = Math.min(n, 25);
-  if (n >= 1){ try { trainUnits(d, tribe, t, id, n); } catch (e){} }
-}
-async function botTick(env){
-  const t = Date.now();
-  const nb = ((await env.DB.prepare('SELECT COUNT(*) n FROM players WHERE is_bot=1').first()) || {}).n || 0;
-  if (nb < BOT_TARGET) await spawnBots(env, Math.min(BOT_SPAWN_PER_TICK, BOT_TARGET - nb));
-  const rows = (await env.DB.prepare('SELECT v.*, p.tribe AS ptribe FROM villages v JOIN players p ON p.uid=v.uid WHERE p.is_bot=1 ORDER BY v.updated ASC LIMIT ?').bind(BOT_BATCH).all()).results || [];
-  const st = [];
-  for (const r of rows){
-    const d = JSON.parse(r.data), P = { uid:r.uid, builders:2, builder_until:0, gold:0 };
-    d._away = 0;
-    advance(d, t, P); fill(d, t, P);
-    botBuild(d, P, [{ row:r, d }], t, r.uid);
-    botTrain(d, r.ptribe | 0, t, r.uid);
-    st.push(vUpd(env, r, d, t));
-  }
-  if (st.length) await env.DB.batch(st);
-}
+
 
 /* =====================================================================
    B2.5 : แชต · บล็อก · เปลี่ยนชื่อ · แผนการรบ
@@ -1454,4 +1435,314 @@ async function firePlans(env, t){
 }
 async function socialCleanup(env, t){
   await env.DB.prepare('DELETE FROM msgs WHERE at<?').bind(t - CHAT_KEEP).run();
+}
+
+/* =====================================================================
+   B3 : บอทคิดเอง (ออกรบ · ความแค้น · กิลด์ · ขยายเมือง · ตอบแชต) · ภารกิจ
+   ===================================================================== */
+const BOT_HIT_PLAYERS = true;   // false = บอทไม่บุกผู้เล่นจริง
+const BOT_ATT_MAX = 8;          // บอทออกรบได้สูงสุดกี่ขบวนต่อรอบ (ทุก 5 นาที)
+const BOT_RANGE = 22;           // ระยะที่บอทมองหาเป้าหมาย
+const BOT_GUILDS = 8;           // จำนวนกิลด์บอทสูงสุด
+const GUILD_MAX = 12;
+const CPN = [0, 0, 500, 1400, 3000, 5500, 9000, 14000];
+
+/* ---------- ข้อมูลสาธารณะ (มีแท็กกิลด์) ---------- */
+async function world(env){
+  const r = await env.DB.prepare('SELECT v.id, v.x, v.y, v.name AS vn, v.pop, v.uid, p.name AS pn, p.is_bot AS bot, g.tag AS gt FROM villages v JOIN players p ON p.uid=v.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE p.banned=0 LIMIT 5000').all();
+  return json({ ok:true, now:Date.now(), v:r.results || [] }, 200, env);
+}
+async function rank(env, q){
+  if (q.f === 'g'){
+    const r = await env.DB.prepare('SELECT g.name, g.tag, COUNT(DISTINCT p.uid) AS mc, COUNT(v.id) AS vc, COALESCE(SUM(v.pop),0) AS pop FROM guilds g JOIN players p ON p.guild_id=g.id LEFT JOIN villages v ON v.uid=p.uid GROUP BY g.id ORDER BY pop DESC LIMIT 30').all();
+    return json({ ok:true, list:r.results || [] }, 200, env);
+  }
+  const f = q.f === 'vc' ? 'vc' : 'pop';
+  const r = await env.DB.prepare('SELECT p.name, g.tag, COUNT(v.id) AS vc, COALESCE(SUM(v.pop),0) AS pop FROM players p LEFT JOIN villages v ON v.uid=p.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE p.banned=0 AND p.is_bot<2 GROUP BY p.uid ORDER BY ' + f + ' DESC LIMIT 50').all();
+  return json({ ok:true, list:r.results || [] }, 200, env);
+}
+
+/* ---------- บอทฝึกทหาร (บุก + ป้องกัน ตามบุคลิก) ---------- */
+function botTrain(d, tribe, t, uid){
+  const pk = persona(uid);
+  const cap = pk === 'turt' ? 0.9 : pk === 'war' ? 0.8 : 0.5;
+  if (tcount(d.troops) > population(d) * cap || rate(d, 'wheat') < 10) return;
+  const plan = [];
+  if (lvl(d, 'barracks') >= 1)
+    plan.push(['barracks', (pk === 'turt' || pk === 'eco') ? (Math.random() < 0.75 ? 'inf_d' : 'inf_a')
+                                                         : (Math.random() < 0.65 ? 'inf_a' : 'inf_d')]);
+  if (lvl(d, 'stable') >= 3 && (pk === 'war' || pk === 'exp')) plan.push(['stable', 'cav_l']);
+  for (const [bk, k] of plan){
+    if (d.train && d.train[bk] && d.train[bk].length) continue;
+    const id = 'u' + tribe + '_' + k, u = UNITS[id];
+    if (!u) continue;
+    let n = Math.floor(Math.min(...RES.map(r => (d.res[r] - 300) / Math.max(1, u.cost[r]))) * 0.5);
+    n = Math.min(n, 30);
+    if (n >= 1){ try { trainUnits(d, tribe, t, id, n); } catch (e){} }
+  }
+}
+
+/* ---------- ภาพรวมโลกสำหรับบอทใช้ตัดสินใจ ---------- */
+async function worldIndex(env){
+  const v = (await env.DB.prepare('SELECT v.id, v.x, v.y, v.uid, v.pop, p.is_bot, p.protect_until, p.guild_id AS pg FROM villages v JOIN players p ON p.uid=v.uid WHERE p.banned=0').all()).results || [];
+  const mv = (await env.DB.prepare('SELECT from_vid, troops FROM moves').all()).results || [];
+  const busy = new Set(), away = {}, occ = new Set();
+  for (const m of mv){ busy.add(m.from_vid); away[m.from_vid] = (away[m.from_vid] || 0) + tUp(JSON.parse(m.troops || '{}')); }
+  for (const x of v) occ.add(x.x + ',' + x.y);
+  return { vills:v, busy, away, occ, sent:0 };
+}
+
+/* ---------- บอทเลือกเป้าหมายและออกรบ ---------- */
+function botAttack(d, r, W, t){
+  const pk = persona(r.uid);
+  const chance = pk === 'war' ? 0.55 : pk === 'exp' ? 0.35 : pk === 'eco' ? 0.2 : 0.1;
+  const grudge = d.grudge || {};
+  const hasGrudge = Object.keys(grudge).some(k => t - grudge[k].at < 3 * 86400000);
+  if (W.busy.has(r.id) || W.sent >= BOT_ATT_MAX || lvl(d, 'rally') < 1) return null;
+  if (Math.random() > (hasGrudge ? Math.max(chance, 0.6) : chance)) return null;
+
+  const tr = {};
+  let n = 0, minS = 99;
+  for (const k in (d.troops || {})){
+    const u = UNITS[k];
+    if (!u || u.type === 'scout' || u.type === 'siege') continue;
+    const keep = u.di > u.atk ? Math.ceil(d.troops[k] * 0.6) : 0;
+    const s = d.troops[k] - keep;
+    if (s <= 0) continue;
+    tr[k] = s; n += s;
+    if (u.spd < minS) minS = u.spd;
+  }
+  if (n < 10) return null;
+
+  let best = null, bs = -1;
+  for (const o of W.vills){
+    if (o.uid === r.uid) continue;
+    const dist = Math.hypot(o.x - r.x, o.y - r.y);
+    if (dist > BOT_RANGE) continue;
+    if (o.pg && o.pg === r.pg) continue;
+    if (o.is_bot === 0 && (!BOT_HIT_PLAYERS || o.protect_until > t)) continue;
+    const g = grudge[o.uid], gr = (g && t - g.at < 3 * 86400000) ? g.n : 0;
+    if (o.is_bot === 0 && !gr && o.pop > r.pop * 1.2) continue;
+    const s = (o.is_bot === 2 ? 3 : 1) * (1 + gr * 2) / (1 + dist * 0.15) *
+              (o.pop < r.pop ? 1.5 : 0.7) * (0.7 + Math.random() * 0.6);
+    if (s > bs){ bs = s; best = { x:o.x, y:o.y, vid:o.id, uid:o.uid, gr }; }
+  }
+  for (let i = 0; i < 12; i++){
+    const x = r.x + Math.round((Math.random() * 2 - 1) * 10), y = r.y + Math.round((Math.random() * 2 - 1) * 10);
+    if (Math.abs(x) > MAP_R || Math.abs(y) > MAP_R || W.occ.has(x + ',' + y)) continue;
+    if (!tile(x, y).npc) continue;
+    const s = 2 / (1 + Math.hypot(x - r.x, y - r.y) * 0.15) * (0.7 + Math.random() * 0.6);
+    if (s > bs){ bs = s; best = { x, y, vid:null, uid:null, gr:0 }; }
+  }
+  if (!best) return null;
+
+  for (const k in tr){ d.troops[k] -= tr[k]; if (d.troops[k] <= 0) delete d.troops[k]; }
+  W.busy.add(r.id); W.sent++;
+  const mis = (best.gr && pk === 'war' && Math.random() < 0.5) ? 'attack' : 'raid';
+  const spd = minS * (1 + 0.03 * lvl(d, 'trainground'));
+  const sec = Math.max(60, Math.round(Math.hypot(best.x - r.x, best.y - r.y) / spd * 3600 / SPEED));
+  return [r.uid, r.id, r.x, r.y, best.x, best.y, best.vid, best.uid, mis, JSON.stringify(tr), '{}',
+    t, t + sec * 1000, 'go', 0, 0];
+}
+
+/* ---------- รอบบอท (ทุก 5 นาที) ---------- */
+async function botTick(env){
+  const t = Date.now(), DB = env.DB;
+  const nb = ((await DB.prepare('SELECT COUNT(*) n FROM players WHERE is_bot=1').first()) || {}).n || 0;
+  if (nb < BOT_TARGET) await spawnBots(env, Math.min(BOT_SPAWN_PER_TICK, BOT_TARGET - nb));
+  try { await botGuilds(env, t); } catch (e){ console.log('guild', e && e.message); }
+  try { await botExpand(env, t); } catch (e){ console.log('expand', e && e.message); }
+  try { await botReplies(env, t); } catch (e){ console.log('reply', e && e.message); }
+
+  const rows = (await DB.prepare('SELECT v.*, p.tribe AS ptribe, p.guild_id AS pg FROM villages v JOIN players p ON p.uid=v.uid WHERE p.is_bot=1 ORDER BY v.updated ASC LIMIT ?').bind(BOT_BATCH).all()).results || [];
+  const W = await worldIndex(env), st = [];
+  for (const r of rows){
+    const d = JSON.parse(r.data), P = { uid:r.uid, builders:2, builder_until:0, gold:0 };
+    if (!d.troops) d.troops = {};
+    d._away = W.away[r.id] || 0;
+    advance(d, t, P); fill(d, t, P);
+    botBuild(d, P, [{ row:r, d }], t, r.uid);
+    botTrain(d, r.ptribe | 0, t, r.uid);
+    const mv = botAttack(d, r, W, t);
+    st.push(vUpd(env, r, d, t));
+    if (mv) st.push(DB.prepare('INSERT INTO moves(uid,from_vid,fx,fy,tx,ty,to_vid,to_uid,mission,troops,loot,depart,arrive,state,lock,tries) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT ver FROM villages WHERE id=?)=?')
+      .bind(...mv, r.id, r.ver + 1));
+  }
+  if (st.length) await DB.batch(st);
+}
+
+/* ---------- กิลด์บอท ---------- */
+const GN1 = ['สมาพันธ์','กองทัพ','พันธมิตร','แนวร่วม','สหาย','ภาคี'];
+const GN2 = [['นาคา','NAG'],['ไกรสร','KRS'],['อินทรี','EGL'],['พยัคฆ์','TGR'],['ช้างเผือก','WHT'],['สุวรรณ','SUV'],
+  ['อโยธยา','AYU'],['ล้านช้าง','LXC'],['ทวารวดี','DVR'],['หริภุญชัย','HPJ'],['ศรีวิชัย','SVJ'],['เชียงแสน','CSN']];
+async function botGuilds(env, t){
+  const DB = env.DB;
+  const ng = ((await DB.prepare('SELECT COUNT(*) n FROM guilds WHERE is_bot=1').first()) || {}).n || 0;
+  if (ng < BOT_GUILDS){
+    const f = await DB.prepare('SELECT uid, zone FROM players WHERE is_bot=1 AND guild_id IS NULL ORDER BY RANDOM() LIMIT 1').first();
+    if (f){
+      const w = pick(GN2), base = pick(GN1) + w[0];
+      for (let i = 0; i < 4; i++){
+        const name = base + (i ? ' ' + (i + 1) : ''), tag = w[1] + (i ? i + 1 : '');
+        try {
+          const r = await DB.prepare('INSERT INTO guilds(name,tag,owner,is_bot,created) VALUES(?,?,?,1,?)').bind(name, tag, f.uid, t).run();
+          const gid = r.meta.last_row_id;
+          await DB.prepare('UPDATE players SET guild_id=? WHERE uid=? OR uid IN (SELECT uid FROM players WHERE is_bot=1 AND guild_id IS NULL AND zone=? ORDER BY RANDOM() LIMIT 6)')
+            .bind(gid, f.uid, f.zone).run();
+          break;
+        } catch (e){ if (!/UNIQUE/i.test(String(e && e.message))) throw e; }
+      }
+    }
+  }
+  const lone = (await DB.prepare('SELECT uid, zone FROM players WHERE is_bot=1 AND guild_id IS NULL ORDER BY RANDOM() LIMIT 3').all()).results || [];
+  for (const b of lone){
+    if (Math.random() > 0.4) continue;
+    const g = await DB.prepare('SELECT g.id FROM guilds g JOIN players o ON o.uid=g.owner WHERE g.is_bot=1 AND o.zone=? AND (SELECT COUNT(*) FROM players m WHERE m.guild_id=g.id) < ? ORDER BY RANDOM() LIMIT 1')
+      .bind(b.zone, GUILD_MAX).first();
+    if (g) await DB.prepare('UPDATE players SET guild_id=? WHERE uid=?').bind(g.id, b.uid).run();
+  }
+}
+
+/* ---------- บอทขยายเมือง ---------- */
+async function botExpand(env, t){
+  const DB = env.DB;
+  const ps = (await DB.prepare('SELECT * FROM players WHERE is_bot=1 ORDER BY RANDOM() LIMIT 4').all()).results || [];
+  if (!ps.length) return;
+  const occ = await occSet(env), st = [];
+  for (const P of ps){
+    const rows = (await DB.prepare('SELECT * FROM villages WHERE uid=?').bind(P.uid).all()).results || [];
+    if (!rows.length) continue;
+    const VS = rows.map(r => ({ row:r, d:JSON.parse(r.data) }));
+    const cp = cpNow(P, VS, t), vc = rows.length;
+    const cap = { exp:6, war:4, eco:4, turt:3 }[persona(P.uid)];
+    if (vc < cap && cp >= (CPN[vc + 1] || 1e12) &&
+        VS.some(V => lvl(V.d, 'main') >= 8 && population(V.d) >= 150)){
+      const base = pick(rows);
+      for (let k = 0; k < 40; k++){
+        const a = Math.random() * Math.PI * 2, rad = 4 + Math.random() * 9;
+        const x = Math.round(base.x + Math.cos(a) * rad), y = Math.round(base.y + Math.sin(a) * rad);
+        if (canSettle(x, y) || occ.has(x + ',' + y)) continue;
+        occ.add(x + ',' + y);
+        const d = newVillage(x, y, false, t);
+        st.push(DB.prepare('INSERT OR IGNORE INTO villages(uid,x,y,name,pop,data,ver,updated) VALUES(?,?,?,?,?,?,0,?)')
+          .bind(P.uid, x, y, 'นคร' + pick(BOT_NM), population(d), SJ(d), t));
+        break;
+      }
+    }
+    st.push(DB.prepare('UPDATE players SET cp=?, cp_at=? WHERE uid=?').bind(cp, t, P.uid));
+  }
+  if (st.length) await DB.batch(st);
+}
+
+/* ---------- บอทคุยแชต ---------- */
+const BOT_LINES = {
+  hi:['สวัสดีท่าน ยินดีที่ได้รู้จัก','ทักมามีธุระอะไรหรือท่าน','สวัสดี เมืองท่านเป็นอย่างไรบ้าง','ยินดีต้อนรับสู่แผ่นดินนี้นะท่าน'],
+  ally:['ถ้าท่านไม่ตีข้า ข้าก็ไม่ตีท่าน','เรื่องพันธมิตรไว้คุยกับหัวหน้ากิลด์ข้าดีกว่า','ข้ายังไม่ไว้ใจท่านนัก พิสูจน์ตัวก่อน','เป็นพันธมิตรกันก็ดี ศัตรูรอบข้างมีเยอะ'],
+  threat:['มาสิ! กำแพงข้าแข็งพอ','ข้าไม่กลัวท่านหรอก','พูดเก่งนัก ลองมาดูสักตั้ง','ทหารข้ารอท่านอยู่แล้ว'],
+  trade:['ตลาดยังไม่เปิดเลย ไว้ค่อยแลกกัน','ข้าขาดเหล็กอยู่พอดี ไว้คุยกันใหม่','ค้าขายดีกว่ารบกันนะท่าน'],
+  sorry:['ครั้งนี้ข้ายกโทษให้ แต่อย่าให้มีอีก','อืม… ข้าจะจำไว้ว่าท่านยังมีน้ำใจ','ขอโทษแล้วก็แล้วกัน'],
+  angry:['ท่านยังกล้าทักข้าอีกหรือ หลังจากที่ตีเมืองข้า','ข้ายังไม่ลืมเรื่องที่ท่านทำ','ระวังตัวไว้ให้ดี ข้ากำลังเตรียมทัพ'],
+  hit:['ทำไมมาตีเมืองข้า! จำไว้เลย','ท่านจะต้องชดใช้','ปล้นข้าไปเท่าไร ข้าจะเอาคืนเป็นสองเท่า','นี่คือการประกาศสงครามใช่ไหม'],
+  held:['กำแพงข้ายังอยู่ ลองใหม่สิ','อ่อนหัดนัก กลับไปฝึกทหารมาใหม่','ทหารท่านมาตายเปล่า ๆ เสียดายจริง'],
+  ask:['ข้าก็ไม่แน่ใจนัก','ถามดีนะท่าน แต่ข้าตอบไม่ได้','ไว้ข้าคิดก่อนแล้วจะบอก'],
+  bye:['แล้วพบกันใหม่ท่าน','ลาก่อน ขอให้เมืองท่านรุ่งเรือง'],
+  def:['อืม','ข้ากำลังยุ่งกับการสร้างเมือง','ไว้คุยกันใหม่นะท่าน','ข้ารับทราบแล้ว','ฮ่า ๆ ท่านนี่ช่างพูดดี']
+};
+function intent(t){
+  t = String(t || '');
+  if (/ขอโทษ|โทษที|sorry/i.test(t)) return 'sorry';
+  if (/สวัสดี|หวัดดี|ดีครับ|ดีค่ะ|hello|hi\b/i.test(t)) return 'hi';
+  if (/พันธมิตร|ร่วมมือ|กิลด์|เข้าพวก|ally/i.test(t)) return 'ally';
+  if (/ตี|บุก|ฆ่า|ทำลาย|ยึด|ปล้น|รบ/.test(t)) return 'threat';
+  if (/แลก|ขาย|ซื้อ|ตลาด|ค้า/.test(t)) return 'trade';
+  if (/ลาก่อน|บาย|bye/i.test(t)) return 'bye';
+  if (/\?|ไหม|มั้ย|อะไร|ยังไง|ทำไม/.test(t)) return 'ask';
+  return 'def';
+}
+async function botMsg(env, bot, to, kind, t){
+  if (await env.DB.prepare('SELECT 1 x FROM blocks WHERE uid=? AND target=?').bind(to, bot).first()) return;
+  await env.DB.prepare('INSERT INTO msgs(conv,from_uid,to_uid,text,at,read,reported) VALUES(?,?,?,?,?,0,0)')
+    .bind(convKey(bot, to), bot, to, pick(BOT_LINES[kind] || BOT_LINES.def), t).run();
+}
+async function botReplies(env, t){
+  const DB = env.DB;
+  const rows = (await DB.prepare('SELECT m.from_uid, m.to_uid, m.text FROM msgs m JOIN players p ON p.uid=m.to_uid WHERE p.is_bot=1 AND m.read=0 AND m.at<? ORDER BY m.id DESC LIMIT 30')
+    .bind(t - 45000).all()).results || [];
+  const seen = new Set();
+  for (const m of rows){
+    const k = m.from_uid + '|' + m.to_uid;
+    if (seen.has(k)) continue;
+    if (seen.size >= 10) break;
+    seen.add(k);
+    await DB.prepare('UPDATE msgs SET read=1 WHERE from_uid=? AND to_uid=? AND read=0').bind(m.from_uid, m.to_uid).run();
+    let gr = 0;
+    try {
+      const v = await DB.prepare('SELECT data FROM villages WHERE uid=? LIMIT 1').bind(m.to_uid).first();
+      const g = (JSON.parse(v.data).grudge || {})[m.from_uid];
+      gr = (g && t - g.at < 3 * 86400000) ? g.n : 0;
+    } catch (e){}
+    let kind = intent(m.text);
+    if (gr >= 1 && kind !== 'sorry' && kind !== 'threat') kind = 'angry';
+    if (persona(m.to_uid) === 'war' && kind === 'def' && Math.random() < 0.4) kind = 'threat';
+    await botMsg(env, m.to_uid, m.from_uid, kind, t);
+  }
+}
+
+/* ---------- ภารกิจ ---------- */
+const QUESTS = [
+  { t:'หว่านกล้า', d:'อัปเกรดหลุมข้าวหลุมใดก็ได้ให้ถึง Lv.1', r:{ res:150 }, c:x => x.F('wheat', 1) >= 1 },
+  { t:'ครบทุกทรัพยากร', d:'อัปเกรดหลุมไม้ เหล็ก และโคลน อย่างน้อยชนิดละ 1 หลุมให้ถึง Lv.1', r:{ res:200 },
+    c:x => x.F('wood', 1) && x.F('iron', 1) && x.F('clay', 1) },
+  { t:'ศาลาว่าการ', d:'อัปเกรดอาคารหลักเป็น Lv.2', r:{ res:250 }, c:x => x.L('main') >= 2 },
+  { t:'คลังสินค้า', d:'สร้างคลังสินค้า', r:{ res:300 }, c:x => x.L('warehouse') >= 1 },
+  { t:'ยุ้งฉาง', d:'สร้างยุ้งฉาง', r:{ res:300 }, c:x => x.L('granary') >= 1 },
+  { t:'ทุ่งทั้งเมือง', d:'อัปเกรดหลุมทรัพยากรทั้ง 20 หลุมให้ถึง Lv.1', r:{ res:400, gold:5 }, c:x => x.F(null, 1) >= 20 },
+  { t:'ตั้งชื่อเมือง', d:'เปลี่ยนชื่อเมืองแรก (⚙ → ✎ เปลี่ยนชื่อเมืองนี้)', r:{ res:200 }, c:x => x.V && x.V.row.name !== 'เมืองแรก' },
+  { t:'ขยายศาลา', d:'อัปเกรดอาคารหลักเป็น Lv.3', r:{ res:400 }, c:x => x.L('main') >= 3 },
+  { t:'ค่ายทหาร', d:'สร้างค่ายทหาร', r:{ res:500 }, c:x => x.L('barracks') >= 1 },
+  { t:'ฝึกทหาร', d:'มีทหารรวมอย่างน้อย 5 นาย', r:{ res:500 }, c:x => x.troops >= 5 },
+  { t:'ปล้นครั้งแรก', d:'ส่งทัพไปปล้นหรือโจมตีแล้วชนะ 1 ครั้ง (ลองเมืองร้างบนแผนที่ดูก่อน)', r:{ res:600, gold:10 },
+    c:async x => (await x.n("SELECT COUNT(*) n FROM reports WHERE uid=? AND title LIKE '⚔️ ชนะ%'", x.uid)) > 0 },
+  { t:'ทักทายเพื่อนบ้าน', d:'ส่งข้อความหาผู้เล่นคนใดก็ได้ (แตะเมืองบนแผนที่แล้วกด ✉)', r:{ res:300 },
+    c:async x => (await x.n('SELECT COUNT(*) n FROM msgs WHERE from_uid=?', x.uid)) > 0 },
+  { t:'กำแพงเมือง', d:'สร้างกำแพงเมือง', r:{ res:500 }, c:x => x.L('wall') >= 1 },
+  { t:'เมืองเติบโต', d:'มีประชากรรวม 120 คน', r:{ res:800, gold:10 }, c:x => x.pop >= 120 },
+  { t:'ศาลาใหญ่', d:'อัปเกรดอาคารหลักเป็น Lv.5', r:{ res:1000 }, c:x => x.L('main') >= 5 },
+  { t:'นครใหญ่', d:'มีประชากรรวม 300 คน', r:{ res:1500, gold:20 }, c:x => x.pop >= 300 }
+];
+function qx(ctx, env){
+  const VS = ctx.VS, uid = ctx.P.uid;
+  let pop = 0, tr = 0;
+  for (const V of VS){ pop += population(V.d); tr += tcount(V.d.troops); }
+  for (const m of (ctx.moves || [])) if (m.uid === uid) tr += tcount(JSON.parse(m.troops || '{}'));
+  return { V:VS[0], uid, pop, troops:tr,
+    F:(res, lv) => { let n = 0; for (const V of VS) for (const f of V.d.fields) if ((!res || f.res === res) && f.level >= lv) n++; return n; },
+    L:k => VS.reduce((m, V) => Math.max(m, lvl(V.d, k)), 0),
+    n:async (sql, ...a) => (((await env.DB.prepare(sql).bind(...a).first()) || {}).n || 0) };
+}
+async function questReady(env, ctx){
+  const q = QUESTS[ctx.P.quest | 0];
+  if (!q || !ctx.VS.length) return false;
+  try { return !!(await q.c(qx(ctx, env))); } catch (e){ return false; }
+}
+function questOut(P, ctx){
+  const i = P.quest | 0, q = QUESTS[i];
+  return { i, total:QUESTS.length, ready:!!ctx.qReady, t:q ? q.t : null, d:q ? q.d : null, r:q ? q.r : null };
+}
+async function questClaim(ctx, env, b){
+  const i = ctx.P.quest | 0, q = QUESTS[i];
+  if (!q) throw ue('ทำภารกิจครบทุกข้อแล้ว');
+  if (!(await q.c(qx(ctx, env)))) throw ue('ยังทำภารกิจนี้ไม่สำเร็จ');
+  const V = ctx.VS.find(x => x.row.id === (b.vid | 0)) || ctx.VS[0];
+  const c = caps(V.d);
+  for (const r of RES) V.d.res[r] = Math.min(r === 'wheat' ? c.gran : c.store, V.d.res[r] + (q.r.res || 0));
+  V.dirty = true;
+  const g = q.r.gold | 0;
+  ctx.pset += ', quest=quest+1' + (g ? ', gold=gold+?' : '');
+  if (g){
+    ctx.pbind.push(g);
+    ctx.ins.push({ t:'ledger', guard:V, cols:'uid,delta,reason,note,at', vals:[ctx.P.uid, g, 'quest', q.t, ctx.t] });
+  }
+  ctx.P.quest = i + 1; ctx.P.gold += g;
+  return { quest:i, reward:q.r };
 }
