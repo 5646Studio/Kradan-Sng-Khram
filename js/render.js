@@ -733,12 +733,16 @@ var Renderer = (function(){
     syncCoord();
   }
 
+    var lastSync = null;
   function syncCoord(){
-    if (editing) return;
     var sx = document.getElementById('sx'), sy = document.getElementById('sy');
     if (!sx || !sy) return;
-    sx.value = Math.round(cam.x);
-    sy.value = Math.round(cam.y);
+    var ae = document.activeElement;
+    if (ae === sx || ae === sy) return;
+    var cx = Math.round(cam.x), cy = Math.round(cam.y);
+    if (lastSync && lastSync.x === cx && lastSync.y === cy) return;
+    lastSync = { x:cx, y:cy };
+    sx.value = cx; sy.value = cy;
   }
 
   function drawVillage(p, ts, relKey, label, isCap){
@@ -1032,7 +1036,8 @@ var Renderer = (function(){
     } catch(e){ logErr('Renderer.loop', e); needDraw = false; }
     requestAnimationFrame(loop);
   }
-  function center(x, y){ cam.x = x; cam.y = y; clampCam(); needDraw = true; }
+  
+  function center(x, y){ cam.x = x; cam.y = y; clampCam(); needDraw = true; lastSync = null; }
   function invalidate(){ needDraw = true; }
 
   return { init:init, center:center, invalidate:invalidate, resize:resize,
@@ -1148,10 +1153,9 @@ var FieldView = (function(){
       });
 
       /* ★ ปุ่มกลาง — เข้าหน้าเมือง ★ */
-      var cl = cityLevel(v, 'main');
-      h += '<button id="cityhub" title="เข้าหน้าเมือง">' +
-        '<img src="' + Art.buildingURL('main', cl, 20) + '" alt="">' +
+      h += '<button id="cityhub" title="เข้าหน้าเมือง"><img src="' + HubArt.url(v) + '" alt="">' +
         '<span class="hubn">' + v.name + '</span></button>';
+
 
       el.innerHTML = h;
       el.querySelectorAll('[data-f]').forEach(function(n){
@@ -1165,4 +1169,111 @@ var FieldView = (function(){
   }
 
   return { init:init, resize:resize, render:render };
+})();
+
+/* ============ HubArt — รูปเมืองตรงกลางหน้าทรัพยากร ============
+   มีรูป assets/scenes/hub_0..4.png → ใช้รูป · ไม่มี → วาดเอง
+   HUB_MODE: 'main' = เปลี่ยนตามเลเวลอาคารหลัก · 'avg' = ตามเลเวลเฉลี่ยของอาคารทั้งเมือง */
+var HUB_MODE = 'avg';
+var HubArt = (function(){
+  var img = {}, tried = {}, drawn = {};
+  function level(v){
+    if (HUB_MODE === 'avg'){
+      var s = 0, n = 0;
+      v.city.forEach(function(c){ if (c.b){ s += c.level; n++; } });
+      if (v.wallLv){ s += v.wallLv; n++; }
+      return n ? Math.round(s / n) : 0;
+    }
+    return cityLevel(v, 'main');
+  }
+  function tier(lv){ return lv <= 0 ? 0 : lv <= 5 ? 1 : lv <= 10 ? 2 : lv <= 15 ? 3 : 4; }
+  function load(t){
+    if (tried[t]) return;
+    tried[t] = 1;
+    var ex = ['png', 'webp'], i = 0;
+    (function nx(){
+      if (i >= ex.length) return;
+      var im = new Image();
+      im.onload = function(){
+        if (!im.naturalWidth) return nx();
+        img[t] = im.src;
+        try { FieldView.render(); } catch(e){}
+      };
+      im.onerror = nx;
+      im.src = CFG.ASSET_PATH + 'scenes/hub_' + t + '.' + ex[i++];
+    })();
+  }
+  function rr(x, a, b, w, h, r){
+    x.beginPath(); x.moveTo(a + r, b);
+    x.arcTo(a + w, b, a + w, b + h, r); x.arcTo(a + w, b + h, a, b + h, r);
+    x.arcTo(a, b + h, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath();
+  }
+  function paint(t){
+    var S = 160, c = document.createElement('canvas');
+    c.width = c.height = S;
+    var x = c.getContext('2d'), o = 12, w = S - 24;
+    x.fillStyle = 'rgba(0,0,0,.35)'; rr(x, o + 4, o + 6, w, w, 16); x.fill();
+    x.fillStyle = ['#6f6044','#857250','#917d58','#9c8962','#a8946a'][t]; rr(x, o, o, w, w, 14); x.fill();
+    x.strokeStyle = 'rgba(70,56,34,.35)'; x.lineWidth = 3;
+    x.beginPath(); x.moveTo(o + w / 2, o + 8); x.lineTo(o + w / 2, o + w - 6);
+    x.moveTo(o + 8, o + w / 2); x.lineTo(o + w - 8, o + w / 2); x.stroke();
+
+    var th = 0;
+    if (t === 0){
+      x.setLineDash([6, 5]); x.strokeStyle = '#5c4a2c'; x.lineWidth = 3;
+      rr(x, o + 5, o + 5, w - 10, w - 10, 10); x.stroke(); x.setLineDash([]);
+    } else {
+      th = 4 + t * 2;
+      x.strokeStyle = ['', '#8c7448', '#a08657', '#b39a66', '#c9ad72'][t]; x.lineWidth = th;
+      rr(x, o + th / 2, o + th / 2, w - th, w - th, 10); x.stroke();
+      if (t >= 2){
+        x.fillStyle = '#d6c08e';
+        for (var i = 18; i < w - 14; i += 12){
+          x.fillRect(o + i, o, 5, 3); x.fillRect(o + i, o + w - 3, 5, 3);
+          x.fillRect(o, o + i, 3, 5); x.fillRect(o + w - 3, o + i, 3, 5);
+        }
+        var tr = 5 + t * 1.5;
+        [[o + 4, o + 4], [o + w - 4, o + 4], [o + 4, o + w - 4], [o + w - 4, o + w - 4]].forEach(function(p){
+          x.fillStyle = '#7a6440'; x.beginPath(); x.arc(p[0], p[1], tr, 0, 6.284); x.fill();
+          x.fillStyle = '#c9b07c'; x.beginPath(); x.arc(p[0], p[1], tr - 2, 0, 6.284); x.fill();
+          if (t >= 3){
+            x.strokeStyle = '#5a4428'; x.lineWidth = 1.5;
+            x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(p[0], p[1] - tr - 8); x.stroke();
+            x.fillStyle = '#b5452f'; x.fillRect(p[0], p[1] - tr - 8, 8, 5);
+          }
+        });
+      }
+      x.fillStyle = '#4a3220'; x.fillRect(o + w / 2 - 10, o + w - th - 1, 20, th + 2);
+    }
+
+    var inner = w - 2 * (th + 10), cell = inner / 4, gx = o + th + 10, gy = o + th + 10;
+    var cells = [[0,0],[3,3],[3,0],[0,3],[1,0],[2,3],[0,2],[3,1],[2,0],[1,3],[0,1],[3,2]];
+    var n = [2, 4, 7, 10, 12][t];
+    var roofs = ['#8a5a30','#a5452f','#7a4a2a','#b5452f','#9a6c2a'];
+    for (var k = 0; k < n; k++){
+      var hx = gx + cells[k][0] * cell + cell * 0.19, hy = gy + cells[k][1] * cell + cell * 0.19, hs = cell * 0.62;
+      x.fillStyle = 'rgba(0,0,0,.3)'; x.fillRect(hx + 2, hy + 2, hs, hs);
+      x.fillStyle = roofs[k % roofs.length]; x.fillRect(hx, hy, hs, hs);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(hx + hs / 2, hy, hs / 2, hs);
+      x.strokeStyle = 'rgba(255,230,180,.35)'; x.lineWidth = 1;
+      x.beginPath(); x.moveTo(hx + hs / 2, hy); x.lineTo(hx + hs / 2, hy + hs); x.stroke();
+    }
+    var ms = cell * (1.3 + t * 0.12), mx = gx + inner / 2 - ms / 2, my = gy + inner / 2 - ms / 2;
+    x.fillStyle = 'rgba(0,0,0,.35)'; x.fillRect(mx + 3, my + 3, ms, ms);
+    x.fillStyle = ['#8a5a30','#a5452f','#b5452f','#c9562f','#d8a21e'][t]; x.fillRect(mx, my, ms, ms);
+    x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(mx + ms / 2, my, ms / 2, ms);
+    if (t >= 3){
+      x.fillStyle = t === 4 ? '#ffe18a' : '#e8c663';
+      x.beginPath(); x.arc(mx + ms / 2, my + ms / 2, ms * 0.18, 0, 6.284); x.fill();
+    }
+    try { return c.toDataURL('image/png'); } catch(e){ return ''; }
+  }
+  function url(v){
+    var t = tier(level(v));
+    load(t);
+    if (img[t]) return img[t];
+    if (!drawn[t]) drawn[t] = paint(t);
+    return drawn[t];
+  }
+  return { url:url, tier:tier, level:level };
 })();

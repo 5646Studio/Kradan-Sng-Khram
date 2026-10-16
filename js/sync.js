@@ -134,6 +134,7 @@ var Sync = (function(){
     });
     S.unread = r.unread || 0;
     if (typeof Social !== 'undefined') Social.onState(r);
+    if (typeof B3 !== 'undefined') B3.onState(r);
     if (S.ran){
       try { UI.refreshAll(); if (typeof MilUI !== 'undefined') MilUI.updateBadge(); }
       catch(e){ logErr('Sync.apply', e); }
@@ -187,7 +188,7 @@ var Sync = (function(){
       (r.v || []).forEach(function(v){
         if (v.uid === S.uid) return;
         var o = by[v.uid];
-        if (!o){ o = by[v.uid] = { uid:v.uid, name:v.pn, tag:null, ruin:v.bot === 2, vills:[] }; L.push(o); }
+        if (!o){ o = by[v.uid] = { uid:v.uid, name:v.pn, tag:v.gt || null, ruin:v.bot === 2, vills:[] }; L.push(o); }
         idx[v.x + ',' + v.y] = { p:o, vi:o.vills.length };
         o.vills.push({ x:v.x, y:v.y, n:v.vn, p:v.pop });
       });
@@ -277,6 +278,8 @@ var Sync = (function(){
     lock('Dungeon', 'open', 'dungeon', 'ดันเจี้ยน');
     lock('Conquest', 'openEndgame', 'endgame', 'ศึกชิงเมืองหลวง');
     lock('Quest', 'open', 'quest', 'ภารกิจ');
+    if (typeof B3 !== 'undefined') B3.install();
+
   }
 
   /* ---------- ทอง ---------- */
