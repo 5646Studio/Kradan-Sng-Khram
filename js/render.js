@@ -1125,16 +1125,12 @@ var FieldView = (function(){
 
       var h = '';
 
-      /* ป้ายโซน */
-      ZN.forEach(function(Z){
+      /* แถบสรุปเล็ก ๆ ด้านบน (ไม่บังหลุม) */
+      h += '<div class="zsum">' + ZN.map(function(Z){
         var n = v.fields.filter(function(f){ return f.res === Z.res; }).length;
-        if (!n) return;
-        var lx = Z.qx < 0 ? 28 : 72;
-        var ly = Z.qy < 0 ? 7 : 94;
-        h += '<div class="zlab" style="left:' + lx + '%;top:' + ly + '%">' +
-          RES_IC[Z.res] + ' ' + Z.nm + ' ×' + n +
-          ' <b>+' + UI.fmt(production(v, Z.res)) + '</b></div>';
-      });
+        return n ? '<span>' + RES_IC[Z.res] + n + ' <b>+' + UI.fmt(production(v, Z.res)) + '</b></span>' : '';
+      }).join('') + '</div>';
+
 
       /* หลุม */
       assign(v).forEach(function(p){

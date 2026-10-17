@@ -244,6 +244,7 @@ var War = (function(){
   }
   function resLine(r){ return RES.map(function(x){ return RES_IC[x] + fmt((r || {})[x] || 0); }).join(' '); }
   function repBody(d){
+    if (d && d.hk && typeof Hero2 !== 'undefined') return Hero2.repBody(d);
     if (!d || !d.a) return '—';
     if (d.miss) return '<div class="rpt-g">ไม่พบเมืองที่พิกัดนี้แล้ว กองทัพเดินทางกลับ</div>';
     var h = side('⚔️ ฝ่ายโจมตี', d.a.name, d.a.v, d.a.x, d.a.y, d.a.sent, d.a.lost, false);

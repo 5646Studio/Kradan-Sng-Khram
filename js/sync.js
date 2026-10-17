@@ -47,6 +47,7 @@ var Sync = (function(){
       S.uid = u.uid;
       Api.get('/rules', null, false).then(function(rr){
         if (rr && rr.ok){ S.features = rr.features || {}; if (typeof War !== 'undefined') War.setRules(rr); }
+        if (rr && rr.ok && typeof Hero2 !== 'undefined') Hero2.setRules(rr);
         return Api.post('/me', {});
       }).then(function(r){
         if (r.err === 'auth') return cb('nologin');
@@ -93,6 +94,7 @@ var Sync = (function(){
         return { unit:j.u, left:j.left, total:j.n, nextAt:j.next, each:j.each };
       });
     o.srvUp = sv.upkeep || 0;
+    o.srvHero = sv.hero || null;
     o.loyalty = 100; o.loyaltyAt = now();
     return o;
   }
@@ -279,6 +281,7 @@ var Sync = (function(){
     lock('Conquest', 'openEndgame', 'endgame', 'ศึกชิงเมืองหลวง');
     lock('Quest', 'open', 'quest', 'ภารกิจ');
     if (typeof B3 !== 'undefined') B3.install();
+    if (typeof Hero2 !== 'undefined') Hero2.install();
 
   }
 
