@@ -14,7 +14,7 @@ const RES = ['wheat', 'wood', 'iron', 'clay'];
 const RTH = { wheat:'ข้าว', wood:'ไม้', iron:'เหล็ก', clay:'โคลน' };
 const RUIN_UID = '__ruins__', RUIN_NAME = 'เมืองร้าง';
 
-const FEATURES = { build:true, gold:true, military:true, hero:false, dungeon:false, market:false,
+const FEATURES = { build:true, gold:true, military:true, hero:true, dungeon:true, market:false,
   guild:false, oasis:false, settle:false, station:false, quest:false, schedule:true, endgame:false,
   chat:true, rename:true };
 
@@ -239,7 +239,8 @@ function prod(d, r){
   for (const k in BD) if (BD[k].boost === r) mb += sumLv(d, k) * 0.05;
   let s = 0;
   for (const f of d.fields) if (f.res === r) s += PROD[f.level] * (1 + bb) * (1 + mb);
-  return Math.floor(s);
+  return Math.floor(s) + heroProd(d);
+
 }
 function population(d){
   let p = 2;
@@ -422,7 +423,7 @@ function trainUnits(d, tribe, t, id, n){
   if (u.req && lvl(d, u.req[0]) < u.req[1]) throw ue('ต้องมี' + BD[u.req[0]].n + 'ระดับ ' + u.req[1]);
   for (const r of RES) if (d.res[r] + 1e-6 < u.cost[r] * n) throw ue('ทรัพยากรไม่พอ');
   for (const r of RES) d.res[r] -= u.cost[r] * n;
-  const each = eachSec(u, bl);
+  const each = eachSec(u, bl) * 1000;
   if (!d.train) d.train = {};
   const q = d.train[u.bld] || (d.train[u.bld] = []);
   const last = q[q.length - 1];
@@ -582,7 +583,9 @@ async function route(req, env){
   if (p === '/world') return world(env);
   if (p === '/rank') return rank(env, q);
   if (p === '/rules') return json({ ok:true, version:VERSION, speed:SPEED, features:FEATURES,
-    tribes:TRIBES.map(t => ({ name:t.name, desc:t.desc })), units:UNIT_LIST }, 200, env);
+    tribes:TRIBES.map(t => ({ name:t.name, desc:t.desc })), units:UNIT_LIST,
+    items:ITEM_LIST, dungeons:DUNG, heroCfg:{ maxLv:HERO_MAX, tierReq:TIER_REQ } }, 200, env);
+
   if (p === '/shop' && req.method === 'GET')
     return json({ ok:true, enabled:env.PAYMENT_ENABLED === '1', packages:PACKAGES }, 200, env);
   if (p === '/shop/webhook') return json({ ok:false, err:'ยังไม่ได้เชื่อมระบบชำระเงิน' }, 501, env);
@@ -647,6 +650,7 @@ async function route(req, env){
     '/quest/claim': ctx => questClaim(ctx, env, b)
   };
   
+  if (p.indexOf('/hero/') === 0) ACT[p] = ctx => heroAct(ctx, b, p.slice(6));
   if (!(p in ACT)) return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
   const out = await session(env, uid, ACT[p]);
   if (!out) return json({ ok:true, player:null, villages:[], features:FEATURES, now:Date.now() }, 200, env);
@@ -761,7 +765,7 @@ async function session(env, uid, act){
     for (const m of mv) if (m.uid === uid) away[m.from_vid] = (away[m.from_vid] || 0) + tUp(JSON.parse(m.troops || '{}'));
     const ctx = { P, t, spend:0, goldSet:'', goldBind:[], reason:'', msg:null, ins:[], pset:'', pbind:[], moves:mv,
       VS:rows.map(r => { const d = JSON.parse(r.data); d._away = away[r.id] || 0; if (!d.troops) d.troops = {}; return { row:r, d, dirty:false }; }) };
-    for (const V of ctx.VS){ if (advance(V.d, t, P)) V.dirty = true; fill(V.d, t, P); }
+    for (const V of ctx.VS){ if (advance(V.d, t, P)) V.dirty = true; fill(V.d, t, P); if (heroTick(V, ctx)) V.dirty = true; }
 
     let err = null;
     try { if (act) ctx.msg = (await act(ctx)) || null; }
@@ -835,7 +839,7 @@ function stateOf(ctx, err){
       const d = V.d;
       return { id:V.row.id, x:V.row.x, y:V.row.y, name:V.row.name, first:!!d.first, bio:d.bio, fields:d.fields,
         city:d.city, wallLv:d.wallLv || 0, res:d.res, resAt:d.resAt, queue:d.queue, pop:population(d), caps:caps(d),
-        troops:d.troops || {}, train:d.train || {}, upkeep:tUp(d.troops) + (d._away || 0),
+        hero:heroOut(d, t), troops:d.troops || {}, train:d.train || {}, upkeep:tUp(d.troops) + (d._away || 0),
         rate:{ wheat:rate(d,'wheat'), wood:rate(d,'wood'), iron:rate(d,'iron'), clay:rate(d,'clay') } };
     }),
     moves:ctx.moves.filter(m => m.uid === P.uid).map(mvOut),
@@ -1745,4 +1749,204 @@ async function questClaim(ctx, env, b){
   }
   ctx.P.quest = i + 1; ctx.P.gold += g;
   return { quest:i, reward:q.r };
+}
+
+/* =====================================================================
+   B4-1 : วีรบุรุษ (ปั้นหน้า · ค่าพลัง · อุปกรณ์ 7 ช่อง · กระเป๋า · รักษา · ดันเจี้ยน)
+   ===================================================================== */
+const HERO_MAX = 60, HERO_PTS = 4;
+const SLOTS = ['helm','armor','weapon','shield','gloves','boots','amulet'];
+const TIER_REQ = [0, 1, 10, 20, 35, 50];
+const TIER_SELL = [0, 100, 250, 500, 900, 1500];
+const SLOT_DEF = {
+  helm:  { st:'exp',   v:[5,10,15,20,30],        n:['หมวกผ้า','หมวกหนัง','หมวกสำริด','มงกุฎนักรบ','ชฎาเทพ'] },
+  armor: { st:'regen', v:[5,10,15,20,30],        n:['เสื้อผ้าฝ้าย','เสื้อเกราะหนัง','เกราะเกล็ด','เกราะนาค','เกราะทิพย์'] },
+  weapon:{ st:'atk',   v:[100,250,500,900,1500], n:['มีดพร้า','ดาบเหล็ก','ดาบสองมือ','ง้าวเพชร','ดาบอาญาสิทธิ์'] },
+  shield:{ st:'def',   v:[100,250,500,900,1500], n:['โล่หวาย','โล่ไม้','โล่สำริด','โล่พญานาค','โล่สุริยัน'] },
+  gloves:{ st:'risk',  v:[3,6,9,12,16],          n:['ผ้าพันมือ','ถุงมือหนัง','ปลอกแขนสำริด','ถุงมือเกราะ','กำไลเทพ'] },
+  boots: { st:'spd',   v:[10,15,20,30,40],       n:['รองเท้าฟาง','รองเท้าหนัง','รองเท้าเดินทาง','รองเท้าลมกรด','รองเท้าเหาะ'] },
+  amulet:{ st:'prod',  v:[10,20,35,50,80],       n:['ตะกรุดไม้','ตะกรุดทองแดง','พระเครื่อง','เครื่องรางนาค','ประคำทิพย์'] }
+};
+const ITEMS = {}, ITEM_LIST = [];
+SLOTS.forEach(s => { for (let t = 1; t <= 5; t++){
+  const o = { k:s + '_' + t, slot:s, tier:t, name:SLOT_DEF[s].n[t - 1], st:SLOT_DEF[s].st, v:SLOT_DEF[s].v[t - 1],
+    req:TIER_REQ[t], sell:TIER_SELL[t] };
+  ITEMS[o.k] = o; ITEM_LIST.push(o);
+} });
+const DUNG = [
+  { i:1, n:'ถ้ำค้างคาว',          ic:'🦇', req:1,  min:20,  risk:6,  exp:30,  drop:0.35, res:150 },
+  { i:2, n:'ซากปรักหักพังพุกาม',   ic:'🏚️', req:5,  min:45,  risk:11, exp:80,  drop:0.45, res:350 },
+  { i:3, n:'ป่าลึกพญานาค',        ic:'🐉', req:10, min:90,  risk:17, exp:180, drop:0.55, res:700 },
+  { i:4, n:'เหมืองร้างใต้ภูผา',    ic:'⛏️', req:15, min:180, risk:24, exp:400, drop:0.65, res:1400 },
+  { i:5, n:'นครบาดาล',           ic:'👑', req:20, min:360, risk:32, exp:900, drop:0.75, res:2600 }
+];
+const LOOK_MAX = { g:2, face:10, skin:6, hair:10, hc:6, brow:6, eye:6, mous:7, beard:7, mark:6 };
+
+function rnd(n){ return Math.floor(Math.random() * n); }
+function randLook(){
+  const L = {};
+  for (const k in LOOK_MAX) L[k] = rnd(LOOK_MAX[k]);
+  if (L.g === 1){ L.mous = 0; L.beard = 0; }
+  if (Math.random() < 0.7) L.mark = 0;
+  return L;
+}
+function heroNew(t){
+  return { v:4, name:'วีรบุรุษ', lv:1, exp:0, pts:HERO_PTS, st:{ atk:0, def:0, off:0, prod:0 },
+    hp:100, hpAt:t, dead:false, healAt:0, dung:null, look:randLook(), lookN:0,
+    eq:{}, bag:[{ id:1, k:'weapon_1' }, { id:2, k:'boots_1' }], iid:3 };
+}
+function heroNeed(lv){ return Math.round(60 * Math.pow(lv, 1.5)); }
+function eqStat(h, st){
+  let s = 0;
+  for (const k in (h.eq || {})){ const it = h.eq[k] && ITEMS[h.eq[k].k]; if (it && it.st === st) s += it.v; }
+  return s;
+}
+function heroProd(d){ const h = d.hero; if (!h || h.v !== 4 || h.dead) return 0; return (h.st.prod | 0) * 3 + eqStat(h, 'prod'); }
+function bagMax(d){ return 12 + Math.floor(lvl(d, 'hero') * 1.2); }
+function healSec(d){ return Math.max(60, Math.round(3 * 3600 * (1 - 0.025 * lvl(d, 'hero')) / SPEED)); }
+function heroHp(h, t){
+  if (h.dead || h.dung) return h.hp;
+  return Math.min(100, h.hp + (10 + eqStat(h, 'regen')) * Math.max(0, t - h.hpAt) / 3600000);
+}
+function gainExp(h, x){
+  h.exp += x;
+  while (h.lv < HERO_MAX && h.exp >= heroNeed(h.lv)){ h.exp -= heroNeed(h.lv); h.lv++; h.pts += HERO_PTS; }
+  if (h.lv >= HERO_MAX) h.exp = Math.min(h.exp, heroNeed(h.lv));
+}
+function dungRisk(h, D){
+  const pow = h.lv * 4 + (h.st.atk | 0) * 3 + (h.st.def | 0) * 2 + (eqStat(h, 'atk') + eqStat(h, 'def')) / 25;
+  return Math.max(1, D.risk * Math.max(0.25, 1 - pow / (D.i * 120 + 80)) * (1 - eqStat(h, 'risk') / 100));
+}
+function dungRoll(h, D){
+  let die = Math.random() * 100 < dungRisk(h, D);
+  const hp = Math.round(8 + Math.random() * (D.i * 7 + 6));
+  if (!die && h.hp - hp <= 0) die = true;
+  const exp = Math.round(D.exp * (0.8 + Math.random() * 0.4) * (1 + eqStat(h, 'exp') / 100) * (die ? 0.5 : 1));
+  let item = null, res = null;
+  if (!die){
+    if (Math.random() < D.drop) item = SLOTS[rnd(SLOTS.length)] + '_' + Math.max(1, Math.min(5, D.i + [-1, 0, 0, 1][rnd(4)]));
+    const r = Math.round(D.res * (0.7 + Math.random() * 0.6));
+    res = { wheat:r, wood:r, iron:r, clay:r };
+  }
+  return { die, hp, exp, item, res };
+}
+
+/* เรียกทุกครั้งที่โหลดเมือง: สร้างวีรบุรุษ · รักษาเสร็จ · กลับจากดันเจี้ยน */
+function heroTick(V, ctx){
+  const d = V.d, t = ctx.t;
+  if (!d.hero || d.hero.v !== 4){ d.hero = heroNew(t); return true; }
+  const h = d.hero;
+  let ch = false;
+  if (h.dead && h.healAt && t >= h.healAt){ h.dead = false; h.healAt = 0; h.hp = 100; h.hpAt = t; ch = true; }
+  if (h.dung && t >= h.dung.back){
+    const o = h.dung.out, D = DUNG.find(x => x.i === h.dung.i) || DUNG[0], at = h.dung.back;
+    h.dung = null; h.hpAt = at;
+    const rep = { hk:1, hero:h.name, dung:D.ic + ' ' + D.n, die:o.die, exp:o.exp, lv0:h.lv, res:null, item:null, lost:null };
+    gainExp(h, o.exp);
+    if (o.die){ h.dead = true; h.hp = 0; h.healAt = 0; }
+    else {
+      h.hp = Math.max(1, h.hp - o.hp);
+      const c = caps(d), add = Object.assign({}, o.res || {});
+      if (o.item){
+        if (h.bag.length < bagMax(d)){ h.bag.push({ id:h.iid++, k:o.item }); rep.item = o.item; }
+        else { rep.lost = o.item; for (const r of RES) add[r] = (add[r] || 0) + ITEMS[o.item].sell; }
+      }
+      for (const r of RES) d.res[r] = Math.min(r === 'wheat' ? c.gran : c.store, d.res[r] + (add[r] || 0));
+      rep.res = add;
+    }
+    rep.lv1 = h.lv;
+    const title = o.die ? '💀 วีรบุรุษบาดเจ็บสาหัสใน ' + D.n
+      : '🕳️ สำรวจ ' + D.n + ' สำเร็จ' + (rep.item ? ' — ได้ ' + ITEMS[rep.item].name : '');
+    ctx.ins.push({ t:'reports', guard:V, cols:'uid,at,kind,title,data,read',
+      vals:[ctx.P.uid, at, 'hero', title, JSON.stringify(rep), 0] });
+    ch = true;
+  }
+  return ch;
+}
+
+function heroAct(ctx, b, op){
+  const V = findV(ctx, b.vid), d = V.d, t = ctx.t, h = d.hero;
+  if (!h || h.v !== 4) throw ue('ยังไม่มีวีรบุรุษ');
+  h.hp = heroHp(h, t); h.hpAt = t;
+  const out = () => { if (h.dung) throw ue('วีรบุรุษออกไปสำรวจดันเจี้ยนอยู่'); };
+  let ret = null;
+
+  if (op === 'look'){
+    const L = {};
+    for (const k in LOOK_MAX){
+      const x = (b.look || {})[k] | 0;
+      if (x < 0 || x >= LOOK_MAX[k]) throw ue('ข้อมูลหน้าตาไม่ถูกต้อง');
+      L[k] = x;
+    }
+    if (L.g === 1){ L.mous = 0; L.beard = 0; }
+    const nm = String(b.name || h.name).trim();
+    if (nm.length < 2 || nm.length > 16 || /[<>]/.test(nm)) throw ue('ชื่อวีรบุรุษต้องยาว 2-16 ตัวอักษร');
+    const changed = JSON.stringify(L) !== JSON.stringify(h.look);
+    if (changed && h.lookN > 0) spend(ctx, 30, 'herolook');
+    if (changed || h.lookN === 0){ h.look = L; h.lookN++; }
+    h.name = nm;
+  } else if (op === 'points'){
+    let s = 0;
+    const add = {};
+    for (const k of ['atk', 'def', 'off', 'prod']){ const x = Math.max(0, (b.add || {})[k] | 0); add[k] = x; s += x; }
+    if (!s) throw ue('ยังไม่ได้เพิ่มแต้ม');
+    if (s > h.pts) throw ue('แต้มไม่พอ');
+    for (const k in add) h.st[k] = (h.st[k] | 0) + add[k];
+    h.pts -= s;
+  } else if (op === 'equip'){
+    out();
+    const i = h.bag.findIndex(x => x.id === (b.iid | 0));
+    if (i < 0) throw ue('ไม่พบอุปกรณ์');
+    const it = ITEMS[h.bag[i].k];
+    if (!it) throw ue('อุปกรณ์ไม่ถูกต้อง');
+    if (h.lv < it.req) throw ue('ต้องเป็นวีรบุรุษ Lv.' + it.req + ' ขึ้นไป');
+    const old = h.eq[it.slot];
+    h.eq[it.slot] = h.bag[i]; h.bag.splice(i, 1);
+    if (old) h.bag.push(old);
+  } else if (op === 'unequip'){
+    out();
+    const x = h.eq[b.slot];
+    if (!x) throw ue('ช่องนี้ว่างอยู่');
+    if (h.bag.length >= bagMax(d)) throw ue('กระเป๋าเต็ม');
+    h.bag.push(x); delete h.eq[b.slot];
+  } else if (op === 'sell'){
+    const i = h.bag.findIndex(x => x.id === (b.iid | 0));
+    if (i < 0) throw ue('ไม่พบอุปกรณ์');
+    const it = ITEMS[h.bag[i].k], c = caps(d);
+    h.bag.splice(i, 1);
+    for (const r of RES) d.res[r] = Math.min(r === 'wheat' ? c.gran : c.store, d.res[r] + (it ? it.sell : 0));
+  } else if (op === 'heal'){
+    if (!h.dead) throw ue('วีรบุรุษไม่ได้บาดเจ็บ');
+    if (h.healAt) throw ue('กำลังรักษาอยู่');
+    const c = 80 + h.lv * 40;
+    for (const r of RES) if (d.res[r] < c) throw ue('ทรัพยากรไม่พอ (ต้องการชนิดละ ' + c + ')');
+    for (const r of RES) d.res[r] -= c;
+    h.healAt = t + healSec(d) * 1000;
+  } else if (op === 'healnow'){
+    if (!h.dead || !h.healAt) throw ue('ไม่ได้อยู่ระหว่างรักษา');
+    spend(ctx, rushCost((h.healAt - t) / 1000), 'heal');
+    h.dead = false; h.healAt = 0; h.hp = 100; h.hpAt = t;
+  } else if (op === 'dungeon'){
+    out();
+    if (h.dead) throw ue('วีรบุรุษบาดเจ็บอยู่');
+    if (h.hp < 30) throw ue('พลังชีวิตต่ำกว่า 30% ให้พักก่อน');
+    const D = DUNG.find(x => x.i === (b.i | 0));
+    if (!D) throw ue('ไม่พบดันเจี้ยน');
+    if (lvl(d, 'hero') < D.req) throw ue('ต้องมีจวนวีรบุรุษ Lv.' + D.req);
+    const sec = Math.max(60, Math.round(D.min * 60 * (1 - eqStat(h, 'spd') / 100) / SPEED));
+    h.dung = { i:D.i, back:t + sec * 1000, out:dungRoll(h, D) };
+    ret = { sec };
+  } else throw ue('ไม่รู้จักคำสั่งวีรบุรุษ');
+  V.dirty = true;
+  return ret;
+}
+
+function heroOut(d, t){
+  const h = d.hero;
+  if (!h || h.v !== 4) return null;
+  return { name:h.name, lv:h.lv, exp:Math.floor(h.exp), need:heroNeed(h.lv), pts:h.pts, st:h.st,
+    hp:Math.floor(heroHp(h, t)), dead:h.dead, healAt:h.healAt,
+    dung:h.dung ? { i:h.dung.i, back:h.dung.back } : null,
+    look:h.look, lookN:h.lookN, eq:h.eq, bag:h.bag, bagMax:bagMax(d), prod:heroProd(d),
+    mansion:lvl(d, 'hero'), healCost:80 + h.lv * 40, healSec:healSec(d) };
 }
