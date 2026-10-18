@@ -761,3 +761,10 @@ input[type=datetime-local].selbox{margin-top:4px;color-scheme:dark}
   background:#2a2218;color:#ffcf40;border-radius:5px;font-size:12px!important}
 .hb-ic svg{width:36px;height:36px;border-radius:50%}
 .zsum{display:none}
+
+/* ===== v14f ===== */
+.ucard .uhead .uicu{height:46px;vertical-align:middle;margin-right:4px}
+.tcell .tic .uicu{height:34px}
+.ttab .uicu{height:26px}
+.rpt-g .ttab .uicu{height:22px}
+.stline .uicu{height:22px}
