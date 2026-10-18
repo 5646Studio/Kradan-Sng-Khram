@@ -105,7 +105,12 @@ var War = (function(){
     if (o){ var vv = o.p.vills[o.vi] || {}; return '🏘 ' + esc(vv.n || '-') + ' · ' + esc(o.p.name) + ' · 👥 ' + fmt(vv.p || 0); }
     try {
       var t = World.tile(x, y);
-      if (t.oasis) return '🌿 โอเอซิส (เปิดในเฟส B4)';
+        if (t.oasis){
+        var ow = Game.oasis && Game.oasis[x + ',' + y];
+        return '🌿 โอเอซิส +' + t.oasis.pct + '% · ' + (ow ? (typeof ow === 'number' ? 'ของเมืองคุณ' : 'มีเจ้าของแล้ว') : 'สัตว์ป่าเฝ้าอยู่') +
+          '<br>ยึดได้: ส่ง 🗿 วีรบุรุษ + ⚔️ โจมตี (ไม่เกิน 30 ช่อง)';
+      }
+
       if (t.npc) return '🏚 เมืองร้าง — ปล้นได้';
       return '⛔ ไม่มีเมืองที่พิกัดนี้';
     } catch(e){ return ''; }
@@ -129,6 +134,10 @@ var War = (function(){
       });
       h += '</div>';
     }
+        var hh = v.srvHero, hOk = !!(hh && !hh.dead && !hh.dung && !hh.army && hh.hp >= 30);
+    h += '<label class="misr" style="margin-bottom:8px"><input type="checkbox" id="sdHero"' + (hOk ? '' : ' disabled') +
+      '><span>🗿 ส่งวีรบุรุษไปด้วย' + (hh ? ' · Lv.' + hh.lv + ' · ❤ ' + hh.hp + '%' : '') +
+      (hOk ? '' : ' — ยังไม่พร้อม') + '</span></label>';
     h += '<div class="destbox"><div class="drow2"><label>X</label><input type="number" id="sdx" value="' +
       (x != null ? x : v.x) + '"><label>Y</label><input type="number" id="sdy" value="' + (y != null ? y : v.y) +
       '"></div><div class="ti-line" id="sdInfo"></div></div>' +
@@ -137,7 +146,7 @@ var War = (function(){
       '<label class="misr"><input type="radio" name="sdm" value="attack"><span>⚔️ โจมตี — สู้จนแพ้ชนะ ซุงกระทุ้งทำลายกำแพงได้</span></label>' +
       '<label class="misr"><input type="radio" name="sdm" value="scout"><span>👁️ สอดแนม — ส่งได้เฉพาะหน่วยสอดแนม</span></label></div>' +
       '<div class="infobox" id="sdPrev">เลือกทหารที่จะส่ง</div>' +
-      '<button class="btn-ok" id="sdGo"' + (L.length ? '' : ' disabled') + '>⚔ ส่งกองทัพ</button>' +
+      '<button class="btn-ok" id="sdGo"' + '' + '>⚔ ส่งกองทัพ</button>' +
       '<button class="btn-use2" id="sdTroops">🛡 ดูรายการทหาร</button>' +
       '<button class="btn-cancel" onclick="UI.close()">ปิด</button>';
     UI.modal(h);
@@ -170,12 +179,13 @@ var War = (function(){
     document.getElementById('sdTroops').onclick = openTroops;
     document.getElementById('sdGo').onclick = function(){
       var t = pick();
-      if (!count(t)) return alert('ยังไม่ได้เลือกทหาร');
+            var hx = document.getElementById('sdHero'), wh = !!(hx && hx.checked);
+      if (!count(t) && !wh) return alert('ยังไม่ได้เลือกทหาร');
       var b = this;
       b.disabled = true;
       Sync.cmd('/send', { vid:v.id, tx:parseInt(document.getElementById('sdx').value, 10),
         ty:parseInt(document.getElementById('sdy').value, 10),
-        mission:document.querySelector('input[name=sdm]:checked').value, troops:t }, function(r){
+        mission:document.querySelector('input[name=sdm]:checked').value, troops:t, hero:wh }, function(r){
         b.disabled = false;
         if (r && r.ok){ UI.close(); Sync.toast('⚔️ กองทัพออกเดินทางแล้ว'); }
       });
@@ -252,6 +262,14 @@ var War = (function(){
       if (d.d.troops) h += side('🛡️ ฝ่ายป้องกัน', d.d.name, d.d.v, d.d.x, d.d.y, d.d.troops, d.d.lost, true);
       else if (!d.def) h += '<div class="rpt-g">ทหารไม่รอดกลับมาเลย จึงไม่รู้กำลังของฝ่ายป้องกัน</div>';
     }
+  function hl(tt, x){
+    return '<div class="rpt-g">' + tt + ' <b>' + esc(x.name) + '</b> Lv.' + x.lv + ' · ✨ +' + fmt(x.exp || 0) + ' EXP · ' +
+        (x.dead ? '<span style="color:#ff6b6b">💀 บาดเจ็บสาหัส</span>' : '❤ เหลือ ' + Math.max(0, x.hp) + '%') + '</div>';
+    }
+    if (d.a.hero) h += hl('🗿 วีรบุรุษฝ่ายโจมตี', d.a.hero);
+    if (d.d && d.d.hero) h += hl('🗿 วีรบุรุษฝ่ายป้องกัน', d.d.hero);
+    if (d.oasis) h += '<div class="rpt-g">🌿 โอเอซิส +' + d.oasis.pct + '% · ' + (d.oasis.captured
+      ? '<b style="color:#8fbf5f">✔ ยึดสำเร็จ ผลผลิตเพิ่มทันที</b>' : (d.oasis.why ? '✖ ' + esc(d.oasis.why) : '—')) + '</div>';
     if (d.pw) h += '<div class="rpt-g">พลังโจมตี <b>' + fmt(d.pw.a) + '</b> · พลังป้องกัน <b>' + fmt(d.pw.d) + '</b></div>';
     if (d.loot && count(d.loot)) h += '<div class="rpt-g">📦 ' + (d.def ? 'ถูกปล้นไป ' : 'ปล้นได้ ') + resLine(d.loot) + '</div>';
     if (d.wall) h += '<div class="rpt-g">🧱 กำแพง Lv.' + d.wall[0] + ' → Lv.' + d.wall[1] + '</div>';

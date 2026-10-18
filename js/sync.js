@@ -128,7 +128,7 @@ var Sync = (function(){
     Game.movements = (r.moves || []).map(function(m){
       return { id:m.id, from:m.from, fx:m.fx, fy:m.fy, tx:m.tx, ty:m.ty, mission:m.mission,
         troops:m.troops || {}, loot:m.loot || {}, returning:m.state === 'back',
-        departAt:m.depart, arriveAt:m.arrive, hero:false };
+        departAt:m.depart, arriveAt:m.arrive, hero:!!m.hero };
     });
     Game.incoming = (r.incoming || []).map(function(m){
       return { id:m.id, target:m.to, fx:m.fx, fy:m.fy, tx:m.tx, ty:m.ty, mission:m.mission,
@@ -195,6 +195,8 @@ var Sync = (function(){
         o.vills.push({ x:v.x, y:v.y, n:v.vn, p:v.pop });
       });
       S.others = L; S.idx = idx; S.worldAt = Date.now();
+      Game.oasis = {};
+      (r.oa || []).forEach(function(o){ Game.oasis[o.x + ',' + o.y] = o.uid === S.uid ? o.vid : 'x'; });
       try { if (typeof Renderer !== 'undefined') Renderer.invalidate(); } catch(e){}
     });
   }

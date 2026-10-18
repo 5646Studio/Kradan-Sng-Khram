@@ -151,7 +151,7 @@ var Hero2 = (function(){
     risk:'🎯 ความเสี่ยงดันเจี้ยน −#%', spd:'🐾 เวลาสำรวจดันเจี้ยน −#%', prod:'🌾 ผลิตทุกชนิด +#/ชม.' };
   var ATT = [['atk','⚔ พลังโจมตี','+80 โจมตีต่อแต้ม · ลดความเสี่ยงในดันเจี้ยน'],
     ['def','🛡 พลังป้องกัน','+80 ป้องกันต่อแต้ม · ลดความเสี่ยงในดันเจี้ยน'],
-    ['off','🎖 นำทัพ','+0.2% พลังโจมตีของกองทัพต่อแต้ม (มีผลใน B4-2)'],
+    ['off','🎖 นำทัพ','+0.2% พลังโจมตีของกองทัพต่อแต้ม'],
     ['prod','🌾 ผลิตทรัพยากร','+3 ทุกชนิดต่อชั่วโมงต่อแต้ม']];
   var LMAX = { g:2, face:10, skin:6, hair:10, hc:6, brow:6, eye:6, mous:7, beard:7, mark:6 };
   var PARTS = [['face','ทรงหน้า'],['skin','สีผิว'],['hair','ทรงผม'],['hc','สีผม'],['brow','คิ้ว'],['eye','ดวงตา'],
@@ -226,6 +226,7 @@ var Hero2 = (function(){
     var t0 = now(), st;
     if (h.dead) st = h.healAt ? '⛑ กำลังรักษา · หายใน ' + UI.dur((h.healAt - t0) / 1000) : '💀 บาดเจ็บสาหัส ต้องรักษา';
     else if (h.dung) st = '🕳️ สำรวจ ' + dName(h.dung.i) + ' · กลับใน ' + UI.dur((h.dung.back - t0) / 1000);
+    else if (h.army) st = '⚔️ ออกรบกับกองทัพ';
     else st = '✅ อยู่ในเมือง';
     var o = '<div class="hdoll">' + SL.map(function(s){
       var x = h.eq[s], it = x && R.items[x.k];
@@ -318,7 +319,7 @@ var Hero2 = (function(){
       UI.dur((h.dung.back - t0) / 1000) + '</div>';
     o += '<div class="infobox">ส่งวีรบุรุษไปสำรวจคนเดียว ได้ EXP ทรัพยากร และอุปกรณ์<br>ต้องมีพลังชีวิต 30% ขึ้นไป · ' +
       'ชั้นที่ลึกขึ้นต้องอัปจวนวีรบุรุษ (ตอนนี้ Lv.' + h.mansion + ')</div>';
-    var busy = h.dead || h.dung || h.hp < 30;
+    var busy = h.dead || h.dung || h.army || h.hp < 30;
     R.dung.forEach(function(D){
       var lock = h.mansion < D.req;
       var sec = Math.max(60, Math.round(D.min * 60 * (1 - eqStat(h, 'spd') / 100) / CFG.SPEED));
@@ -404,7 +405,7 @@ var Hero2 = (function(){
   function adapt(v){
     var h = v && v.srvHero;
     if (!h) return { level:1, exp:0, dead:false, away:false, healing:false, free:0, name:'วีรบุรุษ' };
-    return { level:h.lv, exp:h.exp, dead:h.dead, away:!!h.dung, healing:!!(h.dead && h.healAt), free:h.pts, name:h.name };
+    return { level:h.lv, exp:h.exp, dead:h.dead, away:!!(h.dung || h.army), healing:!!(h.dead && h.healAt), free:h.pts, name:h.name };
   }
   function install(){
     if (inst) return;
@@ -429,7 +430,7 @@ var Hero2 = (function(){
         hu.apply(HUD, arguments);
         try {
           var h = H(), ic = document.querySelector('#herobtn .hb-ic');
-          if (h && ic && !h.dead && !h.dung) ic.innerHTML = HeroArt.svg(h.look, h.eq, '56 20 88 88');
+          if (h && ic && !h.dead && !h.dung && !h.army) ic.innerHTML = HeroArt.svg(h.look, h.eq, '56 20 88 88');
         } catch(e){}
       };
     }

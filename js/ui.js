@@ -9,14 +9,12 @@ var UI = (function(){
     if (n >= 10000) return (n/1000).toFixed(1) + 'k';
     return n.toLocaleString('en-US');
   }
-  function dur(s){
+    function dur(s){
     s = Math.max(0, Math.round(s));
-    if (s < 60) return s + ' วิ';
-    var h = Math.floor(s/3600), m = Math.floor((s%3600)/60), d = Math.floor(h/24);
-    if (d > 0) return d + ' วัน ' + (h%24) + ' ชม.';
-    if (h > 0) return h + ':' + ('0'+m).slice(-2) + ' ชม.';
-    return m + ':' + ('0'+(s%60)).slice(-2) + ' น.';
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+    return (h < 10 ? '0' : '') + h + ':' + ('0' + m).slice(-2) + ':' + ('0' + x).slice(-2);
   }
+
   function modal(h){
     document.getElementById('modalbox').innerHTML = h;
     var m = document.getElementById('modal');
