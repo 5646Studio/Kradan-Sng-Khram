@@ -15,7 +15,7 @@ const RTH = { wheat:'ข้าว', wood:'ไม้', iron:'เหล็ก', cl
 const RUIN_UID = '__ruins__', RUIN_NAME = 'เมืองร้าง';
 
 const FEATURES = { build:true, gold:true, military:true, hero:true, dungeon:true, market:false,
-  guild:false, oasis:false, settle:false, station:false, quest:false, schedule:true, endgame:false,
+  guild:false, oasis:true, settle:false, station:false, quest:false, schedule:true, endgame:false,
   chat:true, rename:true };
 
 const PACKAGES = [
@@ -234,7 +234,7 @@ function caps(d){
            gran:sumCap(d, 'granary') + sumGreat(d, 'greatgranary') };
 }
 function prod(d, r){
-  const bb = d.first ? 0 : (((BIO[d.bio] || {}).bo || {})[r] || 0);
+  const bb = (d.first ? 0 : (((BIO[d.bio] || {}).bo || {})[r] || 0)) + oasisBonus(d, r);
   let mb = 0;
   for (const k in BD) if (BD[k].boost === r) mb += sumLv(d, k) * 0.05;
   let s = 0;
@@ -451,24 +451,7 @@ function kill(t, loss){
   }
   return { dead, left };
 }
-function fight(at, aB, dt, dB, wall, mission, base){
-  let ai = 0, ac = 0;
-  for (const k in at){ const u = UNITS[k]; if (!u) continue; const p = at[k] * u.atk; if (u.type === 'cav') ac += p; else ai += p; }
-  const A = (ai + ac) * aB, cs = (ai + ac) > 0 ? ac / (ai + ac) : 0;
-  let D = base;
-  for (const k in (dt || {})){ const u = UNITS[k]; if (u) D += dt[k] * (u.di * (1 - cs) + u.dc * cs); }
-  D *= dB * Math.pow(1.03, wall);
-  let la, ld;
-  const win = A > D;
-  if (mission === 'raid'){
-    const big = Math.max(A, D), small = Math.min(A, D);
-    const x = big > 0 ? Math.pow(small / big, 1.5) : 1;
-    la = win ? x / (1 + x) : 1 / (1 + x);
-    ld = win ? 1 / (1 + x) : x / (1 + x);
-  } else if (win){ la = Math.pow(D / A, 1.5); ld = 1; }
-  else { la = 1; ld = A > 0 ? Math.pow(A / D, 1.5) : 0; }
-  return { A:Math.round(A), D:Math.round(D), win, la, ld };
-}
+
 function scoutFight(tr, smA, dd){
   let sa = 0, ds = 0;
   for (const k in tr){ const u = UNITS[k]; if (u && u.type === 'scout') sa += tr[k] * 35; }
@@ -700,57 +683,7 @@ function goldItem(ctx, b){
   V.dirty = true;
 }
 
-/* ---------- ส่งกองทัพ ---------- */
-async function sendArmy(ctx, env, b){
-  const V = findV(ctx, b.vid), d = V.d, mis = String(b.mission || '');
-  if (!['attack', 'raid', 'scout'].includes(mis)) throw ue('ภารกิจนี้จะเปิดในเฟสถัดไป');
-  const rl = lvl(d, 'rally');
-  if (rl < 1) throw ue('ต้องมีลานรวมพล');
-  const out = ctx.moves.filter(m => m.from_vid === V.row.id && m.state === 'go').length;
-  if (out >= rallySlots(rl)) throw ue('ส่งทัพพร้อมกันได้สูงสุด ' + rallySlots(rl) + ' ขบวน (อัปลานรวมพลเพื่อเพิ่ม)');
-  const tr = {};
-  let n = 0, minS = 99, onlyScout = true;
-  for (const k in (b.troops || {})){
-    const c = Math.floor(b.troops[k]);
-    if (!(c > 0)) continue;
-    const u = UNITS[k];
-    if (!u || u.tribe !== ctx.P.tribe) throw ue('หน่วยทหารไม่ถูกต้อง');
-    if ((d.troops[k] || 0) < c) throw ue('ทหารในเมืองไม่พอ');
-    tr[k] = c; n += c;
-    if (u.spd < minS) minS = u.spd;
-    if (u.type !== 'scout') onlyScout = false;
-  }
-  if (!n) throw ue('ยังไม่ได้เลือกทหาร');
-  if (mis === 'scout' && !onlyScout) throw ue('ภารกิจสอดแนมส่งได้เฉพาะหน่วยสอดแนม');
-  const tx = b.tx | 0, ty = b.ty | 0;
-  if (Math.abs(tx) > MAP_R || Math.abs(ty) > MAP_R) throw ue('พิกัดอยู่นอกแผนที่');
-  if (tx === V.row.x && ty === V.row.y) throw ue('เป้าหมายคือเมืองตัวเอง');
 
-  const tv = await env.DB.prepare('SELECT v.id, v.uid, p.is_bot, p.protect_until FROM villages v JOIN players p ON p.uid=v.uid WHERE v.x=? AND v.y=?').bind(tx, ty).first();
-  let toVid = null, toUid = null;
-  if (tv){
-    if (tv.uid === ctx.P.uid) throw ue('การเสริมทัพเมืองตัวเองจะเปิดในเฟส B5');
-    if (!tv.is_bot && tv.protect_until > ctx.t) throw ue('เป้าหมายอยู่ในช่วงคุ้มครองผู้เล่นใหม่');
-    toVid = tv.id; toUid = tv.uid;
-    if (!tv.is_bot && ctx.P.protect_until > ctx.t && mis !== 'scout'){
-      ctx.pset += ', protect_until=0'; ctx.P.protect_until = 0;
-    }
-  } else {
-    const T = tile(tx, ty);
-    if (T.oasis) throw ue('การโจมตีโอเอซิสจะเปิดในเฟส B4');
-    if (isFort(tx, ty) || (tx === 0 && ty === 0)) throw ue('ป้อมและเมืองหลวงโลกจะเปิดในเฟส B5');
-    if (!T.npc) throw ue('ไม่มีเมืองที่พิกัดนี้');
-  }
-  const spd = minS * (1 + 0.03 * lvl(d, 'trainground'));
-  const sec = Math.max(60, Math.round(Math.hypot(tx - V.row.x, ty - V.row.y) / spd * 3600 / SPEED));
-  for (const k in tr){ d.troops[k] -= tr[k]; if (d.troops[k] <= 0) delete d.troops[k]; }
-  V.dirty = true;
-  ctx.ins.push({ t:'moves', guard:V,
-    cols:'uid,from_vid,fx,fy,tx,ty,to_vid,to_uid,mission,troops,loot,depart,arrive,state,lock,tries',
-    vals:[ctx.P.uid, V.row.id, V.row.x, V.row.y, tx, ty, toVid, toUid, mis, JSON.stringify(tr), '{}',
-      ctx.t, ctx.t + sec * 1000, 'go', 0, 0] });
-  return { sec };
-}
 
 /* ---------- โหลด → ทำรายการ → บันทึก ---------- */
 async function session(env, uid, act){
@@ -822,7 +755,7 @@ async function commit(env, ctx){
 }
 function mvOut(m){
   return { id:m.id, from:m.from_vid, fx:m.fx, fy:m.fy, tx:m.tx, ty:m.ty, mission:m.mission, state:m.state,
-    depart:m.depart, arrive:m.arrive, troops:JSON.parse(m.troops || '{}'), loot:JSON.parse(m.loot || '{}') };
+    depart:m.depart, arrive:m.arrive, troops:JSON.parse(m.troops || '{}'), loot:JSON.parse(m.loot || '{}'), hero:!!m.hero };
 }
 function stateOf(ctx, err){
   const { P, VS, t } = ctx;
@@ -839,7 +772,7 @@ function stateOf(ctx, err){
       const d = V.d;
       return { id:V.row.id, x:V.row.x, y:V.row.y, name:V.row.name, first:!!d.first, bio:d.bio, fields:d.fields,
         city:d.city, wallLv:d.wallLv || 0, res:d.res, resAt:d.resAt, queue:d.queue, pop:population(d), caps:caps(d),
-        hero:heroOut(d, t), troops:d.troops || {}, train:d.train || {}, upkeep:tUp(d.troops) + (d._away || 0),
+        oa:d.oa || [], hero:heroOut(d, t), troops:d.troops || {}, train:d.train || {}, upkeep:tUp(d.troops) + (d._away || 0),
         rate:{ wheat:rate(d,'wheat'), wood:rate(d,'wood'), iron:rate(d,'iron'), clay:rate(d,'clay') } };
     }),
     moves:ctx.moves.filter(m => m.uid === P.uid).map(mvOut),
@@ -880,21 +813,7 @@ async function resolveDue(env, t, limit){
     if (!ok) await env.DB.prepare('UPDATE moves SET lock=0 WHERE id=?').bind(m.id).run();
   }
 }
-async function doReturn(env, m){
-  const r = await getV(env, m.from_vid);
-  if (!r || r.uid !== m.uid){ await env.DB.prepare('DELETE FROM moves WHERE id=?').bind(m.id).run(); return true; }
-  const P = await getP(env, r.uid) || { builders:2, builder_until:0 };
-  const d = JSON.parse(r.data);
-  if (!d.troops) d.troops = {};
-  d._away = await awaySum(env, r.id);
-  advance(d, m.arrive, P);
-  const tr = JSON.parse(m.troops || '{}'), lo = JSON.parse(m.loot || '{}'), c = caps(d);
-  for (const k in tr) d.troops[k] = (d.troops[k] || 0) + tr[k];
-  for (const x of RES) if (lo[x]) d.res[x] = Math.min(x === 'wheat' ? c.gran : c.store, d.res[x] + lo[x]);
-  const res = await env.DB.batch([ vUpd(env, r, d, Date.now()),
-    env.DB.prepare('DELETE FROM moves WHERE id=?' + GUARD).bind(m.id, r.id, r.ver + 1) ]);
-  return res[0].meta.changes > 0;
-}
+
 function titleA(r){
   const nm = r.d.v ? r.d.v + ' (' + r.d.name + ')' : r.d.name;
   if (r.miss) return '↩️ ไม่พบเป้าหมายที่ (' + r.d.x + '|' + r.d.y + ')';
@@ -908,105 +827,6 @@ function titleD(r){
 function repIns(env, uid, at, title, data, g, gb){
   return env.DB.prepare('INSERT INTO reports(uid,at,kind,title,data,read) SELECT ?,?,?,?,?,0 WHERE 1=1' + g)
     .bind(uid, at, 'war', title, JSON.stringify(data), ...gb);
-}
-async function doArrive(env, m){
-  const t = Date.now(), at = m.arrive, tr = JSON.parse(m.troops || '{}');
-  const aV = await getV(env, m.from_vid), aP = await getP(env, m.uid);
-  const smA = aV ? smithyB(JSON.parse(aV.data)) : 1;
-  const rep = { mission:m.mission, at,
-    a:{ name:aP ? aP.name : '?', v:aV ? aV.name : '?', x:m.fx, y:m.fy, sent:tr, lost:{} },
-    d:{ name:RUIN_NAME, v:'', x:m.tx, y:m.ty, troops:null, lost:{} }, loot:null, win:false };
-  const st = [];
-  let left = tr, loot = { wheat:0, wood:0, iron:0, clay:0 }, guardV = null, defUid = null, botTaunt = null;
-
-  if (m.to_vid){
-    const dr = await getV(env, m.to_vid);
-    if (!dr || dr.x !== m.tx || dr.y !== m.ty) rep.miss = true;
-    else {
-      const dP = await getP(env, dr.uid) || { builders:2, builder_until:0, is_bot:2, name:RUIN_NAME };
-      const dd = JSON.parse(dr.data);
-      if (!dd.troops) dd.troops = {};
-      dd._away = await awaySum(env, dr.id);
-      advance(dd, at, dP);
-      rep.d.name = dP.name; rep.d.v = dr.name;
-      const wall = dd.wallLv || 0;
-      let seen = true;
-      if (m.mission === 'scout'){
-        const o = scoutFight(tr, smA, dd);
-        left = o.left; rep.a.lost = o.dead; rep.win = o.ok; seen = o.seen;
-        if (o.ok) rep.intel = { res:roundRes(dd.res), troops:Object.assign({}, dd.troops), wall, hide:hideCap(dd) };
-      } else {
-        rep.d.troops = Object.assign({}, dd.troops);
-        const f = fight(tr, smA, dd.troops, armouryB(dd), wall, m.mission, 10);
-        const ka = kill(tr, f.la), kd = kill(dd.troops, f.ld);
-        left = ka.left; dd.troops = kd.left;
-        rep.a.lost = ka.dead; rep.d.lost = kd.dead; rep.win = f.win; rep.pw = { a:f.A, d:f.D };
-        if (f.win){
-          loot = takeLoot(dd.res, hideCap(dd), carryOf(left));
-          for (const x of RES) dd.res[x] -= loot[x];
-          const rams = ramCount(left);
-          if (m.mission === 'attack' && rams > 0 && wall > 0){
-            const drop = Math.min(wall, Math.floor(rams / (2 + wall * 0.6)));
-            if (drop > 0){ dd.wallLv = wall - drop; rep.wall = [wall, dd.wallLv]; }
-          }
-        }
-        rep.loot = loot;
-      }
-        if (dP.is_bot === 1 && aP && m.mission !== 'scout'){
-        if (!dd.grudge) dd.grudge = {};
-        const g0 = dd.grudge[m.uid] || { n:0, at:0 };
-        dd.grudge[m.uid] = { n:Math.min(9, g0.n + 1), at };
-        if (aP.is_bot === 0 && Math.random() < 0.6) botTaunt = { bot:dr.uid, to:m.uid, kind:rep.win ? 'hit' : 'held' };
-      }
-      st.push(vUpd(env, dr, dd, t)); guardV = dr;
-
-      if (seen && dP.is_bot === 0) defUid = dr.uid;
-    }
-  } else {
-    const T = tile(m.tx, m.ty);
-    if (!T.npc) rep.miss = true;
-    else {
-      const k = m.tx + ',' + m.ty;
-      const row = await env.DB.prepare('SELECT * FROM npc WHERE k=?').bind(k).first();
-      const prev = row ? JSON.parse(row.res) : {};
-      const hrs = row ? Math.max(0, (at - row.at) / 3600000) : 48;
-      const res = {};
-      for (const x of RES) res[x] = Math.min(5000, Math.floor((prev[x] || 0) + hrs * 120));
-      const nd = Math.round(200 + (MAP_R - Math.min(MAP_R, Math.hypot(m.tx, m.ty))) * 12);
-      rep.d.v = 'เมืองร้าง';
-      if (m.mission === 'scout'){ rep.win = true; rep.intel = { res, troops:null, wall:0, npcDef:nd }; }
-      else {
-        const f = fight(tr, smA, {}, 1, 0, m.mission, nd);
-        const ka = kill(tr, f.la);
-        left = ka.left; rep.a.lost = ka.dead; rep.win = f.win; rep.pw = { a:f.A, d:f.D };
-        if (f.win){ loot = takeLoot(res, 0, carryOf(left)); for (const x of RES) res[x] -= loot[x]; }
-        rep.loot = loot;
-        st.push(env.DB.prepare('INSERT INTO npc(k,at,res) VALUES(?,?,?) ON CONFLICT(k) DO UPDATE SET at=excluded.at, res=excluded.res')
-          .bind(k, at, JSON.stringify(res)));
-      }
-    }
-  }
-
-  const g = guardV ? GUARD : '', gb = guardV ? [guardV.id, guardV.ver + 1] : [];
-  const alive = tcount(left) > 0;
-  if (alive){
-    st.push(env.DB.prepare('UPDATE moves SET state=?, troops=?, loot=?, fx=?, fy=?, tx=?, ty=?, depart=?, arrive=?, lock=0, tries=0 WHERE id=?' + g)
-      .bind('back', JSON.stringify(left), JSON.stringify(loot), m.tx, m.ty, m.fx, m.fy, at, at + (at - m.depart), m.id, ...gb));
-  } else st.push(env.DB.prepare('DELETE FROM moves WHERE id=?' + g).bind(m.id, ...gb));
-
-  if (aP && aP.is_bot === 0){
-    const ar = JSON.parse(JSON.stringify(rep));
-    if (!alive && m.mission !== 'scout'){ ar.d.troops = null; ar.d.lost = null; }
-    st.push(repIns(env, m.uid, at, titleA(rep), ar, g, gb));
-  }
-  if (defUid){
-    const dr2 = JSON.parse(JSON.stringify(rep));
-    dr2.def = true;
-    st.push(repIns(env, defUid, at, titleD(rep), dr2, g, gb));
-  }
-  const res = await env.DB.batch(st);
-  if (botTaunt && (!guardV || res[0].meta.changes > 0)) await botMsg(env, botTaunt.bot, botTaunt.to, botTaunt.kind, Date.now());
-  return guardV ? res[0].meta.changes > 0 : true;
 }
 
 /* ---------- ลงทะเบียน ---------- */
@@ -1058,13 +878,14 @@ async function deleteAccount(env, uid, b){
   const t = Date.now(), DB = env.DB, st = [];
   for (const r of vs){
     const d = JSON.parse(r.data);
-    d.queue = []; d.train = {};
+    d.queue = []; d.train = {}; d.oa = [];
     st.push(DB.prepare('UPDATE villages SET uid=?, name=?, data=?, ver=ver+1, updated=? WHERE id=?').bind(RUIN_UID, RUIN_NAME, SJ(d), t, r.id));
   }
   st.push(DB.prepare('DELETE FROM moves WHERE uid=?').bind(uid));
   st.push(DB.prepare('UPDATE moves SET to_uid=? WHERE to_uid=?').bind(RUIN_UID, uid));
   st.push(DB.prepare('DELETE FROM reports WHERE uid=?').bind(uid));
   st.push(DB.prepare('DELETE FROM plans WHERE uid=?').bind(uid));
+  st.push(DB.prepare('DELETE FROM oasis WHERE uid=?').bind(uid));
   st.push(DB.prepare('DELETE FROM msgs WHERE from_uid=? OR to_uid=?').bind(uid, uid));
   st.push(DB.prepare('DELETE FROM blocks WHERE uid=? OR target=?').bind(uid, uid));
   st.push(DB.prepare('INSERT INTO ledger(uid,delta,reason,note,at) VALUES(?,?,?,?,?)').bind(uid, -(P.gold | 0), 'delete', P.name, t));
@@ -1454,7 +1275,8 @@ const CPN = [0, 0, 500, 1400, 3000, 5500, 9000, 14000];
 /* ---------- ข้อมูลสาธารณะ (มีแท็กกิลด์) ---------- */
 async function world(env){
   const r = await env.DB.prepare('SELECT v.id, v.x, v.y, v.name AS vn, v.pop, v.uid, p.name AS pn, p.is_bot AS bot, g.tag AS gt FROM villages v JOIN players p ON p.uid=v.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE p.banned=0 LIMIT 5000').all();
-  return json({ ok:true, now:Date.now(), v:r.results || [] }, 200, env);
+    const oa = await env.DB.prepare('SELECT o.x, o.y, o.uid, o.vid, p.name AS pn FROM oasis o LEFT JOIN players p ON p.uid=o.uid').all();
+  return json({ ok:true, now:Date.now(), v:r.results || [], oa:oa.results || [] }, 200, env);
 }
 async function rank(env, q){
   if (q.f === 'g'){
@@ -1805,7 +1627,7 @@ function heroProd(d){ const h = d.hero; if (!h || h.v !== 4 || h.dead) return 0;
 function bagMax(d){ return 12 + Math.floor(lvl(d, 'hero') * 1.2); }
 function healSec(d){ return Math.max(60, Math.round(3 * 3600 * (1 - 0.025 * lvl(d, 'hero')) / SPEED)); }
 function heroHp(h, t){
-  if (h.dead || h.dung) return h.hp;
+  if (h.dead || h.dung || h.army) return h.hp;
   return Math.min(100, h.hp + (10 + eqStat(h, 'regen')) * Math.max(0, t - h.hpAt) / 3600000);
 }
 function gainExp(h, x){
@@ -1868,7 +1690,7 @@ function heroAct(ctx, b, op){
   const V = findV(ctx, b.vid), d = V.d, t = ctx.t, h = d.hero;
   if (!h || h.v !== 4) throw ue('ยังไม่มีวีรบุรุษ');
   h.hp = heroHp(h, t); h.hpAt = t;
-  const out = () => { if (h.dung) throw ue('วีรบุรุษออกไปสำรวจดันเจี้ยนอยู่'); };
+  const out = () => { if (h.dung) throw ue('วีรบุรุษออกไปสำรวจดันเจี้ยนอยู่'); if (h.army) throw ue('วีรบุรุษออกรบอยู่'); };
   let ret = null;
 
   if (op === 'look'){
@@ -1946,7 +1768,307 @@ function heroOut(d, t){
   if (!h || h.v !== 4) return null;
   return { name:h.name, lv:h.lv, exp:Math.floor(h.exp), need:heroNeed(h.lv), pts:h.pts, st:h.st,
     hp:Math.floor(heroHp(h, t)), dead:h.dead, healAt:h.healAt,
-    dung:h.dung ? { i:h.dung.i, back:h.dung.back } : null,
+    dung:h.dung ? { i:h.dung.i, back:h.dung.back } : null, army:!!h.army,
     look:h.look, lookN:h.lookN, eq:h.eq, bag:h.bag, bagMax:bagMax(d), prod:heroProd(d),
     mansion:lvl(d, 'hero'), healCost:80 + h.lv * 40, healSec:healSec(d) };
+}
+/* =====================================================================
+   B4-2 : วีรบุรุษออกรบ · ป้องกันเมือง · ยึดโอเอซิส
+   ===================================================================== */
+const HERO_SPD = 7, OASIS_RANGE = 30;
+
+function oasisMax(d){ const l = lvl(d, 'hero'); return l >= 20 ? 4 : l >= 15 ? 3 : l >= 10 ? 2 : l >= 1 ? 1 : 0; }
+function oasisBonus(d, r){
+  let b = 0;
+  for (const o of (d.oa || []))
+    if (o.type === r || (o.type === 'double' && (r === 'wheat' || r === 'wood'))) b += o.pct / 100;
+  return b;
+}
+function expOf(dead){ let s = 0; for (const k in (dead || {})){ const u = UNITS[k]; if (u) s += dead[k] * u.up; } return s; }
+function heroHome(dd){ const h = dd.hero; return (h && h.v === 4 && !h.dead && !h.dung && !h.army) ? h : null; }
+function heroDefP(h){ return 100 + (h.st.def | 0) * 80 + eqStat(h, 'def'); }
+function heroAfter(H, la, exp){
+  if (!H || H.dead) return;
+  const dmg = la >= 1 ? 100 : Math.round(la * 90);
+  H.hp = Math.max(0, H.hp - dmg); H.exp = (H.exp || 0) + exp;
+  if (H.hp <= 0) H.dead = true;
+}
+function heroHit(h, ld, exp, at){
+  h.hp = heroHp(h, at); h.hpAt = at;
+  const dmg = ld >= 1 ? 100 : Math.round(ld * 90);
+  h.hp = Math.max(0, h.hp - dmg);
+  gainExp(h, exp);
+  if (h.hp <= 0){ h.dead = true; h.healAt = 0; }
+  return { name:h.name, lv:h.lv, hp:Math.round(h.hp), exp, dead:!!h.dead };
+}
+async function patchV(env, vid, fn){
+  for (let i = 0; i < 4; i++){
+    const r = await getV(env, vid);
+    if (!r) return false;
+    const d = JSON.parse(r.data), x = fn(d);
+    if (typeof x === 'string') return x;
+    const u = await env.DB.prepare('UPDATE villages SET data=?, pop=?, ver=ver+1, updated=? WHERE id=? AND ver=?')
+      .bind(SJ(d), population(d), Date.now(), r.id, r.ver).run();
+    if (u.meta.changes) return true;
+  }
+  return false;
+}
+
+function fight(at, aB, dt, dB, wall, mission, base, aX, dX){
+  let ai = 0, ac = 0;
+  for (const k in at){ const u = UNITS[k]; if (!u) continue; const p = at[k] * u.atk; if (u.type === 'cav') ac += p; else ai += p; }
+  const A = (ai + ac + (aX || 0)) * aB, cs = (ai + ac) > 0 ? ac / (ai + ac) : 0;
+  let D = base + (dX || 0);
+  for (const k in (dt || {})){ const u = UNITS[k]; if (u) D += dt[k] * (u.di * (1 - cs) + u.dc * cs); }
+  D *= dB * Math.pow(1.03, wall);
+  let la, ld;
+  const win = A > D;
+  if (mission === 'raid'){
+    const big = Math.max(A, D), small = Math.min(A, D), x = big > 0 ? Math.pow(small / big, 1.5) : 1;
+    la = win ? x / (1 + x) : 1 / (1 + x);
+    ld = win ? 1 / (1 + x) : x / (1 + x);
+  } else if (win){ la = Math.pow(D / A, 1.5); ld = 1; }
+  else { la = 1; ld = A > 0 ? Math.pow(A / D, 1.5) : 0; }
+  return { A:Math.round(A), D:Math.round(D), win, la, ld };
+}
+
+async function sendArmy(ctx, env, b){
+  const V = findV(ctx, b.vid), d = V.d, mis = String(b.mission || '');
+  if (!['attack', 'raid', 'scout'].includes(mis)) throw ue('ภารกิจนี้จะเปิดในเฟสถัดไป');
+  const rl = lvl(d, 'rally');
+  if (rl < 1) throw ue('ต้องมีลานรวมพล');
+  const out = ctx.moves.filter(m => m.from_vid === V.row.id && m.state === 'go').length;
+  if (out >= rallySlots(rl)) throw ue('ส่งทัพพร้อมกันได้สูงสุด ' + rallySlots(rl) + ' ขบวน (อัปลานรวมพลเพื่อเพิ่ม)');
+  const tr = {};
+  let n = 0, minS = 99, onlyScout = true;
+  for (const k in (b.troops || {})){
+    const c = Math.floor(b.troops[k]);
+    if (!(c > 0)) continue;
+    const u = UNITS[k];
+    if (!u || u.tribe !== ctx.P.tribe) throw ue('หน่วยทหารไม่ถูกต้อง');
+    if ((d.troops[k] || 0) < c) throw ue('ทหารในเมืองไม่พอ');
+    tr[k] = c; n += c;
+    if (u.spd < minS) minS = u.spd;
+    if (u.type !== 'scout') onlyScout = false;
+  }
+  let hj = null;
+  if (b.hero){
+    if (mis === 'scout') throw ue('วีรบุรุษไปสอดแนมไม่ได้');
+    const h = d.hero;
+    if (!h || h.v !== 4) throw ue('ยังไม่มีวีรบุรุษ');
+    h.hp = heroHp(h, ctx.t); h.hpAt = ctx.t;
+    if (h.dead) throw ue('วีรบุรุษบาดเจ็บอยู่');
+    if (h.dung) throw ue('วีรบุรุษออกไปสำรวจดันเจี้ยนอยู่');
+    if (h.army) throw ue('วีรบุรุษออกรบอยู่');
+    if (h.hp < 30) throw ue('พลังชีวิตวีรบุรุษต่ำกว่า 30%');
+    hj = { name:h.name, lv:h.lv, hp:Math.floor(h.hp), atk:100 + (h.st.atk | 0) * 80 + eqStat(h, 'atk'),
+      off:h.st.off | 0, exp:0, dead:false };
+    if (HERO_SPD < minS) minS = HERO_SPD;
+  }
+  if (!n && !hj) throw ue('ยังไม่ได้เลือกทหาร');
+  if (mis === 'scout' && !onlyScout) throw ue('ภารกิจสอดแนมส่งได้เฉพาะหน่วยสอดแนม');
+  const tx = b.tx | 0, ty = b.ty | 0;
+  if (Math.abs(tx) > MAP_R || Math.abs(ty) > MAP_R) throw ue('พิกัดอยู่นอกแผนที่');
+  if (tx === V.row.x && ty === V.row.y) throw ue('เป้าหมายคือเมืองตัวเอง');
+
+  const tv = await env.DB.prepare('SELECT v.id, v.uid, p.is_bot, p.protect_until FROM villages v JOIN players p ON p.uid=v.uid WHERE v.x=? AND v.y=?').bind(tx, ty).first();
+  let toVid = null, toUid = null;
+  if (tv){
+    if (tv.uid === ctx.P.uid) throw ue('การเสริมทัพเมืองตัวเองจะเปิดในเฟส B5');
+    if (!tv.is_bot && tv.protect_until > ctx.t) throw ue('เป้าหมายอยู่ในช่วงคุ้มครองผู้เล่นใหม่');
+    toVid = tv.id; toUid = tv.uid;
+    if (!tv.is_bot && ctx.P.protect_until > ctx.t && mis !== 'scout'){ ctx.pset += ', protect_until=0'; ctx.P.protect_until = 0; }
+  } else {
+    const T = tile(tx, ty);
+    if (T.oasis && mis === 'scout') throw ue('สอดแนมโอเอซิสไม่ได้');
+    if (isFort(tx, ty) || (tx === 0 && ty === 0)) throw ue('ป้อมและเมืองหลวงโลกจะเปิดในเฟส B5');
+    if (!T.npc && !T.oasis) throw ue('ไม่มีเมืองที่พิกัดนี้');
+  }
+  const spd = minS * (1 + 0.03 * lvl(d, 'trainground'));
+  const sec = Math.max(60, Math.round(Math.hypot(tx - V.row.x, ty - V.row.y) / spd * 3600 / SPEED));
+  for (const k in tr){ d.troops[k] -= tr[k]; if (d.troops[k] <= 0) delete d.troops[k]; }
+  if (hj) d.hero.army = ctx.t;
+  V.dirty = true;
+  ctx.ins.push({ t:'moves', guard:V,
+    cols:'uid,from_vid,fx,fy,tx,ty,to_vid,to_uid,mission,troops,loot,depart,arrive,state,lock,tries,hero',
+    vals:[ctx.P.uid, V.row.id, V.row.x, V.row.y, tx, ty, toVid, toUid, mis, JSON.stringify(tr), '{}',
+      ctx.t, ctx.t + sec * 1000, 'go', 0, 0, hj ? JSON.stringify(hj) : null] });
+  return { sec };
+}
+
+async function doReturn(env, m){
+  const r = await getV(env, m.from_vid);
+  if (!r || r.uid !== m.uid){ await env.DB.prepare('DELETE FROM moves WHERE id=?').bind(m.id).run(); return true; }
+  const P = await getP(env, r.uid) || { builders:2, builder_until:0 };
+  const d = JSON.parse(r.data);
+  if (!d.troops) d.troops = {};
+  d._away = await awaySum(env, r.id);
+  advance(d, m.arrive, P);
+  const tr = JSON.parse(m.troops || '{}'), lo = JSON.parse(m.loot || '{}'), c = caps(d);
+  for (const k in tr) d.troops[k] = (d.troops[k] || 0) + tr[k];
+  for (const x of RES) if (lo[x]) d.res[x] = Math.min(x === 'wheat' ? c.gran : c.store, d.res[x] + lo[x]);
+  if (m.hero && d.hero && d.hero.v === 4){
+    const H = JSON.parse(m.hero), h = d.hero;
+    h.army = 0; h.hp = Math.max(1, H.hp); h.hpAt = m.arrive;
+    gainExp(h, H.exp || 0);
+  }
+  const res = await env.DB.batch([ vUpd(env, r, d, Date.now()),
+    env.DB.prepare('DELETE FROM moves WHERE id=?' + GUARD).bind(m.id, r.id, r.ver + 1) ]);
+  return res[0].meta.changes > 0;
+}
+
+async function oasisArrive(env, m, T, tr, smA, H, rep, at){
+  const DB = env.DB, k = m.tx + ',' + m.ty, O = T.oasis;
+  const own = await DB.prepare('SELECT o.*, p.name AS pn FROM oasis o LEFT JOIN players p ON p.uid=o.uid WHERE o.k=?').bind(k).first();
+  const nd = own ? 300 + O.pct * 8 : 200 + O.pct * 16;
+  rep.d.name = own ? (own.pn || 'ผู้ครอบครอง') : 'สัตว์ป่า';
+  rep.d.v = 'โอเอซิส +' + O.pct + '%';
+  const f = fight(tr, smA, {}, 1, 0, m.mission, nd, H ? H.atk : 0, 0);
+  const ka = kill(tr, f.la);
+  rep.a.lost = ka.dead; rep.win = f.win; rep.pw = { a:f.A, d:f.D };
+  heroAfter(H, f.la, f.win ? Math.round(nd / 20) : 0);
+  rep.oasis = { type:O.type, pct:O.pct, captured:false, why:null };
+  if (!f.win) return ka.left;
+  let why = null;
+  if (!H || H.dead) why = 'ต้องมีวีรบุรุษที่รอดชีวิตร่วมทัพจึงจะยึดได้';
+  else if (m.mission !== 'attack') why = 'ต้องเลือกภารกิจ ⚔️ โจมตี จึงจะยึดได้';
+  else if (own && own.vid === m.from_vid) why = 'เมืองนี้ครอบครองอยู่แล้ว';
+  else if (Math.hypot(m.tx - m.fx, m.ty - m.fy) > OASIS_RANGE) why = 'อยู่ไกลเกิน ' + OASIS_RANGE + ' ช่องจากเมือง';
+  if (!why){
+    const r = await patchV(env, m.from_vid, d => {
+      if (!d.oa) d.oa = [];
+      const mx = oasisMax(d);
+      if (!mx) return 'ต้องสร้างจวนวีรบุรุษก่อน';
+      if (d.oa.length >= mx) return 'เมืองนี้ยึดโอเอซิสครบ ' + mx + ' แห่งแล้ว (อัปจวนวีรบุรุษ Lv.10/15/20 เพื่อเพิ่ม)';
+      d.oa.push({ k, type:O.type, pct:O.pct });
+    });
+    if (typeof r === 'string') why = r;
+    else if (!r) why = 'บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง';
+    else {
+      if (own && own.vid) await patchV(env, own.vid, d => { d.oa = (d.oa || []).filter(x => x.k !== k); });
+      await DB.prepare('INSERT INTO oasis(k,x,y,uid,vid,type,pct,at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(k) DO UPDATE SET uid=excluded.uid, vid=excluded.vid, at=excluded.at')
+        .bind(k, m.tx, m.ty, m.uid, m.from_vid, O.type, O.pct, at).run();
+      rep.oasis.captured = true;
+      if (own && own.uid && own.uid !== m.uid)
+        await DB.prepare('INSERT INTO reports(uid,at,kind,title,data,read) VALUES(?,?,?,?,?,0)')
+          .bind(own.uid, at, 'war', '🌿 เสียโอเอซิส (' + m.tx + '|' + m.ty + ') ให้ ' + rep.a.name, JSON.stringify(rep)).run();
+    }
+  }
+  rep.oasis.why = why;
+  return ka.left;
+}
+
+async function doArrive(env, m){
+  const t = Date.now(), at = m.arrive, tr = JSON.parse(m.troops || '{}');
+  const H = m.hero ? JSON.parse(m.hero) : null;
+  const aV = await getV(env, m.from_vid), aP = await getP(env, m.uid);
+  const smA = (aV ? smithyB(JSON.parse(aV.data)) : 1) * (H ? 1 + (H.off | 0) * 0.002 : 1);
+  const hA = H ? H.atk : 0;
+  const rep = { mission:m.mission, at,
+    a:{ name:aP ? aP.name : '?', v:aV ? aV.name : '?', x:m.fx, y:m.fy, sent:tr, lost:{} },
+    d:{ name:RUIN_NAME, v:'', x:m.tx, y:m.ty, troops:null, lost:{} }, loot:null, win:false };
+  const st = [];
+  let left = tr, loot = { wheat:0, wood:0, iron:0, clay:0 }, guardV = null, defUid = null, botTaunt = null;
+
+  if (m.to_vid){
+    const dr = await getV(env, m.to_vid);
+    if (!dr || dr.x !== m.tx || dr.y !== m.ty) rep.miss = true;
+    else {
+      const dP = await getP(env, dr.uid) || { builders:2, builder_until:0, is_bot:2, name:RUIN_NAME };
+      const dd = JSON.parse(dr.data);
+      if (!dd.troops) dd.troops = {};
+      dd._away = await awaySum(env, dr.id);
+      advance(dd, at, dP);
+      rep.d.name = dP.name; rep.d.v = dr.name;
+      const wall = dd.wallLv || 0;
+      let seen = true;
+      if (m.mission === 'scout'){
+        const o = scoutFight(tr, smA, dd);
+        left = o.left; rep.a.lost = o.dead; rep.win = o.ok; seen = o.seen;
+        if (o.ok) rep.intel = { res:roundRes(dd.res), troops:Object.assign({}, dd.troops), wall, hide:hideCap(dd) };
+      } else {
+        rep.d.troops = Object.assign({}, dd.troops);
+        const dh = heroHome(dd);
+        const f = fight(tr, smA, dd.troops, armouryB(dd), wall, m.mission, 10, hA, dh ? heroDefP(dh) : 0);
+        const ka = kill(tr, f.la), kd = kill(dd.troops, f.ld);
+        left = ka.left; dd.troops = kd.left;
+        rep.a.lost = ka.dead; rep.d.lost = kd.dead; rep.win = f.win; rep.pw = { a:f.A, d:f.D };
+        heroAfter(H, f.la, expOf(kd.dead));
+        if (dh) rep.d.hero = heroHit(dh, f.ld, expOf(ka.dead), at);
+        if (f.win){
+          loot = takeLoot(dd.res, hideCap(dd), carryOf(left));
+          for (const x of RES) dd.res[x] -= loot[x];
+          const rams = ramCount(left);
+          if (m.mission === 'attack' && rams > 0 && wall > 0){
+            const drop = Math.min(wall, Math.floor(rams / (2 + wall * 0.6)));
+            if (drop > 0){ dd.wallLv = wall - drop; rep.wall = [wall, dd.wallLv]; }
+          }
+        }
+        rep.loot = loot;
+      }
+      if (dP.is_bot === 1 && aP && m.mission !== 'scout'){
+        if (!dd.grudge) dd.grudge = {};
+        const g0 = dd.grudge[m.uid] || { n:0, at:0 };
+        dd.grudge[m.uid] = { n:Math.min(9, g0.n + 1), at };
+        if (aP.is_bot === 0 && Math.random() < 0.6) botTaunt = { bot:dr.uid, to:m.uid, kind:rep.win ? 'hit' : 'held' };
+      }
+      st.push(vUpd(env, dr, dd, t)); guardV = dr;
+      if (seen && dP.is_bot === 0) defUid = dr.uid;
+    }
+  } else {
+    const T = tile(m.tx, m.ty);
+    if (T.oasis) left = await oasisArrive(env, m, T, tr, smA, H, rep, at);
+    else if (!T.npc) rep.miss = true;
+    else {
+      const k = m.tx + ',' + m.ty;
+      const row = await env.DB.prepare('SELECT * FROM npc WHERE k=?').bind(k).first();
+      const prev = row ? JSON.parse(row.res) : {};
+      const hrs = row ? Math.max(0, (at - row.at) / 3600000) : 48;
+      const res = {};
+      for (const x of RES) res[x] = Math.min(5000, Math.floor((prev[x] || 0) + hrs * 120));
+      const nd = Math.round(200 + (MAP_R - Math.min(MAP_R, Math.hypot(m.tx, m.ty))) * 12);
+      rep.d.v = 'เมืองร้าง';
+      if (m.mission === 'scout'){ rep.win = true; rep.intel = { res, troops:null, wall:0, npcDef:nd }; }
+      else {
+        const f = fight(tr, smA, {}, 1, 0, m.mission, nd, hA, 0);
+        const ka = kill(tr, f.la);
+        left = ka.left; rep.a.lost = ka.dead; rep.win = f.win; rep.pw = { a:f.A, d:f.D };
+        heroAfter(H, f.la, f.win ? Math.round(nd / 25) : 0);
+        if (f.win){ loot = takeLoot(res, 0, carryOf(left)); for (const x of RES) res[x] -= loot[x]; }
+        rep.loot = loot;
+        st.push(env.DB.prepare('INSERT INTO npc(k,at,res) VALUES(?,?,?) ON CONFLICT(k) DO UPDATE SET at=excluded.at, res=excluded.res')
+          .bind(k, at, JSON.stringify(res)));
+      }
+    }
+  }
+
+  if (H) rep.a.hero = { name:H.name, lv:H.lv, hp:Math.round(H.hp), exp:H.exp || 0, dead:!!H.dead };
+  const heroBack = !!(H && !H.dead);
+  const g = guardV ? GUARD : '', gb = guardV ? [guardV.id, guardV.ver + 1] : [];
+  const alive = tcount(left) > 0 || heroBack;
+  if (alive){
+    st.push(env.DB.prepare('UPDATE moves SET state=?, troops=?, loot=?, hero=?, fx=?, fy=?, tx=?, ty=?, depart=?, arrive=?, lock=0, tries=0 WHERE id=?' + g)
+      .bind('back', JSON.stringify(left), JSON.stringify(loot), heroBack ? JSON.stringify(H) : null,
+        m.tx, m.ty, m.fx, m.fy, at, at + (at - m.depart), m.id, ...gb));
+  } else st.push(env.DB.prepare('DELETE FROM moves WHERE id=?' + g).bind(m.id, ...gb));
+
+  if (aP && aP.is_bot === 0){
+    const ar = JSON.parse(JSON.stringify(rep));
+    if (!alive && m.mission !== 'scout'){ ar.d.troops = null; ar.d.lost = null; }
+    st.push(repIns(env, m.uid, at, titleA(rep), ar, g, gb));
+  }
+  if (defUid){
+    const dr2 = JSON.parse(JSON.stringify(rep));
+    dr2.def = true;
+    st.push(repIns(env, defUid, at, titleD(rep), dr2, g, gb));
+  }
+  const res = await env.DB.batch(st);
+  const ok = guardV ? res[0].meta.changes > 0 : true;
+  if (ok && H && H.dead) await patchV(env, m.from_vid, d => {
+    const h = d.hero;
+    if (!h || h.v !== 4) return;
+    h.army = 0; h.dead = true; h.hp = 0; h.healAt = 0; gainExp(h, H.exp || 0);
+  });
+  if (ok && botTaunt) await botMsg(env, botTaunt.bot, botTaunt.to, botTaunt.kind, Date.now());
+  return ok;
 }
