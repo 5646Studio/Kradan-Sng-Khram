@@ -177,6 +177,8 @@ var Hero2 = (function(){
   function itIcon(k){
     var it = R.items[k];
     if (!it) return '❔';
+    var sh = (typeof Sheets !== 'undefined') ? Sheets.get('it_' + k) : null;
+    if (sh) return '<img src="' + sh + '" alt="">';
     if (miss[k]) return SI[it.slot];
     return '<img src="' + CFG.ASSET_PATH + 'items/it_' + k + '.png" alt="" onerror="Hero2.miss(this,\'' + k + '\')">';
   }

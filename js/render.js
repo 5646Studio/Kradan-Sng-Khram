@@ -1268,6 +1268,8 @@ var HubArt = (function(){
     var t = tier(level(v));
     load(t);
     if (img[t]) return img[t];
+        var sh = (typeof Sheets !== 'undefined') ? Sheets.get('hub_' + t) : null;
+    if (sh) return sh;
     if (!drawn[t]) drawn[t] = paint(t);
     return drawn[t];
   }

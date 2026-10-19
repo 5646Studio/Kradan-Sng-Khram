@@ -76,13 +76,24 @@ var War = (function(){
       q.forEach(function(j, i){
         var u = unit(j.unit);
         h += '<div class="trow"><div class="tinfo"><b>' + icon(u) + ' ' + esc(u ? u.name : j.unit) + ' ×' + j.left +
-          '</b><i>' + (i === 0 ? 'นายถัดไปเสร็จใน ' + UI.dur((j.nextAt - now()) / 1000) : 'รอคิว') + '</i></div></div>';
+          '</b><i>' + (i === 0 ? 'นายถัดไปเสร็จใน ' + UI.dur((j.nextAt - now()) / 1000) : 'รอคิว') + '</i></div>' +
+          '<button class="tcancel" data-tc="' + i + '">✕</button></div>';
       });
     }
     h += '<button class="btn-cancel" onclick="UI.close()">ปิด</button>';
     UI.modal(h);
     document.querySelectorAll('[data-max]').forEach(function(b){
       b.onclick = function(){ document.getElementById('tn_' + b.dataset.max).value = b.dataset.n; };
+    });
+    document.querySelectorAll('[data-tc]').forEach(function(b){
+      b.onclick = function(){
+        var i = +b.dataset.tc, j = q[i], u = j && unit(j.unit);
+        if (!j || !confirm('ยกเลิกฝึก ' + (u ? u.name : '') + ' ×' + j.left + '?\nคืนทรัพยากรของทหารที่ยังฝึกไม่เสร็จ')) return;
+        b.disabled = true;
+        Sync.cmd('/train/cancel', { vid:v.id, bld:bk, idx:i }, function(r){
+          if (r && r.ok){ Sync.toast('✕ ยกเลิกการฝึกแล้ว'); openTrain(bk); } else b.disabled = false;
+        });
+      };
     });
     document.querySelectorAll('[data-tr]').forEach(function(b){
       b.onclick = function(){
@@ -144,7 +155,10 @@ var War = (function(){
       '<div class="misrow2">' +
       '<label class="misr"><input type="radio" name="sdm" value="raid" checked><span>💰 ปล้น — เสียทหารน้อย เน้นขนของกลับ</span></label>' +
       '<label class="misr"><input type="radio" name="sdm" value="attack"><span>⚔️ โจมตี — สู้จนแพ้ชนะ ซุงกระทุ้งทำลายกำแพงได้</span></label>' +
-      '<label class="misr"><input type="radio" name="sdm" value="scout"><span>👁️ สอดแนม — ส่งได้เฉพาะหน่วยสอดแนม</span></label></div>' +
+      '<label class="misr"><input type="radio" name="sdm" value="scout"><span>👁️ สอดแนม — ส่งได้เฉพาะหน่วยสอดแนม</span></label>' +
+      '<label class="misr"><input type="radio" name="sdm" value="support"><span>🛡️ เสริมทัพ — ประจำการที่เมืองตัวเอง/เพื่อนกิลด์ ออกรบจากที่นั่นได้ 3 ครั้ง</span></label></div>' +
+      '<label class="misr" id="sdCmdRow" style="display:none;margin-bottom:8px"><input type="checkbox" id="sdCmd">' +
+      '<span>🤝 ให้เจ้าของเมืองปลายทางสั่งทหารกองนี้ได้</span></label>' +
       '<div class="infobox" id="sdPrev">เลือกทหารที่จะส่ง</div>' +
       '<button class="btn-ok" id="sdGo"' + '' + '>⚔ ส่งกองทัพ</button>' +
       '<button class="btn-use2" id="sdTroops">🛡 ดูรายการทหาร</button>' +
@@ -164,7 +178,11 @@ var War = (function(){
       document.getElementById('sdInfo').innerHTML = isNaN(tx) || isNaN(ty) ? '' : '🎯 ' + targetInfo(tx, ty);
       var t = pick(), n = 0, spd = 99, carry = 0;
       for (var k in t){ var u = unit(k); n += t[k]; spd = Math.min(spd, u.spd); carry += t[k] * u.carry; }
-      if (!n || isNaN(tx) || isNaN(ty)){ document.getElementById('sdPrev').innerHTML = 'เลือกทหารที่จะส่ง'; return; }
+      var hx0 = document.getElementById('sdHero'), hOn = !!(hx0 && hx0.checked);
+      if (hOn){ var cl = unit('u' + (Game.player.tribe | 0) + '_cav_l'); spd = Math.min(spd, cl ? cl.spd : 14); }
+      var mm = document.querySelector('input[name=sdm]:checked'), cr = document.getElementById('sdCmdRow');
+      if (cr) cr.style.display = (mm && mm.value === 'support') ? '' : 'none';
+      if ((!n && !hOn) || isNaN(tx) || isNaN(ty)){ document.getElementById('sdPrev').innerHTML = 'เลือกทหารที่จะส่ง'; return; }
       var d = Math.hypot(tx - v.x, ty - v.y);
       spd *= 1 + 0.03 * cityLevel(v, 'trainground');
       var sec = Math.max(60, Math.round(d / spd * 3600 / CFG.SPEED));
@@ -185,7 +203,7 @@ var War = (function(){
       b.disabled = true;
       Sync.cmd('/send', { vid:v.id, tx:parseInt(document.getElementById('sdx').value, 10),
         ty:parseInt(document.getElementById('sdy').value, 10),
-        mission:document.querySelector('input[name=sdm]:checked').value, troops:t, hero:wh }, function(r){
+        mission:document.querySelector('input[name=sdm]:checked').value, troops:t, hero:wh, canCmd:!!(document.getElementById('sdCmd') || {}).checked }, function(r){
         b.disabled = false;
         if (r && r.ok){ UI.close(); Sync.toast('⚔️ กองทัพออกเดินทางแล้ว'); }
       });
@@ -229,9 +247,12 @@ var War = (function(){
     h += '<div class="row"><span>เสบียงกองทัพรวม</span><b style="color:#ff9a5a">−' + fmt(v.srvUp || 0) + ' 🌾/ชม.</b></div>' +
       '<div class="grow2"><button class="btn-ok mini2" id="toSend">⚔ ส่งกองทัพ</button>' +
       '<button class="btn-use mini2" id="toTrain">🏋 ฝึกทหาร</button></div>' +
+      '<button class="btn-use2" id="toSt">🛡 กองประจำการ / เสริมทัพ</button>' +
       '<button class="btn-cancel" onclick="UI.close()">ปิด</button>';
     UI.modal(h);
     document.getElementById('toSend').onclick = function(){ openSend(); };
+    var ts = document.getElementById('toSt');
+    if (ts) ts.onclick = function(){ B5.open(); };
     document.getElementById('toTrain').onclick = function(){
       openTrain(cityLevel(v, 'barracks') > 0 ? 'barracks' : cityLevel(v, 'stable') > 0 ? 'stable' : 'barracks');
     };
@@ -255,6 +276,8 @@ var War = (function(){
   function resLine(r){ return RES.map(function(x){ return RES_IC[x] + fmt((r || {})[x] || 0); }).join(' '); }
   function repBody(d){
     if (d && d.hk && typeof Hero2 !== 'undefined') return Hero2.repBody(d);
+    if (d && d.sup) return '<div class="rpt-g">🛡 ' + esc(d.from) + ' → ' + esc(d.to) + ' (' + d.x + '|' + d.y + ')<br>' +
+    troopLine(d.troops) + (d.why ? '<br>✖ ' + esc(d.why) : '') + '</div>';
     if (!d || !d.a) return '—';
     if (d.miss) return '<div class="rpt-g">ไม่พบเมืองที่พิกัดนี้แล้ว กองทัพเดินทางกลับ</div>';
     var h = side('⚔️ ฝ่ายโจมตี', d.a.name, d.a.v, d.a.x, d.a.y, d.a.sent, d.a.lost, false);

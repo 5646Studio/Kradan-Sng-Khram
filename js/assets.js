@@ -128,5 +128,11 @@ var Assets = (function(){
   function stats(){
     return { loaded:Object.keys(img).length, missing:Object.keys(missing).length, ready:ready };
   }
-  return { load:load, get:get, has:has, tier:tier, terrain:terrain, stats:stats };
+    function provide(key, src){
+    if (!src || img[key]) return;
+    var e = new Image();
+    e.onload = function(){ if (!img[key]){ img[key] = e; changed(); } };
+    e.src = src;
+  }
+  return { load:load, get:get, has:has, tier:tier, terrain:terrain, stats:stats, provide:provide };
 })();
