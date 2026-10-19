@@ -15,7 +15,7 @@ const RTH = { wheat:'ข้าว', wood:'ไม้', iron:'เหล็ก', cl
 const RUIN_UID = '__ruins__', RUIN_NAME = 'เมืองร้าง';
 
 const FEATURES = { build:true, gold:true, military:true, hero:true, dungeon:true, market:false,
-  guild:false, oasis:true, settle:false, station:false, quest:false, schedule:true, endgame:false,
+  guild:false, oasis:true, settle:false, station:true, quest:false, schedule:true, endgame:false,
   chat:true, rename:true };
 
 const PACKAGES = [
@@ -609,6 +609,8 @@ async function route(req, env){
 
   const SOC = await social(p, b, env, uid);
   if (SOC) return SOC;
+  const STN = await stationApi(p, b, env, uid);
+  if (STN) return STN;
 
   const ACT = {
     '/me': null,
@@ -629,6 +631,7 @@ async function route(req, env){
       V.row.name = nm; V.dirty = true;
     },
     '/train': ctx => { const V = findV(ctx, b.vid); trainUnits(V.d, ctx.P.tribe, ctx.t, String(b.u || ''), b.n); V.dirty = true; },
+    '/train/cancel': ctx => { const V = findV(ctx, b.vid); const n = trainCancel(V.d, ctx.t, String(b.bld || ''), b.idx | 0); V.dirty = true; return { n }; },
     '/send': ctx => sendArmy(ctx, env, b),
     '/quest/claim': ctx => questClaim(ctx, env, b)
   };
@@ -796,6 +799,7 @@ async function awaySum(env, vid){
   const r = (await env.DB.prepare('SELECT troops FROM moves WHERE from_vid=?').bind(vid).all()).results || [];
   let s = 0;
   for (const m of r) s += tUp(JSON.parse(m.troops || '{}'));
+  for (const x of ((await env.DB.prepare('SELECT troops FROM stations WHERE owner_vid=?').bind(vid).all()).results || [])) s += tUp(JSON.parse(x.troops || '{}'));
   return s;
 }
 function vUpd(env, r, d, t){
@@ -886,6 +890,8 @@ async function deleteAccount(env, uid, b){
   st.push(DB.prepare('DELETE FROM reports WHERE uid=?').bind(uid));
   st.push(DB.prepare('DELETE FROM plans WHERE uid=?').bind(uid));
   st.push(DB.prepare('DELETE FROM oasis WHERE uid=?').bind(uid));
+  st.push(DB.prepare('DELETE FROM stations WHERE owner_uid=?').bind(uid));
+  st.push(DB.prepare('UPDATE stations SET host_uid=? WHERE host_uid=?').bind(RUIN_UID, uid));
   st.push(DB.prepare('DELETE FROM msgs WHERE from_uid=? OR to_uid=?').bind(uid, uid));
   st.push(DB.prepare('DELETE FROM blocks WHERE uid=? OR target=?').bind(uid, uid));
   st.push(DB.prepare('INSERT INTO ledger(uid,delta,reason,note,at) VALUES(?,?,?,?,?)').bind(uid, -(P.gold | 0), 'delete', P.name, t));
@@ -1834,7 +1840,7 @@ function fight(at, aB, dt, dB, wall, mission, base, aX, dX){
 
 async function sendArmy(ctx, env, b){
   const V = findV(ctx, b.vid), d = V.d, mis = String(b.mission || '');
-  if (!['attack', 'raid', 'scout'].includes(mis)) throw ue('ภารกิจนี้จะเปิดในเฟสถัดไป');
+  if (!['attack', 'raid', 'scout', 'support'].includes(mis)) throw ue('ภารกิจไม่ถูกต้อง');
   const rl = lvl(d, 'rally');
   if (rl < 1) throw ue('ต้องมีลานรวมพล');
   const out = ctx.moves.filter(m => m.from_vid === V.row.id && m.state === 'go').length;
@@ -1853,7 +1859,7 @@ async function sendArmy(ctx, env, b){
   }
   let hj = null;
   if (b.hero){
-    if (mis === 'scout') throw ue('วีรบุรุษไปสอดแนมไม่ได้');
+    if (mis === 'scout' || mis === 'support') throw ue('วีรบุรุษไปสอดแนมหรือเสริมทัพไม่ได้');
     const h = d.hero;
     if (!h || h.v !== 4) throw ue('ยังไม่มีวีรบุรุษ');
     h.hp = heroHp(h, ctx.t); h.hpAt = ctx.t;
@@ -1863,7 +1869,7 @@ async function sendArmy(ctx, env, b){
     if (h.hp < 30) throw ue('พลังชีวิตวีรบุรุษต่ำกว่า 30%');
     hj = { name:h.name, lv:h.lv, hp:Math.floor(h.hp), atk:100 + (h.st.atk | 0) * 80 + eqStat(h, 'atk'),
       off:h.st.off | 0, exp:0, dead:false };
-    if (HERO_SPD < minS) minS = HERO_SPD;
+    const hs = heroSpeed(ctx.P.tribe); if (hs < minS) minS = hs;
   }
   if (!n && !hj) throw ue('ยังไม่ได้เลือกทหาร');
   if (mis === 'scout' && !onlyScout) throw ue('ภารกิจสอดแนมส่งได้เฉพาะหน่วยสอดแนม');
@@ -1873,8 +1879,15 @@ async function sendArmy(ctx, env, b){
 
   const tv = await env.DB.prepare('SELECT v.id, v.uid, p.is_bot, p.protect_until FROM villages v JOIN players p ON p.uid=v.uid WHERE v.x=? AND v.y=?').bind(tx, ty).first();
   let toVid = null, toUid = null;
-  if (tv){
-    if (tv.uid === ctx.P.uid) throw ue('การเสริมทัพเมืองตัวเองจะเปิดในเฟส B5');
+
+    if (mis === 'support'){
+    if (!tv) throw ue('เสริมทัพได้เฉพาะเมือง');
+    const why = await supportWhy(env, ctx.P, tv);
+    if (why) throw ue(why);
+    toVid = tv.id; toUid = tv.uid;
+  } else if (tv){
+    if (tv.uid === ctx.P.uid) throw ue('โจมตีเมืองตัวเองไม่ได้');
+ 
     if (!tv.is_bot && tv.protect_until > ctx.t) throw ue('เป้าหมายอยู่ในช่วงคุ้มครองผู้เล่นใหม่');
     toVid = tv.id; toUid = tv.uid;
     if (!tv.is_bot && ctx.P.protect_until > ctx.t && mis !== 'scout'){ ctx.pset += ', protect_until=0'; ctx.P.protect_until = 0; }
@@ -1891,12 +1904,14 @@ async function sendArmy(ctx, env, b){
   V.dirty = true;
   ctx.ins.push({ t:'moves', guard:V,
     cols:'uid,from_vid,fx,fy,tx,ty,to_vid,to_uid,mission,troops,loot,depart,arrive,state,lock,tries,hero',
-    vals:[ctx.P.uid, V.row.id, V.row.x, V.row.y, tx, ty, toVid, toUid, mis, JSON.stringify(tr), '{}',
+    vals:[ctx.P.uid, V.row.id, V.row.x, V.row.y, tx, ty, toVid, toUid, mis, JSON.stringify(tr),
+      mis === 'support' ? JSON.stringify({ cmd:b.canCmd ? 1 : 0 }) : '{}',
       ctx.t, ctx.t + sec * 1000, 'go', 0, 0, hj ? JSON.stringify(hj) : null] });
   return { sec };
 }
 
 async function doReturn(env, m){
+  if (m.st && !m.st_last){ const r0 = await stationReturn(env, m); if (r0 !== null) return r0; }
   const r = await getV(env, m.from_vid);
   if (!r || r.uid !== m.uid){ await env.DB.prepare('DELETE FROM moves WHERE id=?').bind(m.id).run(); return true; }
   const P = await getP(env, r.uid) || { builders:2, builder_until:0 };
@@ -1959,6 +1974,7 @@ async function oasisArrive(env, m, T, tr, smA, H, rep, at){
 }
 
 async function doArrive(env, m){
+  if (m.mission === 'support') return await supportArrive(env, m);
   const t = Date.now(), at = m.arrive, tr = JSON.parse(m.troops || '{}');
   const H = m.hero ? JSON.parse(m.hero) : null;
   const aV = await getV(env, m.from_vid), aP = await getP(env, m.uid);
@@ -1987,11 +2003,19 @@ async function doArrive(env, m){
         left = o.left; rep.a.lost = o.dead; rep.win = o.ok; seen = o.seen;
         if (o.ok) rep.intel = { res:roundRes(dd.res), troops:Object.assign({}, dd.troops), wall, hide:hideCap(dd) };
       } else {
-        rep.d.troops = Object.assign({}, dd.troops);
+        const SG = (await env.DB.prepare('SELECT * FROM stations WHERE host_vid=?').bind(dr.id).all()).results || [];
+        const all = Object.assign({}, dd.troops);
+        for (const s of SG){ s._t = JSON.parse(s.troops || '{}'); for (const k in s._t) all[k] = (all[k] || 0) + s._t[k]; }
+        rep.d.troops = Object.assign({}, all);
         const dh = heroHome(dd);
-        const f = fight(tr, smA, dd.troops, armouryB(dd), wall, m.mission, 10, hA, dh ? heroDefP(dh) : 0);
-        const ka = kill(tr, f.la), kd = kill(dd.troops, f.ld);
-        left = ka.left; dd.troops = kd.left;
+        const f = fight(tr, smA, all, armouryB(dd), wall, m.mission, 10, hA, dh ? heroDefP(dh) : 0);
+        const ka = kill(tr, f.la), kd = kill(all, f.ld);
+        left = ka.left; dd.troops = kill(dd.troops, f.ld).left;
+        m._sx = SG.map(s => {
+          const k2 = kill(s._t, f.ld).left;
+          return tcount(k2) ? env.DB.prepare('UPDATE stations SET troops=? WHERE id=?' + GUARD).bind(JSON.stringify(k2), s.id, dr.id, dr.ver + 1)
+                            : env.DB.prepare('DELETE FROM stations WHERE id=?' + GUARD).bind(s.id, dr.id, dr.ver + 1);
+        });
         rep.a.lost = ka.dead; rep.d.lost = kd.dead; rep.win = f.win; rep.pw = { a:f.A, d:f.D };
         heroAfter(H, f.la, expOf(kd.dead));
         if (dh) rep.d.hero = heroHit(dh, f.ld, expOf(ka.dead), at);
@@ -2012,7 +2036,7 @@ async function doArrive(env, m){
         dd.grudge[m.uid] = { n:Math.min(9, g0.n + 1), at };
         if (aP.is_bot === 0 && Math.random() < 0.6) botTaunt = { bot:dr.uid, to:m.uid, kind:rep.win ? 'hit' : 'held' };
       }
-      st.push(vUpd(env, dr, dd, t)); guardV = dr;
+      st.push(vUpd(env, dr, dd, t)); guardV = dr; if (m._sx) st.push(...m._sx);
       if (seen && dP.is_bot === 0) defUid = dr.uid;
     }
   } else {
@@ -2046,10 +2070,11 @@ async function doArrive(env, m){
   const heroBack = !!(H && !H.dead);
   const g = guardV ? GUARD : '', gb = guardV ? [guardV.id, guardV.ver + 1] : [];
   const alive = tcount(left) > 0 || heroBack;
+  const BL = backLeg(m, aV, left, at);
   if (alive){
     st.push(env.DB.prepare('UPDATE moves SET state=?, troops=?, loot=?, hero=?, fx=?, fy=?, tx=?, ty=?, depart=?, arrive=?, lock=0, tries=0 WHERE id=?' + g)
       .bind('back', JSON.stringify(left), JSON.stringify(loot), heroBack ? JSON.stringify(H) : null,
-        m.tx, m.ty, m.fx, m.fy, at, at + (at - m.depart), m.id, ...gb));
+      m.tx, m.ty, BL.x, BL.y, at, BL.arrive, m.id, ...gb));
   } else st.push(env.DB.prepare('DELETE FROM moves WHERE id=?' + g).bind(m.id, ...gb));
 
   if (aP && aP.is_bot === 0){
@@ -2071,4 +2096,194 @@ async function doArrive(env, m){
   });
   if (ok && botTaunt) await botMsg(env, botTaunt.bot, botTaunt.to, botTaunt.kind, Date.now());
   return ok;
+}
+
+/* =====================================================================
+   B5-1 : เสริมทัพ · กองประจำการ (โควตา 3 ครั้ง) · เรียกกลับ · ยกเลิกฝึก · ความเร็ววีรบุรุษ
+   ===================================================================== */
+function heroSpeed(tribe){ const u = UNITS['u' + tribe + '_cav_l']; return u ? u.spd : 14; }
+function minSpd(t){ let s = 99; for (const k in (t || {})){ const u = UNITS[k]; if (u && t[k] > 0 && u.spd < s) s = u.spd; } return s === 99 ? 14 : s; }
+
+function trainCancel(d, t, bk, idx){
+  const q = d.train && d.train[bk];
+  if (!q || !q[idx]) throw ue('ไม่พบรายการฝึก');
+  const j = q[idx], u = UNITS[j.u], c = caps(d);
+  for (const r of RES) d.res[r] = Math.min(r === 'wheat' ? c.gran : c.store, d.res[r] + (u ? u.cost[r] * j.left : 0));
+  q.splice(idx, 1);
+  for (let i = idx; i < q.length; i++){
+    const p = q[i - 1];
+    q[i].next = Math.max(p ? p.next + p.each * (p.left - 1) : t, t) + q[i].each;
+  }
+  if (!q.length) delete d.train[bk];
+  return j.left;
+}
+
+/* ขากลับ: ครั้งสุดท้ายของโควตา → กลับเมืองเจ้าของตรงจากสนามรบ */
+function backLeg(m, aV, left, at){
+  if (m.st_last && aV)
+    return { x:aV.x, y:aV.y, arrive:at + Math.max(60, Math.round(Math.hypot(aV.x - m.tx, aV.y - m.ty) / minSpd(left) * 3600 / SPEED)) * 1000 };
+  return { x:m.fx, y:m.fy, arrive:at + (at - m.depart) };
+}
+
+async function supportWhy(env, P, hv){
+  if (!P) return 'ไม่พบผู้เล่น';
+  if (hv.uid === P.uid) return null;
+  const H = await getP(env, hv.uid);
+  if (H && H.is_bot === 0 && P.guild_id && P.guild_id === H.guild_id) return null;
+  return 'เสริมทัพได้เฉพาะเมืองตัวเองหรือเพื่อนร่วมกิลด์';
+}
+
+async function supportArrive(env, m){
+  const DB = env.DB, at = m.arrive, tr = JSON.parse(m.troops || '{}');
+  const aV = await getV(env, m.from_vid);
+  if (!aV || aV.uid !== m.uid){ await DB.prepare('DELETE FROM moves WHERE id=?').bind(m.id).run(); return true; }
+  const hv = await getV(env, m.to_vid), aP = await getP(env, m.uid);
+  const why = (!hv || hv.x !== m.tx || hv.y !== m.ty) ? 'ไม่พบเมืองปลายทางแล้ว' : await supportWhy(env, aP, hv);
+  const data = { sup:1, troops:tr, from:aV.name, to:hv ? hv.name : '?', x:m.tx, y:m.ty, why };
+  if (why){
+    await DB.batch([
+      DB.prepare('UPDATE moves SET state=?, fx=?, fy=?, tx=?, ty=?, depart=?, arrive=?, lock=0, tries=0 WHERE id=?')
+        .bind('back', m.tx, m.ty, m.fx, m.fy, at, at + (at - m.depart), m.id),
+      DB.prepare('INSERT INTO reports(uid,at,kind,title,data,read) VALUES(?,?,?,?,?,0)')
+        .bind(m.uid, at, 'war', '↩️ เสริมทัพไม่สำเร็จ — ' + why, JSON.stringify(data))
+    ]);
+    return true;
+  }
+  const cmd = hv.uid === m.uid ? 1 : ((JSON.parse(m.loot || '{}').cmd | 0) ? 1 : 0);
+  const ex = await DB.prepare('SELECT * FROM stations WHERE owner_vid=? AND host_vid=?').bind(m.from_vid, hv.id).first();
+  const st = [];
+  if (ex){
+    const t0 = JSON.parse(ex.troops || '{}');
+    for (const k in tr) t0[k] = (t0[k] || 0) + tr[k];
+    st.push(DB.prepare('UPDATE stations SET troops=?, raids=0, can_cmd=? WHERE id=?').bind(JSON.stringify(t0), cmd, ex.id));
+  } else st.push(DB.prepare('INSERT INTO stations(owner_uid,owner_vid,host_uid,host_vid,x,y,troops,raids,quota,can_cmd,since) VALUES(?,?,?,?,?,?,?,0,3,?,?)')
+    .bind(m.uid, m.from_vid, hv.uid, hv.id, hv.x, hv.y, JSON.stringify(tr), cmd, at));
+  st.push(DB.prepare('DELETE FROM moves WHERE id=?').bind(m.id));
+  if (aP && aP.is_bot === 0) st.push(DB.prepare('INSERT INTO reports(uid,at,kind,title,data,read) VALUES(?,?,?,?,?,0)')
+    .bind(m.uid, at, 'war', '🛡 กำลังหนุนถึง ' + hv.name + ' แล้ว · ออกรบจากฐานได้ 3 ครั้ง', JSON.stringify(data)));
+  if (hv.uid !== m.uid){
+    const hp = await getP(env, hv.uid);
+    if (hp && hp.is_bot === 0) st.push(DB.prepare('INSERT INTO reports(uid,at,kind,title,data,read) VALUES(?,?,?,?,?,0)')
+      .bind(hv.uid, at, 'war', '🤝 ได้รับกำลังหนุนจาก ' + (aP ? aP.name : '?'), JSON.stringify(data)));
+  }
+  await DB.batch(st);
+  return true;
+}
+
+/* ทัพจากฐานกลับมาประจำที่ฐานเดิม (ยังไม่ครบโควตา) */
+async function stationReturn(env, m){
+  const s = await env.DB.prepare('SELECT * FROM stations WHERE id=?').bind(m.st).first();
+  if (!s) return null;
+  const tr = JSON.parse(s.troops || '{}'), add = JSON.parse(m.troops || '{}');
+  for (const k in add) tr[k] = (tr[k] || 0) + add[k];
+  const nt = JSON.stringify(tr);
+  const r = await env.DB.batch([
+    env.DB.prepare('UPDATE stations SET troops=? WHERE id=? AND troops=?').bind(nt, s.id, s.troops),
+    env.DB.prepare('DELETE FROM moves WHERE id=? AND (SELECT troops FROM stations WHERE id=?)=?').bind(m.id, s.id, nt)
+  ]);
+  if (!r[0].meta.changes) return false;
+  const lo = JSON.parse(m.loot || '{}');
+  if (tcount(lo)) await patchV(env, m.loot_vid || m.from_vid, d => {
+    const c = caps(d);
+    for (const x of RES) if (lo[x]) d.res[x] = Math.min(x === 'wheat' ? c.gran : c.store, d.res[x] + lo[x]);
+  });
+  return true;
+}
+
+async function stationApi(p, b, env, uid){
+  if (p.indexOf('/station/') !== 0) return null;
+  const DB = env.DB, t = Date.now(), ok = o => json(Object.assign({ ok:true }, o || {}), 200, env);
+  const me = await getP(env, uid);
+  if (!me) throw ue('ยังไม่ได้ลงทะเบียน');
+  if (me.banned) throw ue('บัญชีนี้ถูกระงับ');
+
+  if (p === '/station/list'){
+    const q = 'SELECT s.*, hv.name AS hn, hp.name AS hpn, ov.name AS ovn, op.name AS opn FROM stations s LEFT JOIN villages hv ON hv.id=s.host_vid LEFT JOIN players hp ON hp.uid=s.host_uid LEFT JOIN villages ov ON ov.id=s.owner_vid LEFT JOIN players op ON op.uid=s.owner_uid WHERE ';
+    const mine = (await DB.prepare(q + 's.owner_uid=? ORDER BY s.id').bind(uid).all()).results || [];
+    const host = (await DB.prepare(q + 's.host_uid=? AND s.owner_uid<>? ORDER BY s.id').bind(uid, uid).all()).results || [];
+    const f = s => ({ id:s.id, ownerVid:s.owner_vid, hostVid:s.host_vid, x:s.x, y:s.y, troops:JSON.parse(s.troops || '{}'),
+      raids:s.raids, quota:s.quota, cmd:!!s.can_cmd, own:s.host_uid === s.owner_uid,
+      hostName:s.hn || RUIN_NAME, hostPlayer:s.hpn || RUIN_NAME, ownerName:s.opn || '?', ownerVill:s.ovn || '?' });
+    return ok({ mine:mine.map(f), hosted:host.map(f) });
+  }
+  const s = await DB.prepare('SELECT * FROM stations WHERE id=?').bind(b.id | 0).first();
+  if (!s) throw ue('ไม่พบกองทหารนี้');
+  const tr = JSON.parse(s.troops || '{}'), A = await getV(env, s.owner_vid);
+
+  if (p === '/station/cmd'){
+    if (s.owner_uid !== uid) throw ue('ตั้งค่าได้เฉพาะเจ้าของทหาร');
+    if (s.host_uid === uid) throw ue('เมืองของคุณเองสั่งได้เสมอ');
+    await DB.prepare('UPDATE stations SET can_cmd=? WHERE id=?').bind(b.on ? 1 : 0, s.id).run();
+    return ok({});
+  }
+  if (p === '/station/recall'){
+    if (s.owner_uid !== uid) throw ue('เรียกกลับได้เฉพาะเจ้าของทหาร');
+    const st = [DB.prepare('DELETE FROM stations WHERE id=? AND raids=? AND troops=?').bind(s.id, s.raids, s.troops)];
+    let sec = 0;
+    if (tcount(tr) && A){
+      sec = Math.max(60, Math.round(Math.hypot(A.x - s.x, A.y - s.y) / minSpd(tr) * 3600 / SPEED));
+      st.push(DB.prepare('INSERT INTO moves(uid,from_vid,fx,fy,tx,ty,to_vid,to_uid,mission,troops,loot,depart,arrive,state,lock,tries) SELECT ?,?,?,?,?,?,NULL,NULL,?,?,?,?,?,?,0,0 WHERE changes()>0')
+        .bind(uid, A.id, s.x, s.y, A.x, A.y, 'support', s.troops, '{}', t, t + sec * 1000, 'back'));
+    }
+    const r = await DB.batch(st);
+    if (!r[0].meta.changes) throw ue('ลองใหม่อีกครั้ง');
+    return ok({ sec });
+  }
+  if (p === '/station/raid'){
+    if (!(s.owner_uid === uid || (s.host_uid === uid && s.can_cmd))) throw ue('คุณไม่มีสิทธิ์สั่งกองทหารนี้');
+    if (s.raids >= s.quota) throw ue('ใช้โควตาครบ ' + s.quota + ' ครั้งแล้ว');
+    if (!A) throw ue('ไม่พบเมืองเจ้าของทหาร');
+    const mis = String(b.mission || '');
+    if (!['raid', 'attack', 'scout'].includes(mis)) throw ue('ภารกิจไม่ถูกต้อง');
+    const send = {};
+    let n = 0, onlyScout = true;
+    for (const k in (b.troops || {})){
+      const c = Math.floor(b.troops[k]);
+      if (!(c > 0)) continue;
+      if ((tr[k] || 0) < c) throw ue('ทหารในฐานไม่พอ');
+      send[k] = c; n += c;
+      if (!UNITS[k] || UNITS[k].type !== 'scout') onlyScout = false;
+    }
+    if (!n) throw ue('ยังไม่ได้เลือกทหาร');
+    if (mis === 'scout' && !onlyScout) throw ue('ภารกิจสอดแนมส่งได้เฉพาะหน่วยสอดแนม');
+    const tx = b.tx | 0, ty = b.ty | 0;
+    if (Math.abs(tx) > MAP_R || Math.abs(ty) > MAP_R) throw ue('พิกัดอยู่นอกแผนที่');
+    if (tx === s.x && ty === s.y) throw ue('เป้าหมายคือฐานตัวเอง');
+    const tv = await DB.prepare('SELECT v.id, v.uid, p.is_bot, p.protect_until FROM villages v JOIN players p ON p.uid=v.uid WHERE v.x=? AND v.y=?').bind(tx, ty).first();
+    let toVid = null, toUid = null;
+    if (tv){
+      if (tv.uid === s.owner_uid) throw ue('โจมตีเมืองของเจ้าของทหารไม่ได้');
+      if (!tv.is_bot && tv.protect_until > t) throw ue('เป้าหมายอยู่ในช่วงคุ้มครองผู้เล่นใหม่');
+      toVid = tv.id; toUid = tv.uid;
+    } else {
+      const T = tile(tx, ty);
+      if (isFort(tx, ty) || (tx === 0 && ty === 0)) throw ue('ป้อมและเมืองหลวงโลกจะเปิดใน B5-4');
+      if (T.oasis && mis === 'scout') throw ue('สอดแนมโอเอซิสไม่ได้');
+      if (!T.npc && !T.oasis) throw ue('ไม่มีเมืองที่พิกัดนี้');
+    }
+    for (const k in send){ tr[k] -= send[k]; if (tr[k] <= 0) delete tr[k]; }
+    const raids = s.raids + 1, last = raids >= s.quota ? 1 : 0;
+    const sec = Math.max(60, Math.round(Math.hypot(tx - s.x, ty - s.y) / minSpd(send) * 3600 / SPEED));
+    const lootVid = s.host_uid === s.owner_uid ? s.host_vid : s.owner_vid;
+    const MV = 'INSERT INTO moves(uid,from_vid,fx,fy,tx,ty,to_vid,to_uid,mission,troops,loot,depart,arrive,state,lock,tries,hero,st,st_last,loot_vid) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,NULL,?,?,? WHERE (SELECT raids FROM stations WHERE id=?)=?';
+    const st = [
+      DB.prepare('UPDATE stations SET troops=?, raids=? WHERE id=? AND raids=? AND troops=?').bind(JSON.stringify(tr), raids, s.id, s.raids, s.troops),
+      DB.prepare(MV).bind(s.owner_uid, s.owner_vid, s.x, s.y, tx, ty, toVid, toUid, mis, JSON.stringify(send), '{}',
+        t, t + sec * 1000, 'go', s.id, last, lootVid, s.id, raids)
+    ];
+    if (last){
+      if (tcount(tr)){
+        const hs = Math.max(60, Math.round(Math.hypot(A.x - s.x, A.y - s.y) / minSpd(tr) * 3600 / SPEED));
+        st.push(DB.prepare(MV).bind(s.owner_uid, s.owner_vid, s.x, s.y, A.x, A.y, null, null, 'support', JSON.stringify(tr), '{}',
+          t, t + hs * 1000, 'back', null, 1, null, s.id, raids));
+      }
+      st.push(DB.prepare('DELETE FROM stations WHERE id=? AND raids=?').bind(s.id, raids));
+    }
+    const r = await DB.batch(st);
+    if (!r[0].meta.changes) throw ue('มีการสั่งการซ้อนกัน ลองใหม่อีกครั้ง');
+    if (tv && !tv.is_bot && mis !== 'scout')
+      await DB.prepare('UPDATE players SET protect_until=0 WHERE uid=? AND protect_until>?').bind(s.owner_uid, t).run();
+    return ok({ sec, last:!!last });
+  }
+  return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
 }
