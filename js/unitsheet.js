@@ -128,7 +128,7 @@ var Sheets = (function(){
 
 var UnitSheet = {
   get:function(tribe, k){
-    return Sheets.get('u' + tribe + '_' + k) ||
-      Sheets.get('u_' + ((k === 'cav_h' && (tribe === 1 || tribe === 2)) ? 'elephant' : k));
+    var k2 = (k === 'cav_h' && (tribe === 1 || tribe === 2)) ? 'elephant' : k;
+    return Sheets.get('u' + tribe + '_' + k2) || Sheets.get('u_' + k2);
   }
 };

@@ -3,8 +3,8 @@ var War = (function(){
   var R = { units:[], byId:{} }, ORIG = {}, inst = false, lastArr = 0, REP = [];
   var IC = { inf_a:'⚔️', inf_d:'🛡️', inf_x:'🗡️', scout:'👁️', cav_l:'🐎', cav_h:'🐘', ram:'🐏' };
   var MIS = { attack:{ ic:'⚔️', name:'โจมตี' }, raid:{ ic:'💰', name:'ปล้น' },
-              scout:{ ic:'👁️', name:'สอดแนม' }, support:{ ic:'🛡️', name:'เสริมทัพ' } };
-  var BLD_OK = { barracks:1, stable:1, workshop:1 };
+              scout:{ ic:'👁️', name:'สอดแนม' }, support:{ ic:'🛡️', name:'เสริมทัพ' }, settle:{ ic:'🏘️', name:'ตั้งเมืองใหม่' } };
+  var BLD_OK = { barracks:1, stable:1, workshop:1, residence:1, palace:1 };
 
   function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
     return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
@@ -24,7 +24,7 @@ var War = (function(){
   function unit(id){ return R.byId[id] || null; }
   function myUnits(bld){
     var tr = Game.player.tribe | 0;
-    return R.units.filter(function(u){ return u.tribe === tr && (!bld || u.bld === bld); });
+    return R.units.filter(function(u){ return u.tribe === tr && (!bld || u.bld === bld || (bld === 'palace' && u.type === 'settle')); });
   }
   function icon(u){
     if (!u) return '⚔️';
@@ -52,6 +52,12 @@ var War = (function(){
     var bl = cityLevel(v, bk), B = BUILDINGS[bIndex(bk)];
     var h = '<h3>' + B.ic + ' ' + B.name + ' Lv.' + bl + '</h3>';
     if (bl < 1) h += '<div class="bc-lock">🔒 ยังไม่ได้สร้าง' + B.name + '</div>';
+    if ((bk === 'residence' || bk === 'palace') && v.srvExp){
+    var E = v.srvExp;
+      h += '<div class="infobox">🏘️ ช่องขยายเมือง <b>' + Math.max(0, E.slots - E.used) + '/' + E.slots + '</b> (ใช้ไปแล้ว ' + E.used +
+        ')<br>ผู้ตั้งถิ่นฐานต้องใช้คฤหาสน์/พระราชวัง Lv.10 · ส่ง 3 นายต่อ 1 เมือง' +
+        (bk === 'palace' ? '<br>👑 ขุนพลสูงสุด <b>' + E.chief + '</b> นาย (พระราชวัง Lv.5/10/15/20 → 1/2/3/4)' : '') + '</div>';
+    }
     myUnits(bk).forEach(function(u){
       var why = bl < u.lv ? 'ต้องมี' + B.name + 'ระดับ ' + u.lv
         : (u.req && cityLevel(v, u.req[0]) < u.req[1])
@@ -123,7 +129,7 @@ var War = (function(){
       }
 
       if (t.npc) return '🏚 เมืองร้าง — ปล้นได้';
-      return '⛔ ไม่มีเมืองที่พิกัดนี้';
+      return World.canSettle(x, y) ? '⛔ ไม่มีเมืองที่พิกัดนี้' : '🏕 ที่ว่าง — ส่งผู้ตั้งถิ่นฐานไปตั้งเมืองได้';
     } catch(e){ return ''; }
   }
   function openSend(x, y){
@@ -156,7 +162,9 @@ var War = (function(){
       '<label class="misr"><input type="radio" name="sdm" value="raid" checked><span>💰 ปล้น — เสียทหารน้อย เน้นขนของกลับ</span></label>' +
       '<label class="misr"><input type="radio" name="sdm" value="attack"><span>⚔️ โจมตี — สู้จนแพ้ชนะ ซุงกระทุ้งทำลายกำแพงได้</span></label>' +
       '<label class="misr"><input type="radio" name="sdm" value="scout"><span>👁️ สอดแนม — ส่งได้เฉพาะหน่วยสอดแนม</span></label>' +
-      '<label class="misr"><input type="radio" name="sdm" value="support"><span>🛡️ เสริมทัพ — ประจำการที่เมืองตัวเอง/เพื่อนกิลด์ ออกรบจากที่นั่นได้ 3 ครั้ง</span></label></div>' +
+      '<label class="misr"><input type="radio" name="sdm" value="support"><span>🛡️ เสริมทัพ — ประจำการที่เมืองตัวเอง/เพื่อนกิลด์ ออกรบจากที่นั่นได้ 3 ครั้ง</span></label>' +
+      '<label class="misr"><input type="radio" name="sdm" value="settle"><span>🏘️ ตั้งเมืองใหม่ — ส่งผู้ตั้งถิ่นฐาน 3 นายไปยังที่ว่าง</span></label></div>' +
+
       '<label class="misr" id="sdCmdRow" style="display:none;margin-bottom:8px"><input type="checkbox" id="sdCmd">' +
       '<span>🤝 ให้เจ้าของเมืองปลายทางสั่งทหารกองนี้ได้</span></label>' +
       '<div class="infobox" id="sdPrev">เลือกทหารที่จะส่ง</div>' +
@@ -164,6 +172,12 @@ var War = (function(){
       '<button class="btn-use2" id="sdTroops">🛡 ดูรายการทหาร</button>' +
       '<button class="btn-cancel" onclick="UI.close()">ปิด</button>';
     UI.modal(h);
+    try {
+      if (x != null && !(Net.at && Net.at(x, y)) && !World.canSettle(x, y)){
+        var se = document.querySelector('input[name=sdm][value=settle]');
+        if (se) se.checked = true;
+      }
+    } catch(e){}
 
     function pick(){
       var t = {};
@@ -276,6 +290,8 @@ var War = (function(){
   function resLine(r){ return RES.map(function(x){ return RES_IC[x] + fmt((r || {})[x] || 0); }).join(' '); }
   function repBody(d){
     if (d && d.hk && typeof Hero2 !== 'undefined') return Hero2.repBody(d);
+    if (d && d.settle) return '<div class="rpt-g">🏘️ จาก ' + esc(d.from) + ' → (' + d.x + '|' + d.y + ')' +
+       (d.why ? '<br>✖ ' + esc(d.why) + ' ผู้ตั้งถิ่นฐานเดินทางกลับ' : '<br>✔ ก่อตั้งเมืองใหม่สำเร็จ') + '</div>';
     if (d && d.sup) return '<div class="rpt-g">🛡 ' + esc(d.from) + ' → ' + esc(d.to) + ' (' + d.x + '|' + d.y + ')<br>' +
     troopLine(d.troops) + (d.why ? '<br>✖ ' + esc(d.why) : '') + '</div>';
     if (!d || !d.a) return '—';
@@ -295,6 +311,8 @@ var War = (function(){
       ? '<b style="color:#8fbf5f">✔ ยึดสำเร็จ ผลผลิตเพิ่มทันที</b>' : (d.oasis.why ? '✖ ' + esc(d.oasis.why) : '—')) + '</div>';
     if (d.pw) h += '<div class="rpt-g">พลังโจมตี <b>' + fmt(d.pw.a) + '</b> · พลังป้องกัน <b>' + fmt(d.pw.d) + '</b></div>';
     if (d.loot && count(d.loot)) h += '<div class="rpt-g">📦 ' + (d.def ? 'ถูกปล้นไป ' : 'ปล้นได้ ') + resLine(d.loot) + '</div>';
+    if (d.loy) h += '<div class="rpt-g">🏳️ ความภักดี ' + d.loy.a + '% → <b>' + d.loy.b + '%</b>' +
+       (d.captured ? ' · <b style="color:#ffcf40">👑 ยึดเมืองสำเร็จ!</b>' : '') + (d.loy.why ? '<br>✖ ' + esc(d.loy.why) : '') + '</div>';
     if (d.wall) h += '<div class="rpt-g">🧱 กำแพง Lv.' + d.wall[0] + ' → Lv.' + d.wall[1] + '</div>';
     if (d.intel){
       h += '<div class="rpt-g"><b>👁️ ข้อมูลที่สอดแนมได้</b><br>' + resLine(d.intel.res) +

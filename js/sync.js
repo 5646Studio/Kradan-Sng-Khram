@@ -95,7 +95,8 @@ var Sync = (function(){
       });
     o.srvUp = sv.upkeep || 0;
     o.srvHero = sv.hero || null;
-    o.loyalty = 100; o.loyaltyAt = now();
+    o.srvExp = sv.exp || null;
+    o.loyalty = sv.loy == null ? 100 : sv.loy; o.loyaltyAt = now();
     return o;
   }
   function resetGame(){

@@ -36,7 +36,8 @@ var Social = (function(){
   }
 
   /* ---------- กล่องข้อความ ---------- */
-  function openInbox(){
+  function openInbox(){ if (typeof Chat3 !== 'undefined') return Chat3.open('dm'); return openInboxDM(); }
+  function openInboxDM(){
     if (!on()) return UI.modal('<h3>✉ กล่องข้อความ</h3><div class="infobox">แชตใช้ได้ในโหมดออนไลน์เท่านั้น</div>' + closeBtn());
     stopTimer();
     UI.modal('<h3>✉ กล่องข้อความ</h3><p class="stnone">กำลังโหลด…</p>');
@@ -430,6 +431,7 @@ var Social = (function(){
     watchTile();
   }
 
-  return { install:install, onState:onState, openInbox:openInbox, openThread:openThread,
+    return { install:install, onState:onState, openInbox:openInbox, openThread:openThread,
+    newMsg:newMsg, openBlocks:openBlocks, when:when,
     renamePlayer:renamePlayer, renameVillage:renameVillage, openPlan:openPlan };
 })();
