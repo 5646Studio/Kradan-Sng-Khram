@@ -92,6 +92,7 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
         <div id="gmsg2"></div>
         <p style="font-size:10.5px;color:#7a6c4e;margin-top:8px">ทองเข้าทันที ผู้เล่นจะเห็นภายใน 30 วินาที</p>
       </div>
+      <div class="card"><b>🧪 เพิ่ม Culture Points (ทดสอบ)</b><input id="cpname" placeholder="ชื่อผู้เล่น"><input id="cpamt" type="number" placeholder="CP เช่น 5000"><button class="btn b2" id="cpsend">➕ เพิ่ม CP</button><div id="cpmsg"></div></div>
       <div class="card"><b>🧾 คำสั่งซื้อ</b><div id="olist"></div></div>
       <div class="card"><b>📒 บัญชีทอง (200 รายการล่าสุด)</b><div id="llist"></div></div>
     </div>
@@ -329,6 +330,12 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
       loadAll();
     });
   };
+    $('cpsend').onclick = function(){
+    Api.post('/admin/cp', { name:$('cpname').value.trim(), cp:parseInt($('cpamt').value, 10) || 0 }).then(function(r){
+      note('cpmsg', r.ok ? '✔ เพิ่ม CP แล้ว' : r.err, r.ok);
+    });
+  };
+
   function paintLedger(r){
     var L = (r && r.list) || [];
     $('llist').innerHTML = L.length ? L.map(function(g){
