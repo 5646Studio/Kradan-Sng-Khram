@@ -768,3 +768,13 @@ input[type=datetime-local].selbox{margin-top:4px;color-scheme:dark}
 .ttab .uicu{height:26px}
 .rpt-g .ttab .uicu{height:22px}
 .stline .uicu{height:22px}
+
+/* ===== v14h ===== */
+.btab .tdot{display:inline-flex;align-items:center;justify-content:center;min-width:8px;height:8px;padding:0 3px;
+  margin-left:4px;border-radius:7px;background:#c0392b;color:#fff;font-style:normal;font-size:8px;vertical-align:middle}
+.btab .tdot:not(:empty){min-width:14px;height:14px}
+#msgbtn.roomnew::after{content:'';position:absolute;bottom:-2px;right:-2px;width:8px;height:8px;border-radius:50%;
+  background:#4db8ff;border:1px solid #0d0b08}
+.cmsg .cn{font-size:9.5px;color:#8fbf5f;margin:0 0 2px 4px;cursor:pointer}
+.cmsg .cn .gt{color:#4db8ff}
+
