@@ -15,7 +15,7 @@ const RTH = { wheat:'ข้าว', wood:'ไม้', iron:'เหล็ก', cl
 const RUIN_UID = '__ruins__', RUIN_NAME = 'เมืองร้าง';
 
 const FEATURES = { build:true, gold:true, military:true, hero:true, dungeon:true, market:false,
-  guild:false, oasis:true, settle:false, station:true, quest:false, schedule:true, endgame:false,
+  guild:false, oasis:true, settle:true, station:true, quest:false, schedule:true, endgame:false,
   chat:true, rename:true };
 
 const PACKAGES = [
@@ -417,7 +417,7 @@ function trainUnits(d, tribe, t, id, n){
   if (!u || u.tribe !== tribe) throw ue('ไม่พบหน่วยนี้ในเผ่าของคุณ');
   n = Math.floor(n);
   if (!(n > 0) || n > 5000) throw ue('จำนวนต้องอยู่ระหว่าง 1 - 5,000');
-  const bl = lvl(d, u.bld);
+  const bl = u.type === 'settle' ? Math.max(lvl(d, 'residence'), lvl(d, 'palace')) : lvl(d, u.bld);
   if (bl < 1) throw ue('ต้องสร้าง' + BD[u.bld].n + 'ก่อน');
   if (bl < u.lv) throw ue('ต้องมี' + BD[u.bld].n + 'ระดับ ' + u.lv);
   if (u.req && lvl(d, u.req[0]) < u.req[1]) throw ue('ต้องมี' + BD[u.req[0]].n + 'ระดับ ' + u.req[1]);
@@ -611,6 +611,8 @@ async function route(req, env){
   if (SOC) return SOC;
   const STN = await stationApi(p, b, env, uid);
   if (STN) return STN;
+  const RM = await roomApi(p, b, env, uid);
+  if (RM) return RM;
 
   const ACT = {
     '/me': null,
@@ -637,6 +639,7 @@ async function route(req, env){
   };
   
   if (p.indexOf('/hero/') === 0) ACT[p] = ctx => heroAct(ctx, b, p.slice(6));
+  if (p === '/train') ACT[p] = ctx => trainEx(ctx, b);
   if (!(p in ACT)) return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
   const out = await session(env, uid, ACT[p]);
   if (!out) return json({ ok:true, player:null, villages:[], features:FEATURES, now:Date.now() }, 200, env);
@@ -715,6 +718,8 @@ async function session(env, uid, act){
     }
     ctx.unread = ((await env.DB.prepare('SELECT COUNT(*) n FROM reports WHERE uid=? AND read=0').bind(uid).first()) || {}).n || 0;
     ctx.msgUnread = ((await env.DB.prepare('SELECT COUNT(*) n FROM msgs WHERE to_uid=? AND read=0').bind(uid).first()) || {}).n || 0;
+    ctx.rooms = { w:((await env.DB.prepare("SELECT MAX(id) n FROM msgs WHERE conv='r:world'").first()) || {}).n || 0,
+    g:P.guild_id ? (((await env.DB.prepare('SELECT MAX(id) n FROM msgs WHERE conv=?').bind('r:g' + P.guild_id).first()) || {}).n || 0) : 0 };
     ctx.qReady = await questReady(env, ctx);
 
     return stateOf(ctx, err);
@@ -769,13 +774,14 @@ function stateOf(ctx, err){
     renameN:P.rename_n | 0, renameAt:P.rename_at || 0, oldName:P.old_name || null,
     schedUntil:P.sched_until || 0 },
     msgUnread:ctx.msgUnread || 0,
+    rooms:ctx.rooms || null,
     quest:questOut(P, ctx),
 
     villages:VS.map(V => {
       const d = V.d;
       return { id:V.row.id, x:V.row.x, y:V.row.y, name:V.row.name, first:!!d.first, bio:d.bio, fields:d.fields,
         city:d.city, wallLv:d.wallLv || 0, res:d.res, resAt:d.resAt, queue:d.queue, pop:population(d), caps:caps(d),
-        oa:d.oa || [], hero:heroOut(d, t), troops:d.troops || {}, train:d.train || {}, upkeep:tUp(d.troops) + (d._away || 0),
+        loy:Math.round(loyNow(d, t)), exp:{ slots:expSlots(d), used:d.expUsed | 0, chief:chiefCap(d) }, oa:d.oa || [], hero:heroOut(d, t), troops:d.troops || {}, train:d.train || {}, upkeep:tUp(d.troops) + (d._away || 0),
         rate:{ wheat:rate(d,'wheat'), wood:rate(d,'wood'), iron:rate(d,'iron'), clay:rate(d,'clay') } };
     }),
     moves:ctx.moves.filter(m => m.uid === P.uid).map(mvOut),
@@ -819,12 +825,14 @@ async function resolveDue(env, t, limit){
 }
 
 function titleA(r){
+  if (r.captured) return '👑 ยึดเมือง ' + r.d.v + ' สำเร็จ!';
   const nm = r.d.v ? r.d.v + ' (' + r.d.name + ')' : r.d.name;
   if (r.miss) return '↩️ ไม่พบเป้าหมายที่ (' + r.d.x + '|' + r.d.y + ')';
   if (r.mission === 'scout') return (r.win ? '👁️ สอดแนมสำเร็จ — ' : '👁️ สอดแนมล้มเหลว — ') + nm;
   return (r.win ? '⚔️ ชนะ — ' : '💀 พ่ายแพ้ — ') + (r.mission === 'raid' ? 'ปล้น ' : 'โจมตี ') + nm;
 }
 function titleD(r){
+  if (r.captured) return '🏳️ เสียเมือง ' + r.d.v + ' ให้ ' + r.a.name;
   if (r.mission === 'scout') return '👁️ ตรวจพบการสอดแนมจาก ' + r.a.name;
   return (r.win ? '🔥 เมืองถูกตีแตก — ' : '🛡️ ป้องกันสำเร็จ — ') + r.a.name + ' บุก ' + r.d.v;
 }
@@ -1005,6 +1013,13 @@ async function admin(p, b, q, env, by){
     }
     throw ue('action ต้องเป็น spawn / tick / clear');
   }
+    if (p === '/admin/cp'){
+    const pl = await DB.prepare('SELECT uid FROM players WHERE name=?').bind(String(b.name || '').trim()).first();
+    if (!pl) throw ue('ไม่พบผู้เล่นชื่อนี้');
+    await DB.prepare('UPDATE players SET cp=cp+? WHERE uid=?').bind(b.cp | 0, pl.uid).run();
+    return json({ ok:true }, 200, env);
+  }
+
   return json({ ok:false, err:'ไม่พบคำสั่งแอดมิน' }, 404, env);
 }
 
@@ -1152,7 +1167,7 @@ async function social(p, b, env, uid){
 
   /* ---------- แชต ---------- */
   if (p === '/chat/inbox'){
-    const rows = (await DB.prepare('SELECT m.conv, m.from_uid, m.to_uid, m.text, m.at, (SELECT COUNT(*) FROM msgs u WHERE u.conv=m.conv AND u.to_uid=? AND u.read=0) AS unread FROM msgs m WHERE m.id IN (SELECT MAX(id) FROM msgs WHERE from_uid=? OR to_uid=? GROUP BY conv) ORDER BY m.id DESC LIMIT 50')
+    const rows = (await DB.prepare("SELECT m.conv, m.from_uid, m.to_uid, m.text, m.at, (SELECT COUNT(*) FROM msgs u WHERE u.conv=m.conv AND u.to_uid=? AND u.read=0) AS unread FROM msgs m WHERE m.id IN (SELECT MAX(id) FROM msgs WHERE (from_uid=? OR to_uid=?) AND conv NOT LIKE 'r:%' GROUP BY conv) ORDER BY m.id DESC LIMIT 50")
       .bind(uid, uid, uid).all()).results || [];
     const others = rows.map(x => x.from_uid === uid ? x.to_uid : x.from_uid), names = {};
     if (others.length){
@@ -1840,7 +1855,7 @@ function fight(at, aB, dt, dB, wall, mission, base, aX, dX){
 
 async function sendArmy(ctx, env, b){
   const V = findV(ctx, b.vid), d = V.d, mis = String(b.mission || '');
-  if (!['attack', 'raid', 'scout', 'support'].includes(mis)) throw ue('ภารกิจไม่ถูกต้อง');
+  if (!['attack', 'raid', 'scout', 'support', 'settle'].includes(mis)) throw ue('ภารกิจไม่ถูกต้อง');
   const rl = lvl(d, 'rally');
   if (rl < 1) throw ue('ต้องมีลานรวมพล');
   const out = ctx.moves.filter(m => m.from_vid === V.row.id && m.state === 'go').length;
@@ -1880,7 +1895,12 @@ async function sendArmy(ctx, env, b){
   const tv = await env.DB.prepare('SELECT v.id, v.uid, p.is_bot, p.protect_until FROM villages v JOIN players p ON p.uid=v.uid WHERE v.x=? AND v.y=?').bind(tx, ty).first();
   let toVid = null, toUid = null;
 
-    if (mis === 'support'){
+  if (Object.keys(tr).some(k => UNITS[k].type === 'settle') && mis !== 'settle')
+  throw ue('ผู้ตั้งถิ่นฐานใช้ได้กับภารกิจ 🏘️ ตั้งเมืองใหม่เท่านั้น');
+  if (mis === 'support' && Object.keys(tr).some(k => UNITS[k].type === 'chief')) throw ue('ขุนพลไปเสริมทัพไม่ได้');
+  if (mis === 'settle'){ settleCheck(ctx, tr, hj, tx, ty, tv); }
+  else if (mis === 'support'){
+
     if (!tv) throw ue('เสริมทัพได้เฉพาะเมือง');
     const why = await supportWhy(env, ctx.P, tv);
     if (why) throw ue(why);
@@ -1975,6 +1995,7 @@ async function oasisArrive(env, m, T, tr, smA, H, rep, at){
 
 async function doArrive(env, m){
   if (m.mission === 'support') return await supportArrive(env, m);
+  if (m.mission === 'settle') return await settleArrive(env, m);
   const t = Date.now(), at = m.arrive, tr = JSON.parse(m.troops || '{}');
   const H = m.hero ? JSON.parse(m.hero) : null;
   const aV = await getV(env, m.from_vid), aP = await getP(env, m.uid);
@@ -2030,6 +2051,7 @@ async function doArrive(env, m){
         }
         rep.loot = loot;
       }
+      if (m.mission === 'attack' && rep.win) await conquerCheck(env, m, dr, dd, dP, aP, left, rep, at);
       if (dP.is_bot === 1 && aP && m.mission !== 'scout'){
         if (!dd.grudge) dd.grudge = {};
         const g0 = dd.grudge[m.uid] || { n:0, at:0 };
@@ -2284,6 +2306,186 @@ async function stationApi(p, b, env, uid){
     if (tv && !tv.is_bot && mis !== 'scout')
       await DB.prepare('UPDATE players SET protect_until=0 WHERE uid=? AND protect_until>?').bind(s.owner_uid, t).run();
     return ok({ sec, last:!!last });
+  }
+  return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
+}
+
+/* =====================================================================
+   B5-2 : ผู้ตั้งถิ่นฐาน · เมืองใหม่ · ขุนพล · ความภักดี · ยึดเมือง · ห้องแชตกิลด์/โลก
+   ===================================================================== */
+const SETTLE_N = 3, ROOM_GAP = 5000, ROOM_MAX = 300;
+const LOY_DROP = [0, 25, 58, 98, 150];
+const UT_EX = [
+  ['settler','settle','residence',10, 0,80,80, 5,0,1, [1200,1500,1300,1500], 5000,
+    ['ผู้ตั้งถิ่นฐาน','ผู้ตั้งถิ่นฐาน','ผู้ตั้งถิ่นฐาน','ผู้ตั้งถิ่นฐาน']],
+  ['chief','chief','palace',5, 40,60,40, 4,0,4, [4000,5500,5000,6000], 20000,
+    ['ขุนพล','แสนท้าว','ขุนพลขอม','ขุนพลศรีวิชัย']]
+];
+TRIBES.forEach((T, ti) => UT_EX.forEach(u => {
+  const o = { id:'u' + ti + '_' + u[0], k:u[0], tribe:ti, name:u[12][ti], type:u[1], bld:u[2], lv:u[3], req:null,
+    atk:Math.round(u[4] * T.a), di:Math.round(u[5] * T.d), dc:Math.round(u[6] * T.d),
+    spd:+(u[7] * T.s).toFixed(1), carry:u[8], up:u[9],
+    cost:{ wheat:u[10][0], wood:u[10][1], iron:u[10][2], clay:u[10][3] }, time:u[11] };
+  UNITS[o.id] = o; UNIT_LIST.push(o);
+}));
+
+function expSlots(d){
+  const r = lvl(d, 'residence'), p = lvl(d, 'palace');
+  return Math.max(r >= 20 ? 2 : r >= 10 ? 1 : 0, p >= 20 ? 3 : p >= 15 ? 2 : p >= 10 ? 1 : 0);
+}
+function chiefCap(d){ const p = lvl(d, 'palace'); return p >= 20 ? 4 : p >= 15 ? 3 : p >= 10 ? 2 : p >= 5 ? 1 : 0; }
+function loyNow(d, t){
+  const l = d.loy == null ? 100 : d.loy;
+  const r = 1 + 0.5 * Math.max(lvl(d, 'residence'), lvl(d, 'palace'));
+  return Math.max(0, Math.min(100, l + r * Math.max(0, t - (d.loyAt || t)) / 3600000));
+}
+function unitHave(ctx, V, id){
+  let n = V.d.troops[id] || 0;
+  for (const b in (V.d.train || {})) for (const j of V.d.train[b]) if (j.u === id) n += j.left;
+  for (const m of ctx.moves) if (m.from_vid === V.row.id && m.uid === ctx.P.uid) n += (JSON.parse(m.troops || '{}')[id] || 0);
+  return n;
+}
+function trainEx(ctx, b){
+  const V = findV(ctx, b.vid), d = V.d, u = UNITS[String(b.u || '')], n = Math.floor(b.n) || 0;
+  if (u && u.type === 'settle'){
+    const free = Math.max(0, expSlots(d) - (d.expUsed | 0)), cap = free * SETTLE_N, have = unitHave(ctx, V, u.id);
+    if (!expSlots(d)) throw ue('ต้องมีคฤหาสน์หรือพระราชวัง Lv.10');
+    if (have + n > cap) throw ue('ฝึกผู้ตั้งถิ่นฐานได้อีก ' + Math.max(0, cap - have) + ' นาย (ช่องขยายเมืองเหลือ ' + free + ')');
+  }
+  if (u && u.type === 'chief'){
+    const cap = chiefCap(d), have = unitHave(ctx, V, u.id);
+    if (have + n > cap) throw ue('มีขุนพลได้สูงสุด ' + cap + ' นาย (พระราชวัง Lv.5/10/15/20 → 1/2/3/4)');
+  }
+  trainUnits(d, ctx.P.tribe, ctx.t, String(b.u || ''), b.n);
+  V.dirty = true;
+}
+
+/* ---------- ตั้งเมืองใหม่ ---------- */
+function settleCheck(ctx, tr, hj, tx, ty, tv){
+  if (hj) throw ue('วีรบุรุษไปตั้งเมืองไม่ได้');
+  let n = 0;
+  for (const k in tr){
+    if (UNITS[k].type !== 'settle') throw ue('ภารกิจตั้งเมืองส่งได้เฉพาะผู้ตั้งถิ่นฐาน');
+    n += tr[k];
+  }
+  if (n !== SETTLE_N) throw ue('ต้องส่งผู้ตั้งถิ่นฐาน ' + SETTLE_N + ' นายพอดี');
+  if (tv) throw ue('มีเมืองตั้งอยู่แล้ว');
+  const why = canSettle(tx, ty);
+  if (why) throw ue('ตั้งเมืองไม่ได้: ' + why);
+  const pend = ctx.moves.filter(m => m.uid === ctx.P.uid && m.mission === 'settle' && m.state === 'go').length;
+  const need = CPN[ctx.VS.length + pend + 1] || 1e12, cp = cpNow(ctx.P, ctx.VS, ctx.t);
+  if (cp < need) throw ue('Culture Points ไม่พอ (' + Math.floor(cp) + ' / ' + need + ')');
+}
+async function settleArrive(env, m){
+  const DB = env.DB, at = m.arrive, t = Date.now();
+  const aV = await getV(env, m.from_vid), P = await getP(env, m.uid);
+  if (!aV || aV.uid !== m.uid || !P){ await DB.prepare('DELETE FROM moves WHERE id=?').bind(m.id).run(); return true; }
+  let why = canSettle(m.tx, m.ty);
+  if (!why && await DB.prepare('SELECT id FROM villages WHERE x=? AND y=?').bind(m.tx, m.ty).first()) why = 'มีผู้อื่นตั้งเมืองไปก่อนแล้ว';
+  if (!why){
+    const rows = (await DB.prepare('SELECT data FROM villages WHERE uid=?').bind(m.uid).all()).results || [];
+    const cp = cpNow(P, rows.map(r => ({ d:JSON.parse(r.data) })), at), need = CPN[rows.length + 1] || 1e12;
+    if (cp < need) why = 'Culture Points ไม่พอ (' + Math.floor(cp) + ' / ' + need + ')';
+  }
+  const data = { settle:1, x:m.tx, y:m.ty, from:aV.name, why };
+  if (!why){
+    const d = newVillage(m.tx, m.ty, false, at);
+    try {
+      await DB.batch([
+        DB.prepare('INSERT INTO villages(uid,x,y,name,pop,data,ver,updated) VALUES(?,?,?,?,?,?,0,?)')
+          .bind(m.uid, m.tx, m.ty, 'เมืองใหม่', population(d), SJ(d), t),
+        DB.prepare('DELETE FROM moves WHERE id=?').bind(m.id),
+        DB.prepare('INSERT INTO reports(uid,at,kind,title,data,read) VALUES(?,?,?,?,?,0)')
+          .bind(m.uid, at, 'war', '🏘️ ก่อตั้งเมืองใหม่ที่ (' + m.tx + '|' + m.ty + ') สำเร็จ!', JSON.stringify(data))
+      ]);
+      await patchV(env, m.from_vid, dd => { dd.expUsed = (dd.expUsed | 0) + 1; });
+      return true;
+    } catch (e){
+      if (!/UNIQUE/i.test(String(e && e.message))) throw e;
+      why = data.why = 'มีผู้อื่นตั้งเมืองไปก่อนแล้ว';
+    }
+  }
+  await DB.batch([
+    DB.prepare('UPDATE moves SET state=?, fx=?, fy=?, tx=?, ty=?, depart=?, arrive=?, lock=0, tries=0 WHERE id=?')
+      .bind('back', m.tx, m.ty, m.fx, m.fy, at, at + (at - m.depart), m.id),
+    DB.prepare('INSERT INTO reports(uid,at,kind,title,data,read) VALUES(?,?,?,?,?,0)')
+      .bind(m.uid, at, 'war', '↩️ ตั้งเมืองไม่สำเร็จ — ' + why, JSON.stringify(data))
+  ]);
+  return true;
+}
+
+/* ---------- ขุนพล · ความภักดี · ยึดเมือง ---------- */
+async function conquerCheck(env, m, dr, dd, dP, aP, left, rep, at){
+  const ck = Object.keys(left).filter(k => UNITS[k] && UNITS[k].type === 'chief' && left[k] > 0);
+  const nc = ck.reduce((s, k) => s + left[k], 0);
+  if (!nc || !aP) return;
+  const DB = env.DB, l0 = loyNow(dd, at);
+  let why = null;
+  if (lvl(dd, 'palace') > 0) why = 'เมืองหลวง (มีพระราชวัง) ยึดไม่ได้';
+  else if (dP.is_bot !== 2){
+    const n = ((await DB.prepare('SELECT COUNT(*) n FROM villages WHERE uid=?').bind(dr.uid).first()) || {}).n || 0;
+    if (n <= 1) why = 'เป็นเมืองสุดท้ายของเจ้าของ ยึดไม่ได้';
+  }
+  if (why){ rep.loy = { a:Math.round(l0), b:Math.round(l0), why }; return; }
+  const l1 = l0 - LOY_DROP[Math.min(4, nc)];
+  dd.loyAt = at;
+  if (l1 > 0){ dd.loy = l1; rep.loy = { a:Math.round(l0), b:Math.round(l1) }; return; }
+  const rows = (await DB.prepare('SELECT data FROM villages WHERE uid=?').bind(m.uid).all()).results || [];
+  const cp = cpNow(aP, rows.map(r => ({ d:JSON.parse(r.data) })), at), need = CPN[rows.length + 1] || 1e12;
+  if (cp < need){ dd.loy = 0; rep.loy = { a:Math.round(l0), b:0, why:'Culture Points ไม่พอ (' + Math.floor(cp) + ' / ' + need + ')' }; return; }
+
+  left[ck[0]] -= 1;
+  if (left[ck[0]] <= 0) delete left[ck[0]];
+  dd.loy = 25; dd.loyAt = at; dd.troops = {}; dd.queue = []; dd.train = {}; dd.oa = []; dd.grudge = {};
+  dd.expUsed = 0; dd.first = false; dd.hero = heroNew(at);
+  rep.loy = { a:Math.round(l0), b:0 }; rep.captured = true;
+  const G = ' AND (SELECT ver FROM villages WHERE id=?)=?', gb = [dr.id, dr.ver + 1];
+  m._sx = (m._sx || []).concat([
+    DB.prepare('UPDATE villages SET uid=?, name=? WHERE id=?' + G).bind(m.uid, 'เมืองยึดได้', dr.id, ...gb),
+    DB.prepare('DELETE FROM oasis WHERE vid=?' + G).bind(dr.id, ...gb),
+    DB.prepare('DELETE FROM stations WHERE owner_vid=?' + G).bind(dr.id, ...gb),
+    DB.prepare("INSERT INTO moves(uid,from_vid,fx,fy,tx,ty,to_vid,to_uid,mission,troops,loot,depart,arrive,state,lock,tries) SELECT s.owner_uid, s.owner_vid, s.x, s.y, v.x, v.y, NULL, NULL, 'support', s.troops, '{}', ?, ?, 'back', 0, 0 FROM stations s JOIN villages v ON v.id=s.owner_vid WHERE s.host_vid=? AND s.owner_uid<>?" + G)
+      .bind(at, at + 3600000, dr.id, m.uid, ...gb),
+    DB.prepare('DELETE FROM stations WHERE host_vid=? AND owner_uid<>?' + G).bind(dr.id, m.uid, ...gb),
+    DB.prepare('UPDATE stations SET host_uid=? WHERE host_vid=?' + G).bind(m.uid, dr.id, ...gb),
+    DB.prepare("UPDATE moves SET to_uid=? WHERE to_vid=? AND state='go'" + G).bind(m.uid, dr.id, ...gb)
+  ]);
+}
+
+/* ---------- ห้องแชต กิลด์ / โลก ---------- */
+async function roomApi(p, b, env, uid){
+  if (p.indexOf('/room/') !== 0) return null;
+  const DB = env.DB, t = Date.now(), ok = o => json(Object.assign({ ok:true }, o || {}), 200, env);
+  const me = await getP(env, uid);
+  if (!me) throw ue('ยังไม่ได้ลงทะเบียน');
+  if (me.banned) throw ue('บัญชีนี้ถูกระงับ');
+  const room = b.room === 'guild' ? 'guild' : 'world';
+  let conv = 'r:world';
+  if (room === 'guild'){
+    if (!me.guild_id) throw ue('คุณยังไม่มีกิลด์ — เข้าร่วมหรือตั้งกิลด์ได้ที่สถานทูต (เปิดใน B5-3)');
+    conv = 'r:g' + me.guild_id;
+  }
+  if (p === '/room/list'){
+    const rows = ((await DB.prepare('SELECT m.id, m.from_uid, m.text, m.at, p.name, g.tag FROM msgs m LEFT JOIN players p ON p.uid=m.from_uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE m.conv=? AND m.id>? AND m.from_uid NOT IN (SELECT target FROM blocks WHERE uid=?) ORDER BY m.id DESC LIMIT 80')
+      .bind(conv, b.after | 0, uid).all()).results || []).reverse();
+    return ok({ room, list:rows.map(m => ({ id:m.id, uid:m.from_uid, mine:m.from_uid === uid,
+      name:m.name || '(ลบบัญชีแล้ว)', tag:m.tag || null, text:m.text, at:m.at })) });
+  }
+  if (p === '/room/send'){
+    const text = String(b.text || '').replace(/\r/g, '').trim();
+    if (!text) throw ue('พิมพ์ข้อความก่อน');
+    if (text.length > ROOM_MAX) throw ue('ข้อความยาวเกิน ' + ROOM_MAX + ' ตัวอักษร');
+    const last = await DB.prepare("SELECT at FROM msgs WHERE from_uid=? AND conv LIKE 'r:%' ORDER BY id DESC LIMIT 1").bind(uid).first();
+    if (last && t - last.at < ROOM_GAP) throw ue('ส่งเร็วเกินไป รอ 5 วินาที');
+    const r = await DB.prepare('INSERT INTO msgs(conv,from_uid,to_uid,text,at,read,reported) VALUES(?,?,NULL,?,?,1,0)').bind(conv, uid, text, t).run();
+    return ok({ id:r.meta.last_row_id });
+  }
+  if (p === '/room/report'){
+    const m = await DB.prepare('SELECT m.id, m.from_uid, m.text, m.at, p.name FROM msgs m LEFT JOIN players p ON p.uid=m.from_uid WHERE m.id=? AND m.conv=?')
+      .bind(b.id | 0, conv).first();
+    if (!m) throw ue('ไม่พบข้อความ');
+    await DB.prepare('UPDATE msgs SET reported=1 WHERE id=?').bind(m.id).run();
+    return ok({ msg:m });
   }
   return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
 }
