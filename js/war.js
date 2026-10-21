@@ -55,7 +55,7 @@ var War = (function(){
     if ((bk === 'residence' || bk === 'palace') && v.srvExp){
     var E = v.srvExp;
       h += '<div class="infobox">🏘️ ช่องขยายเมือง <b>' + Math.max(0, E.slots - E.used) + '/' + E.slots + '</b> (ใช้ไปแล้ว ' + E.used +
-        ')<br>ผู้ตั้งถิ่นฐานต้องใช้คฤหาสน์/พระราชวัง Lv.10 · ส่ง 3 นายต่อ 1 เมือง' +
+        ')<br>คฤหาสน์/พระราชวัง Lv.5/10/15/20 → 1/2/3/4 ช่อง · ช่องละ 3 นาย · ส่ง 3 นายต่อ 1 เมือง' +
         (bk === 'palace' ? '<br>👑 ขุนพลสูงสุด <b>' + E.chief + '</b> นาย (พระราชวัง Lv.5/10/15/20 → 1/2/3/4)' : '') + '</div>';
     }
     myUnits(bk).forEach(function(u){
@@ -264,7 +264,7 @@ var War = (function(){
       '<button class="btn-use2" id="toSt">🛡 กองประจำการ / เสริมทัพ</button>' +
       '<button class="btn-cancel" onclick="UI.close()">ปิด</button>';
     UI.modal(h);
-    document.getElementById('toSend').onclick = function(){ openSend(); };
+    document.getElementById('toSend').onclick = function(){ War.openSend(); };
     var ts = document.getElementById('toSt');
     if (ts) ts.onclick = function(){ B5.open(); };
     document.getElementById('toTrain').onclick = function(){

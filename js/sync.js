@@ -285,6 +285,7 @@ var Sync = (function(){
     lock('Quest', 'open', 'quest', 'ภารกิจ');
     if (typeof B3 !== 'undefined') B3.install();
     if (typeof Hero2 !== 'undefined') Hero2.install();
+    if (typeof Send2 !== 'undefined') Send2.install();
 
   }
 

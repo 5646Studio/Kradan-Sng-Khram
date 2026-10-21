@@ -40,7 +40,8 @@ var B5 = (function(){
         '<button class="btn-ok" id="stNew">🛡 ส่งเสริมทัพ</button>' + closeBtn();
       UI.modal(h);
       document.getElementById('stNew').onclick = function(){ War.openSend(); };
-      document.querySelectorAll('[data-sr]').forEach(function(b){ b.onclick = function(){ openRaid(find(+b.dataset.sr)); }; });
+      document.querySelectorAll('[data-sr]').forEach(function(b){ b.onclick = function(){ B5.openRaid(find(+b.dataset.sr)); };
+ });
       document.querySelectorAll('[data-sb]').forEach(function(b){
         b.onclick = function(){
           if (!confirm('เรียกทหารกองนี้กลับเมือง?')) return;

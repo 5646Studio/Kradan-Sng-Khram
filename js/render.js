@@ -986,21 +986,18 @@ var Renderer = (function(){
 
       h += '<div class="ti-act">';
       if (own){
-        h += '<button class="btn-ok" onclick="Renderer.gotoVillage(' +
-          t.x + ',' + t.y + ')">🏛 เข้าเมือง</button>';
+        h += '<button class="btn-ok" onclick="Renderer.gotoVillage(' + t.x + ',' + t.y + ')">🏛 เข้าเมือง</button>' +
+          '<button class="btn-use" onclick="Renderer.sendHere(' + t.x + ',' + t.y + ')">⚔ ส่งทัพ</button>';
       } else {
-        var d = Math.round(Military.dist(V().x, V().y, t.x, t.y)*10)/10;
-        h += '<button class="btn-ok" onclick="Renderer.sendHere(' +
-          t.x + ',' + t.y + ')">⚔ ส่งทัพ (' + d + ')</button>';
+        var d = Math.round(Math.hypot(t.x - V().x, t.y - V().y) * 10) / 10;
+        h += '<button class="btn-ok" onclick="Renderer.sendHere(' + t.x + ',' + t.y + ')">⚔ ส่งทัพ (' + d + ')</button>';
+        var bmk = (typeof Bookmark !== 'undefined') && Bookmark.has(t.x, t.y);
+        h += '<button class="btn-use" style="flex:0 0 48px" ' +
+          (bmk ? 'disabled' : 'onclick="Bookmark.quickAdd(' + t.x + ',' + t.y + ')"') + '>' + (bmk ? '✓📍' : '📍') + '</button>';
+        if (typeof Schedule !== 'undefined' && Schedule.active())
+          h += '<button class="btn-use" style="flex:0 0 44px" onclick="Renderer.schedHere(' + t.x + ',' + t.y + ')">⏰</button>';
       }
-      var bmk = (typeof Bookmark !== 'undefined') && Bookmark.has(t.x, t.y);
-      h += '<button class="btn-use" style="flex:0 0 48px" ' +
-        (bmk ? 'disabled' : 'onclick="Bookmark.quickAdd(' + t.x + ',' + t.y + ')"') +
-        '>' + (bmk ? '✓📍' : '📍') + '</button>';
-      if (typeof Schedule !== 'undefined' && Schedule.active() && !own)
-        h += '<button class="btn-use" style="flex:0 0 44px" ' +
-          'onclick="Renderer.schedHere(' + t.x + ',' + t.y + ')">⏰</button>';
-      h += '<button class="btn-cancel" onclick="Renderer.hideInfo()">ปิด</button></div>';
+      h += '</div>';
       box.innerHTML = h;
       box.classList.remove('hidden');
       document.body.classList.add('tiopen');
