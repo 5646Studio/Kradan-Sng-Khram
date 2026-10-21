@@ -1032,10 +1032,10 @@ const BOT_NM = ['ศรีราชา','ไกรสร','เพชรา','อ
   'สายฟ้า','ภูผา','จันทรา','ดาวเรือง','มหาวงศ์'];
 const PERS = ['eco', 'war', 'turt', 'exp'];
 const PLAN = {
-  eco:['warehouse','granary','market','mill','sawmill','brickyard','foundry','embassy','barracks'],
-  war:['barracks','smithy','armoury','stable','warehouse','granary','watchtower','wall'],
-  turt:['wall','warehouse','granary','cranny','watchtower','barracks','armoury'],
-  exp:['warehouse','granary','residence','embassy','townhall','market','barracks']
+  eco:['warehouse','granary','barracks','market','embassy','residence','mill','sawmill','brickyard','foundry'],
+  war:['barracks','warehouse','granary','smithy','armoury','stable','watchtower','wall','residence'],
+  turt:['wall','barracks','warehouse','granary','cranny','watchtower','armoury','residence'],
+  exp:['warehouse','granary','barracks','residence','embassy','market','townhall']
 };
 function pick(a){ return a[Math.floor(Math.random() * a.length)]; }
 function persona(uid){
@@ -1359,16 +1359,17 @@ function botAttack(d, r, W, t){
     tr[k] = s; n += s;
     if (u.spd < minS) minS = u.spd;
   }
-  if (n < 10) return null;
+  if (n < 5) return null;
 
   let best = null, bs = -1;
   for (const o of W.vills){
     if (o.uid === r.uid) continue;
-    const dist = Math.hypot(o.x - r.x, o.y - r.y);
-    if (dist > BOT_RANGE) continue;
-    if (o.pg && o.pg === r.pg) continue;
-    if (o.is_bot === 0 && (!BOT_HIT_PLAYERS || o.protect_until > t)) continue;
     const g = grudge[o.uid], gr = (g && t - g.at < 3 * 86400000) ? g.n : 0;
+    const dist = Math.hypot(o.x - r.x, o.y - r.y);
+    if (dist > (gr ? BOT_RANGE * 3 : BOT_RANGE)) continue;
+    if (o.pg && o.pg === r.pg) continue;
+    if (o.is_bot === 0 && (!BOT_HIT_PLAYERS || (o.protect_until > t && !gr))) continue;
+
     if (o.is_bot === 0 && !gr && o.pop > r.pop * 1.2) continue;
     const s = (o.is_bot === 2 ? 3 : 1) * (1 + gr * 2) / (1 + dist * 0.15) *
               (o.pop < r.pop ? 1.5 : 0.7) * (0.7 + Math.random() * 0.6);
@@ -1463,7 +1464,7 @@ async function botExpand(env, t){
     const cp = cpNow(P, VS, t), vc = rows.length;
     const cap = { exp:6, war:4, eco:4, turt:3 }[persona(P.uid)];
     if (vc < cap && cp >= (CPN[vc + 1] || 1e12) &&
-        VS.some(V => lvl(V.d, 'main') >= 8 && population(V.d) >= 150)){
+        VS.some(V => lvl(V.d, 'main') >= 5 && population(V.d) >= 90)){
       const base = pick(rows);
       for (let k = 0; k < 40; k++){
         const a = Math.random() * Math.PI * 2, rad = 4 + Math.random() * 9;
@@ -1599,7 +1600,7 @@ async function questClaim(ctx, env, b){
    ===================================================================== */
 const HERO_MAX = 60, HERO_PTS = 4;
 const SLOTS = ['helm','armor','weapon','shield','gloves','boots','amulet'];
-const TIER_REQ = [0, 1, 10, 20, 35, 50];
+const TIER_REQ = [0, 1, 5, 10, 15, 20];
 const TIER_SELL = [0, 100, 250, 500, 900, 1500];
 const SLOT_DEF = {
   helm:  { st:'exp',   v:[5,10,15,20,30],        n:['หมวกผ้า','หมวกหนัง','หมวกสำริด','มงกุฎนักรบ','ชฎาเทพ'] },
@@ -1638,7 +1639,7 @@ function heroNew(t){
     hp:100, hpAt:t, dead:false, healAt:0, dung:null, look:randLook(), lookN:0,
     eq:{}, bag:[{ id:1, k:'weapon_1' }, { id:2, k:'boots_1' }], iid:3 };
 }
-function heroNeed(lv){ return Math.round(60 * Math.pow(lv, 1.5)); }
+function heroNeed(lv){ return Math.round(40 * Math.pow(lv, 1.4)); }
 function eqStat(h, st){
   let s = 0;
   for (const k in (h.eq || {})){ const it = h.eq[k] && ITEMS[h.eq[k].k]; if (it && it.st === st) s += it.v; }
@@ -1961,7 +1962,7 @@ async function oasisArrive(env, m, T, tr, smA, H, rep, at){
   const f = fight(tr, smA, {}, 1, 0, m.mission, nd, H ? H.atk : 0, 0);
   const ka = kill(tr, f.la);
   rep.a.lost = ka.dead; rep.win = f.win; rep.pw = { a:f.A, d:f.D };
-  heroAfter(H, f.la, f.win ? Math.round(nd / 20) : 0);
+  heroAfter(H, f.la, f.win ? Math.round(nd / 10) : 0);
   rep.oasis = { type:O.type, pct:O.pct, captured:false, why:null };
   if (!f.win) return ka.left;
   let why = null;
@@ -2038,8 +2039,8 @@ async function doArrive(env, m){
                             : env.DB.prepare('DELETE FROM stations WHERE id=?' + GUARD).bind(s.id, dr.id, dr.ver + 1);
         });
         rep.a.lost = ka.dead; rep.d.lost = kd.dead; rep.win = f.win; rep.pw = { a:f.A, d:f.D };
-        heroAfter(H, f.la, expOf(kd.dead));
-        if (dh) rep.d.hero = heroHit(dh, f.ld, expOf(ka.dead), at);
+        heroAfter(H, f.la, expOf(kd.dead) * 2 + (f.win ? 5 + Math.floor(population(dd) / 10) : 0));
+        if (dh) rep.d.hero = heroHit(dh, f.ld, expOf(ka.dead) * 2, at);
         if (f.win){
           loot = takeLoot(dd.res, hideCap(dd), carryOf(left));
           for (const x of RES) dd.res[x] -= loot[x];
@@ -2079,7 +2080,7 @@ async function doArrive(env, m){
         const f = fight(tr, smA, {}, 1, 0, m.mission, nd, hA, 0);
         const ka = kill(tr, f.la);
         left = ka.left; rep.a.lost = ka.dead; rep.win = f.win; rep.pw = { a:f.A, d:f.D };
-        heroAfter(H, f.la, f.win ? Math.round(nd / 25) : 0);
+        heroAfter(H, f.la, f.win ? Math.round(nd / 12) : 0);
         if (f.win){ loot = takeLoot(res, 0, carryOf(left)); for (const x of RES) res[x] -= loot[x]; }
         rep.loot = loot;
         st.push(env.DB.prepare('INSERT INTO npc(k,at,res) VALUES(?,?,?) ON CONFLICT(k) DO UPDATE SET at=excluded.at, res=excluded.res')
@@ -2316,7 +2317,7 @@ async function stationApi(p, b, env, uid){
 const SETTLE_N = 3, ROOM_GAP = 5000, ROOM_MAX = 300;
 const LOY_DROP = [0, 25, 58, 98, 150];
 const UT_EX = [
-  ['settler','settle','residence',10, 0,80,80, 5,0,1, [1200,1500,1300,1500], 5000,
+  ['settler','settle','residence',5, 0,80,80, 5,0,1, [1200,1500,1300,1500], 5000,
     ['ผู้ตั้งถิ่นฐาน','ผู้ตั้งถิ่นฐาน','ผู้ตั้งถิ่นฐาน','ผู้ตั้งถิ่นฐาน']],
   ['chief','chief','palace',5, 40,60,40, 4,0,4, [4000,5500,5000,6000], 20000,
     ['ขุนพล','แสนท้าว','ขุนพลขอม','ขุนพลศรีวิชัย']]
@@ -2330,9 +2331,10 @@ TRIBES.forEach((T, ti) => UT_EX.forEach(u => {
 }));
 
 function expSlots(d){
-  const r = lvl(d, 'residence'), p = lvl(d, 'palace');
-  return Math.max(r >= 20 ? 2 : r >= 10 ? 1 : 0, p >= 20 ? 3 : p >= 15 ? 2 : p >= 10 ? 1 : 0);
+  const f = l => l >= 20 ? 4 : l >= 15 ? 3 : l >= 10 ? 2 : l >= 5 ? 1 : 0;
+  return Math.max(f(lvl(d, 'residence')), f(lvl(d, 'palace')));
 }
+
 function chiefCap(d){ const p = lvl(d, 'palace'); return p >= 20 ? 4 : p >= 15 ? 3 : p >= 10 ? 2 : p >= 5 ? 1 : 0; }
 function loyNow(d, t){
   const l = d.loy == null ? 100 : d.loy;
@@ -2349,7 +2351,7 @@ function trainEx(ctx, b){
   const V = findV(ctx, b.vid), d = V.d, u = UNITS[String(b.u || '')], n = Math.floor(b.n) || 0;
   if (u && u.type === 'settle'){
     const free = Math.max(0, expSlots(d) - (d.expUsed | 0)), cap = free * SETTLE_N, have = unitHave(ctx, V, u.id);
-    if (!expSlots(d)) throw ue('ต้องมีคฤหาสน์หรือพระราชวัง Lv.10');
+    if (!expSlots(d)) throw ue('ต้องมีคฤหาสน์หรือพระราชวัง Lv.5');
     if (have + n > cap) throw ue('ฝึกผู้ตั้งถิ่นฐานได้อีก ' + Math.max(0, cap - have) + ' นาย (ช่องขยายเมืองเหลือ ' + free + ')');
   }
   if (u && u.type === 'chief'){
