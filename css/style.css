@@ -778,3 +778,10 @@ input[type=datetime-local].selbox{margin-top:4px;color-scheme:dark}
 .cmsg .cn{font-size:9.5px;color:#8fbf5f;margin:0 0 2px 4px;cursor:pointer}
 .cmsg .cn .gt{color:#4db8ff}
 
+/* ===== v14i ===== */
+.s2l{display:block;font-size:10.5px;color:#a89468;margin:4px 0 2px}
+.s2chips{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 2px}
+#modalbox .s2c{width:auto!important;margin:0!important;padding:4px 9px!important;font-size:10.5px!important;
+  font-weight:400!important;background:#2a2218;color:#ffcf40;border:1px solid #4a3a22;border-radius:12px}
+#modalbox .s2c:active{background:#3a2e1c}
+
