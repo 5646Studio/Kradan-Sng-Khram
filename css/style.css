@@ -604,12 +604,12 @@ body.tiopen #fabwrap,body.tiopen #herobtn{display:none!important}
 
 /* ปุ่มกลางหน้าทรัพยากร — เข้าเมือง */
 #cityhub{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-  width:50px;height:50px;border-radius:12px;padding:0;
+  width:60px;height:60px;border-radius:12px;padding:0;
   background:none;border:none;
   box-shadow:none;
   display:flex;align-items:center;justify-content:center;z-index:6}
 #cityhub:active{transform:translate(-50%,-50%) scale(.93)}
-#cityhub img{width:50px;height:50px;object-fit:contain;
+#cityhub img{width:60px;height:60px;object-fit:contain;
   filter:drop-shadow(0 2px 4px rgba(0,0,0,.8))}
 .hubn{position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);
   max-width:50px;padding:1px 9px;border-radius:9px;
@@ -785,3 +785,85 @@ input[type=datetime-local].selbox{margin-top:4px;color-scheme:dark}
   font-weight:400!important;background:#2a2218;color:#ffcf40;border:1px solid #4a3a22;border-radius:12px}
 #modalbox .s2c:active{background:#3a2e1c}
 
+/* ===== v14j ===== */
+/* โปรไฟล์ */
+.pf-head{display:flex;gap:12px;align-items:center;background:linear-gradient(135deg,#2a2216,#14110c);
+  border:1px solid #4a3a22;border-radius:12px;padding:12px;margin-bottom:8px}
+.pf-av{flex:0 0 64px;height:64px;border-radius:50%;background:#100d09;border:2px solid #c9a24a;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;font-size:30px}
+.pf-av svg{width:100%;height:100%}
+.pf-id{min-width:0}
+.pf-id b{display:block;font-size:16px;color:#ffcf40}
+.pf-id .gt{color:#4db8ff;font-size:12px}
+.pf-id i{display:block;font-style:normal;font-size:10.5px;color:#a89468;margin-top:2px}
+.pf-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px}
+.pf-st{background:#100d09;border:1px solid #2f2618;border-radius:9px;padding:7px 2px;text-align:center}
+.pf-st span{display:block;font-size:16px}
+.pf-st b{display:block;font-size:13px;color:#f0e6cc}
+.pf-st i{font-style:normal;font-size:9px;color:#8a7a55}
+.pf-cp{background:#100d09;border:1px solid #2f2618;border-radius:10px;padding:8px;margin-bottom:8px}
+.pf-cph{display:flex;justify-content:space-between;font-size:11px;color:#a89468;margin-bottom:4px}
+.pf-cph b{color:#ffcf40}
+.pf-sub{font-size:10px;color:#8a7a55;margin-top:3px}
+.pf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:6px}
+#modalbox .pf-q{width:auto!important;margin:0!important;padding:8px 2px!important;background:#1c1710;
+  border:1px solid #3a2e1c;border-radius:10px;display:flex;flex-direction:column;align-items:center;gap:2px;
+  color:#e8dfc8;font-size:10px!important;font-weight:400!important}
+.pf-q span{font-size:20px}
+.pf-theme{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:8px}
+#modalbox .pf-th{width:auto!important;margin:0!important;padding:9px 2px!important;background:#1c1710;
+  border:1px solid #3a2e1c;border-radius:9px;color:#a89468;font-size:11px!important}
+#modalbox .pf-th.on{background:#5a4a1e;color:#ffcf40;border-color:#c9a24a}
+.pf-list{border:1px solid #2f2618;border-radius:10px;overflow:hidden;margin-bottom:6px}
+#modalbox .pf-li{width:100%!important;margin:0!important;display:flex;align-items:center;gap:10px;
+  padding:11px 12px!important;background:#14110c;border-bottom:1px solid #2f2618;border-radius:0;
+  color:#e8dfc8;font-size:12.5px!important;font-weight:400!important;text-align:left}
+.pf-li em{margin-left:auto;font-style:normal;color:#6a5f45}
+
+/* ตลาด / กิลด์ */
+.mkres{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;margin:6px 0}
+.mkres div{display:flex;align-items:center;gap:4px;background:#100d09;border:1px solid #2f2618;border-radius:8px;padding:5px}
+.mkres input{flex:1;min-width:0;width:100%}
+.mkcap{font-style:normal;font-size:9px;color:#6a5f45}
+.gmem{background:#100d09;border:1px solid #2f2618;border-radius:9px;padding:8px;margin-bottom:5px}
+.gmh{display:flex;align-items:center;gap:6px}
+.gmh b{flex:1;font-size:12.5px}
+.gmh i{font-style:normal;font-size:10px;color:#8a7a55}
+.gdot{width:8px;height:8px;border-radius:50%;background:#3a2e1c;flex:0 0 8px}
+.gdot.on{background:#6fd35a}
+.gvl{display:flex;flex-direction:column;gap:3px;margin-top:5px}
+.gv{font-size:10.5px;color:#b9ac92}
+.gact{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+
+/* ธีมกลางวัน */
+body.day{background:#efe4c8!important;color:#3a2c18!important}
+body.day #topbar,body.day #navbar,body.day #bugbar,body.day #taskpanel{background:#f7eedb!important;
+  border-color:#cdb68a!important;color:#3a2c18!important}
+body.day .rbox,body.day #topbar button{background:#fffaf0!important;border-color:#d6c39b!important;color:#8a5a00!important}
+body.day .rbox span{color:#3a2c18!important}
+body.day .rbox label{color:#8a7044!important}
+body.day #navbar button{color:#8a7044!important}
+body.day #navbar button.active{color:#9a5a00!important}
+body.day #modalbox{background:#fbf4e3!important;color:#3a2c18!important;border-color:#c9b48a!important}
+body.day #modalbox h3{color:#8a5a00!important}
+body.day #modalbox h4{color:#7a6038!important}
+body.day #modalbox b:not([style]){color:#6a4200}
+body.day .infobox,body.day .row,body.day .stcard,body.day .bcard,body.day .ucard,body.day .cvrow,body.day .dgcard,
+body.day .qcard,body.day .shopc,body.day .hslot,body.day .hbag div,body.day .tcell,body.day .destbox,body.day .misr,
+body.day .hof-row,body.day .rpt,body.day .qrow,body.day .trow,body.day .chatbox,body.day .hd-c,body.day .hlook .pv,
+body.day .gmem,body.day .mkres div,body.day .pf-st,body.day .pf-cp,body.day .rbar,body.day .dgrun{
+  background:#fffaf0!important;border-color:#dcc9a0!important;color:#3a2c18!important}
+body.day input,body.day select,body.day textarea,body.day .selbox{background:#fff!important;color:#3a2c18!important;border-color:#cdb68a!important}
+body.day .stnone,body.day .bc-d,body.day .stline,body.day .pf-sub,body.day .gv{color:#7a6a4a!important}
+body.day .btn-cancel{background:#e8dcc0!important;color:#6a5434!important}
+body.day #tileinfo,body.day #searchbar,body.day #legend{background:rgba(251,244,227,.96)!important;color:#3a2c18!important}
+body.day .cmsg .cb{background:#efe2c4!important;color:#3a2c18!important}
+body.day .cmsg.me .cb{background:#e9c766!important;color:#2a1c08!important}
+body.day .pf-head{background:linear-gradient(135deg,#fff3d6,#f3e3bc)!important;border-color:#c9a24a!important}
+body.day .pf-id b{color:#8a5a00!important}
+body.day #modalbox .pf-q,body.day #modalbox .pf-th,body.day #modalbox .pf-li{background:#fffaf0!important;color:#3a2c18!important;border-color:#dcc9a0!important}
+body.day #modalbox .pf-th.on{background:#f0d58a!important;color:#5a3a00!important}
+body.day #modalbox .s2c,body.day #modalbox .btab{background:#f3e7c9!important;color:#6a4200!important;border-color:#d6c39b!important}
+body.day #modalbox .btab.on{background:#e9c766!important}
+body.day .scene{filter:brightness(1.1) saturate(1.05)}
+body.day #map{filter:brightness(1.08)}
