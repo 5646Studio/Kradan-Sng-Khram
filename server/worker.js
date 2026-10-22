@@ -14,8 +14,8 @@ const RES = ['wheat', 'wood', 'iron', 'clay'];
 const RTH = { wheat:'ข้าว', wood:'ไม้', iron:'เหล็ก', clay:'โคลน' };
 const RUIN_UID = '__ruins__', RUIN_NAME = 'เมืองร้าง';
 
-const FEATURES = { build:true, gold:true, military:true, hero:true, dungeon:true, market:false,
-  guild:false, oasis:true, settle:true, station:true, quest:false, schedule:true, endgame:false,
+const FEATURES = { build:true, gold:true, military:true, hero:true, dungeon:true, market:true,
+  guild:true, oasis:true, settle:true, station:true, quest:false, schedule:true, endgame:false,
   chat:true, rename:true };
 
 const PACKAGES = [
@@ -390,7 +390,7 @@ function cancelQ(d, P, t, idx){
 }
 function finishNow(d, P, t, q){ accrue(d, t); applyQ(d, q); d.queue.splice(d.queue.indexOf(q), 1); fill(d, t, P); }
 function cpPerDay(VS){
-  let s = 0;
+  let s = VS.length * CP_BASE;
   for (const V of VS) for (const c of V.d.city)
     if (c.k && c.level > 0) s += Math.floor((BD[c.k].cp || 0) * Math.pow(1.18, c.level - 1));
   return s;
@@ -613,7 +613,10 @@ async function route(req, env){
   if (STN) return STN;
   const RM = await roomApi(p, b, env, uid);
   if (RM) return RM;
-
+  const GLD = await guildApi(p, b, env, uid);
+  if (GLD) return GLD;
+  if (p === '/market/list') return await marketList(env, uid, b);
+  
   const ACT = {
     '/me': null,
     '/build': ctx => { const V = findV(ctx, b.vid); enqueue(V.d, ctx.P, ctx.VS, ctx.t, b.kind, b.slot, b.key); V.dirty = true; },
@@ -640,6 +643,8 @@ async function route(req, env){
   
   if (p.indexOf('/hero/') === 0) ACT[p] = ctx => heroAct(ctx, b, p.slice(6));
   if (p === '/train') ACT[p] = ctx => trainEx(ctx, b);
+  if (p === '/party') ACT[p] = ctx => partyStart(ctx, b);
+  if (p.indexOf('/market/') === 0) ACT[p] = ctx => marketAct(ctx, env, b, p.slice(8));
   if (!(p in ACT)) return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
   const out = await session(env, uid, ACT[p]);
   if (!out) return json({ ok:true, player:null, villages:[], features:FEATURES, now:Date.now() }, 200, env);
@@ -704,7 +709,7 @@ async function session(env, uid, act){
     for (const m of mv) if (m.uid === uid) away[m.from_vid] = (away[m.from_vid] || 0) + tUp(JSON.parse(m.troops || '{}'));
     const ctx = { P, t, spend:0, goldSet:'', goldBind:[], reason:'', msg:null, ins:[], pset:'', pbind:[], moves:mv,
       VS:rows.map(r => { const d = JSON.parse(r.data); d._away = away[r.id] || 0; if (!d.troops) d.troops = {}; return { row:r, d, dirty:false }; }) };
-    for (const V of ctx.VS){ if (advance(V.d, t, P)) V.dirty = true; fill(V.d, t, P); if (heroTick(V, ctx)) V.dirty = true; }
+    for (const V of ctx.VS){ if (advance(V.d, t, P)) V.dirty = true; fill(V.d, t, P); if (heroTick(V, ctx)) V.dirty = true; if (partyTick(V, ctx)) V.dirty = true; }
 
     let err = null;
     try { if (act) ctx.msg = (await act(ctx)) || null; }
@@ -740,6 +745,7 @@ async function commit(env, ctx){
     st.push(env.DB.prepare('INSERT INTO ' + x.t + '(' + x.cols + ') SELECT ' + ph + ' WHERE (SELECT ver FROM villages WHERE id=?)=?')
       .bind(...x.vals, x.guard.row.id, x.guard.row.ver + 1));
   }
+  for (const s of (ctx.sql || [])) st.push(s);
   const g0 = dirty[0];
   const guard = g0 ? ' AND (SELECT ver FROM villages WHERE id=?)=?' : '';
   const gb = g0 ? [g0.row.id, g0.row.ver + 1] : [];
@@ -772,7 +778,7 @@ function stateOf(ctx, err){
     player:{ uid:P.uid, name:P.name, gold:P.gold, cp:cpNow(P, VS, t), cpRate:cpPerDay(VS), tribe:P.tribe, zone:P.zone,
     builders:bCount(P, t), builderUntil:P.builder_until, protectUntil:P.protect_until, created:P.created,
     renameN:P.rename_n | 0, renameAt:P.rename_at || 0, oldName:P.old_name || null,
-    schedUntil:P.sched_until || 0 },
+    schedUntil:P.sched_until || 0, cpNext:CPN[VS.length + 1] || 0, guild:P.guild_id || 0, grole:P.guild_role | 0 },
     msgUnread:ctx.msgUnread || 0,
     rooms:ctx.rooms || null,
     quest:questOut(P, ctx),
@@ -781,11 +787,11 @@ function stateOf(ctx, err){
       const d = V.d;
       return { id:V.row.id, x:V.row.x, y:V.row.y, name:V.row.name, first:!!d.first, bio:d.bio, fields:d.fields,
         city:d.city, wallLv:d.wallLv || 0, res:d.res, resAt:d.resAt, queue:d.queue, pop:population(d), caps:caps(d),
-        loy:Math.round(loyNow(d, t)), exp:{ slots:expSlots(d), used:d.expUsed | 0, chief:chiefCap(d) }, oa:d.oa || [], hero:heroOut(d, t), troops:d.troops || {}, train:d.train || {}, upkeep:tUp(d.troops) + (d._away || 0),
+        party:d.party || null, loy:Math.round(loyNow(d, t)), exp:{ slots:expSlots(d), used:d.expUsed | 0, chief:chiefCap(d) }, oa:d.oa || [], hero:heroOut(d, t), troops:d.troops || {}, train:d.train || {}, upkeep:tUp(d.troops) + (d._away || 0),
         rate:{ wheat:rate(d,'wheat'), wood:rate(d,'wood'), iron:rate(d,'iron'), clay:rate(d,'clay') } };
     }),
     moves:ctx.moves.filter(m => m.uid === P.uid).map(mvOut),
-    incoming:ctx.moves.filter(m => m.to_uid === P.uid && m.uid !== P.uid && m.state === 'go').filter(m => {
+    incoming:ctx.moves.filter(m => m.to_uid === P.uid && m.uid !== P.uid && m.state === 'go' && m.mission !== 'trade' && m.mission !== 'support').filter(m => {
       const V = VS.find(x => x.row.id === m.to_vid);
       if (!V) return false;
       const wl = lvl(V.d, 'watchtower');
@@ -885,6 +891,7 @@ async function deleteAccount(env, uid, b){
   const P = await getP(env, uid);
   if (!P) throw ue('ไม่พบบัญชี');
   if (String(b.name || '').trim() !== P.name) throw ue('พิมพ์ชื่อไม่ตรง');
+  await guildLeave(env, uid);
   await ensureRuins(env);
   const vs = (await env.DB.prepare('SELECT * FROM villages WHERE uid=?').bind(uid).all()).results || [];
   const t = Date.now(), DB = env.DB, st = [];
@@ -897,6 +904,7 @@ async function deleteAccount(env, uid, b){
   st.push(DB.prepare('UPDATE moves SET to_uid=? WHERE to_uid=?').bind(RUIN_UID, uid));
   st.push(DB.prepare('DELETE FROM reports WHERE uid=?').bind(uid));
   st.push(DB.prepare('DELETE FROM plans WHERE uid=?').bind(uid));
+  st.push(DB.prepare('DELETE FROM offers WHERE uid=?').bind(uid)); st.push(DB.prepare('DELETE FROM guild_req WHERE uid=?').bind(uid));
   st.push(DB.prepare('DELETE FROM oasis WHERE uid=?').bind(uid));
   st.push(DB.prepare('DELETE FROM stations WHERE owner_uid=?').bind(uid));
   st.push(DB.prepare('UPDATE stations SET host_uid=? WHERE host_uid=?').bind(RUIN_UID, uid));
@@ -1291,11 +1299,11 @@ const BOT_ATT_MAX = 8;          // บอทออกรบได้สูงส
 const BOT_RANGE = 22;           // ระยะที่บอทมองหาเป้าหมาย
 const BOT_GUILDS = 8;           // จำนวนกิลด์บอทสูงสุด
 const GUILD_MAX = 12;
-const CPN = [0, 0, 500, 1400, 3000, 5500, 9000, 14000];
+const CPN = [0, 0, 300, 750, 1350, 2100, 3000, 4100, 5300, 6600, 8000, 9500, 11000];
 
 /* ---------- ข้อมูลสาธารณะ (มีแท็กกิลด์) ---------- */
 async function world(env){
-  const r = await env.DB.prepare('SELECT v.id, v.x, v.y, v.name AS vn, v.pop, v.uid, p.name AS pn, p.is_bot AS bot, g.tag AS gt FROM villages v JOIN players p ON p.uid=v.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE p.banned=0 LIMIT 5000').all();
+  const r = await env.DB.prepare('SELECT v.id, v.x, v.y, v.name AS vn, v.pop, v.uid, p.name AS pn, p.is_bot AS bot, g.tag AS gt, p.guild_id AS gid FROM villages v JOIN players p ON p.uid=v.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE p.banned=0 LIMIT 5000').all();
     const oa = await env.DB.prepare('SELECT o.x, o.y, o.uid, o.vid, p.name AS pn FROM oasis o LEFT JOIN players p ON p.uid=o.uid').all();
   return json({ ok:true, now:Date.now(), v:r.results || [], oa:oa.results || [] }, 200, env);
 }
@@ -1780,7 +1788,7 @@ function heroAct(ctx, b, op){
     const sec = Math.max(60, Math.round(D.min * 60 * (1 - eqStat(h, 'spd') / 100) / SPEED));
     h.dung = { i:D.i, back:t + sec * 1000, out:dungRoll(h, D) };
     ret = { sec };
-  } else throw ue('ไม่รู้จักคำสั่งวีรบุรุษ');
+  } else if (op === 'potion'){ out(); if (h.dead) throw ue('วีรบุรุษบาดเจ็บสาหัส ต้องรักษาก่อน'); if (h.hp >= 99.5) throw ue('พลังชีวิตเต็มแล้ว'); spend(ctx, potionCost(h.hp), 'potion'); h.hp = 100; h.hpAt = t; } else throw ue('ไม่รู้จักคำสั่งวีรบุรุษ');
   V.dirty = true;
   return ret;
 }
@@ -1859,7 +1867,7 @@ async function sendArmy(ctx, env, b){
   if (!['attack', 'raid', 'scout', 'support', 'settle'].includes(mis)) throw ue('ภารกิจไม่ถูกต้อง');
   const rl = lvl(d, 'rally');
   if (rl < 1) throw ue('ต้องมีลานรวมพล');
-  const out = ctx.moves.filter(m => m.from_vid === V.row.id && m.state === 'go').length;
+  const out = ctx.moves.filter(m => m.from_vid === V.row.id && m.state === 'go' && m.mission !== 'trade').length;
   if (out >= rallySlots(rl)) throw ue('ส่งทัพพร้อมกันได้สูงสุด ' + rallySlots(rl) + ' ขบวน (อัปลานรวมพลเพื่อเพิ่ม)');
   const tr = {};
   let n = 0, minS = 99, onlyScout = true;
@@ -1893,7 +1901,7 @@ async function sendArmy(ctx, env, b){
   if (Math.abs(tx) > MAP_R || Math.abs(ty) > MAP_R) throw ue('พิกัดอยู่นอกแผนที่');
   if (tx === V.row.x && ty === V.row.y) throw ue('เป้าหมายคือเมืองตัวเอง');
 
-  const tv = await env.DB.prepare('SELECT v.id, v.uid, p.is_bot, p.protect_until FROM villages v JOIN players p ON p.uid=v.uid WHERE v.x=? AND v.y=?').bind(tx, ty).first();
+  const tv = await env.DB.prepare('SELECT v.id, v.uid, p.is_bot,  p.protect_until, p.guild_id AS gid FROM villages v JOIN players p ON p.uid=v.uid WHERE v.x=? AND v.y=?').bind(tx, ty).first();
   let toVid = null, toUid = null;
 
   if (Object.keys(tr).some(k => UNITS[k].type === 'settle') && mis !== 'settle')
@@ -1908,7 +1916,7 @@ async function sendArmy(ctx, env, b){
     toVid = tv.id; toUid = tv.uid;
   } else if (tv){
     if (tv.uid === ctx.P.uid) throw ue('โจมตีเมืองตัวเองไม่ได้');
- 
+    if (tv.gid && tv.gid === ctx.P.guild_id && mis !== 'scout') throw ue('โจมตีเพื่อนร่วมกิลด์ไม่ได้');
     if (!tv.is_bot && tv.protect_until > ctx.t) throw ue('เป้าหมายอยู่ในช่วงคุ้มครองผู้เล่นใหม่');
     toVid = tv.id; toUid = tv.uid;
     if (!tv.is_bot && ctx.P.protect_until > ctx.t && mis !== 'scout'){ ctx.pset += ', protect_until=0'; ctx.P.protect_until = 0; }
@@ -1932,6 +1940,7 @@ async function sendArmy(ctx, env, b){
 }
 
 async function doReturn(env, m){
+  if (m.mission === 'trade'){ await env.DB.prepare('DELETE FROM moves WHERE id=?').bind(m.id).run(); return true; }
   if (m.st && !m.st_last){ const r0 = await stationReturn(env, m); if (r0 !== null) return r0; }
   const r = await getV(env, m.from_vid);
   if (!r || r.uid !== m.uid){ await env.DB.prepare('DELETE FROM moves WHERE id=?').bind(m.id).run(); return true; }
@@ -1997,6 +2006,7 @@ async function oasisArrive(env, m, T, tr, smA, H, rep, at){
 async function doArrive(env, m){
   if (m.mission === 'support') return await supportArrive(env, m);
   if (m.mission === 'settle') return await settleArrive(env, m);
+  if (m.mission === 'trade') return await tradeArrive(env, m);
   const t = Date.now(), at = m.arrive, tr = JSON.parse(m.troops || '{}');
   const H = m.hero ? JSON.parse(m.hero) : null;
   const aV = await getV(env, m.from_vid), aP = await getP(env, m.uid);
@@ -2272,10 +2282,11 @@ async function stationApi(p, b, env, uid){
     const tx = b.tx | 0, ty = b.ty | 0;
     if (Math.abs(tx) > MAP_R || Math.abs(ty) > MAP_R) throw ue('พิกัดอยู่นอกแผนที่');
     if (tx === s.x && ty === s.y) throw ue('เป้าหมายคือฐานตัวเอง');
-    const tv = await DB.prepare('SELECT v.id, v.uid, p.is_bot, p.protect_until FROM villages v JOIN players p ON p.uid=v.uid WHERE v.x=? AND v.y=?').bind(tx, ty).first();
+    const tv = await DB.prepare('SELECT v.id, v.uid, p.is_bot,  p.protect_until, p.guild_id AS gid FROM villages v JOIN players p ON p.uid=v.uid WHERE v.x=? AND v.y=?').bind(tx, ty).first();
     let toVid = null, toUid = null;
     if (tv){
       if (tv.uid === s.owner_uid) throw ue('โจมตีเมืองของเจ้าของทหารไม่ได้');
+      if (tv.gid && tv.gid === me.guild_id && mis !== 'scout') throw ue('โจมตีเพื่อนร่วมกิลด์ไม่ได้');
       if (!tv.is_bot && tv.protect_until > t) throw ue('เป้าหมายอยู่ในช่วงคุ้มครองผู้เล่นใหม่');
       toVid = tv.id; toUid = tv.uid;
     } else {
@@ -2488,6 +2499,353 @@ async function roomApi(p, b, env, uid){
     if (!m) throw ue('ไม่พบข้อความ');
     await DB.prepare('UPDATE msgs SET reported=1 WHERE id=?').bind(m.id).run();
     return ok({ msg:m });
+  }
+  return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
+}
+
+/* =====================================================================
+   B5-3 : CP พื้นฐาน · งานเฉลิมฉลอง · ยาวีรบุรุษ · ตลาด · กิลด์ผู้เล่นจริง
+   ===================================================================== */
+const CP_BASE = 20, MERCH_CAP = 500, MERCH_SPD = 16, NPC_GOLD = 3, GUILD_COST = 50, OFFER_MAX = 10;
+const PARTY = {
+  small:{ n:'งานเฉลิมฉลองเล็ก', lv:1,  h:24, cp:200, cost:{ wheat:1500, wood:1600, iron:1400, clay:1600 } },
+  big:  { n:'งานเฉลิมฉลองใหญ่', lv:10, h:48, cp:800, cost:{ wheat:7000, wood:7500, iron:6500, clay:7500 } }
+};
+const MVC = 'uid,from_vid,fx,fy,tx,ty,to_vid,to_uid,mission,troops,loot,depart,arrive,state,lock,tries,hero';
+
+function potionCost(hp){ return Math.max(2, Math.ceil((100 - hp) / 10)); }
+
+/* ---------- งานเฉลิมฉลอง ---------- */
+function partySec(k, lv){ return Math.max(600, Math.round(PARTY[k].h * 3600 * Math.pow(0.96, Math.max(0, lv - 1)) / SPEED)); }
+function partyStart(ctx, b){
+  const V = findV(ctx, b.vid), d = V.d, P0 = PARTY[b.kind];
+  if (!P0) throw ue('ไม่พบงานนี้');
+  const lv = lvl(d, 'townhall');
+  if (lv < P0.lv) throw ue('ต้องมีศาลาประชาคม Lv.' + P0.lv);
+  if (d.party) throw ue('มีงานเฉลิมฉลองกำลังจัดอยู่');
+  for (const r of RES) if (d.res[r] + 1e-6 < P0.cost[r]) throw ue('ทรัพยากรไม่พอ');
+  for (const r of RES) d.res[r] -= P0.cost[r];
+  const sec = partySec(b.kind, lv);
+  d.party = { k:b.kind, start:ctx.t, end:ctx.t + sec * 1000, cp:P0.cp };
+  V.dirty = true;
+  return { sec };
+}
+function partyTick(V, ctx){
+  const p = V.d.party;
+  if (!p || ctx.t < p.end) return false;
+  ctx.P.cp = (ctx.P.cp || 0) + p.cp;
+  V.d.party = null;
+  ctx.ins.push({ t:'reports', guard:V, cols:'uid,at,kind,title,data,read',
+    vals:[ctx.P.uid, p.end, 'city', '🎉 ' + PARTY[p.k].n + ' ที่ ' + V.row.name + ' จบแล้ว · +' + p.cp + ' CP',
+      JSON.stringify({ party:1, cp:p.cp }), 0] });
+  return true;
+}
+
+/* ---------- ตลาด ---------- */
+function mCap(tr){ return Math.round(MERCH_CAP * ((TRIBES[tr] || {}).c || 1)); }
+function mSpd(tr){ return +(MERCH_SPD * ((TRIBES[tr] || {}).s || 1)).toFixed(1); }
+async function mBusy(env, vid){
+  let n = 0;
+  for (const m of ((await env.DB.prepare("SELECT loot FROM moves WHERE from_vid=? AND mission='trade'").bind(vid).all()).results || []))
+    n += JSON.parse(m.loot || '{}').m | 0;
+  return n + (((await env.DB.prepare('SELECT COALESCE(SUM(m),0) n FROM offers WHERE vid=?').bind(vid).first()) || {}).n || 0);
+}
+function resIn(o){
+  const r = { _s:0 };
+  for (const x of RES){ const v = Math.max(0, Math.floor((o || {})[x] || 0)); r[x] = v; r._s += v; }
+  return r;
+}
+function tradeRow(uid, fv, x0, y0, tx, ty, toVid, toUid, loot, t, spd){
+  const sec = Math.max(60, Math.round(Math.hypot(tx - x0, ty - y0) / spd * 3600 / SPEED));
+  return [uid, fv, x0, y0, tx, ty, toVid, toUid, 'trade', '{}', JSON.stringify(loot), t, t + sec * 1000, 'go', 0, 0, null];
+}
+async function marketAct(ctx, env, b, op){
+  const DB = env.DB, t = ctx.t, uid = ctx.P.uid, tr = ctx.P.tribe | 0;
+  ctx.sql = ctx.sql || [];
+  if (op === 'cancel'){
+    const o = await DB.prepare('SELECT * FROM offers WHERE id=? AND uid=?').bind(b.id | 0, uid).first();
+    if (!o) throw ue('ไม่พบข้อเสนอ');
+    const V2 = findV(ctx, o.vid);
+    const c = await DB.prepare('UPDATE offers SET taker=?, taken_at=? WHERE id=? AND (taker IS NULL OR taker=? OR taken_at<?)')
+      .bind(uid, t, o.id, uid, t - 60000).run();
+    if (!c.meta.changes) throw ue('มีผู้เล่นกำลังรับข้อเสนอนี้ ลองใหม่ในอีกครู่');
+    const cc = caps(V2.d);
+    V2.d.res[o.give_r] = Math.min(o.give_r === 'wheat' ? cc.gran : cc.store, V2.d.res[o.give_r] + o.give_n);
+    ctx.sql.push(DB.prepare('DELETE FROM offers WHERE id=?' + GUARD).bind(o.id, V2.row.id, V2.row.ver + 1));
+    V2.dirty = true;
+    return;
+  }
+  const V = findV(ctx, b.vid), d = V.d, tot = lvl(d, 'market');
+  if (tot < 1) throw ue('ต้องสร้างตลาดก่อน');
+  if (op === 'npc'){
+    const R = resIn(b.res), c = caps(d);
+    let have = 0;
+    for (const x of RES) have += Math.floor(d.res[x]);
+    if (!R._s || R._s > have) throw ue('ยอดรวมไม่ถูกต้อง');
+    for (const x of RES) if (R[x] > (x === 'wheat' ? c.gran : c.store)) throw ue('เกินความจุคลัง/ยุ้งฉาง');
+    spend(ctx, NPC_GOLD, 'npc');
+    for (const x of RES) d.res[x] = R[x];
+    V.dirty = true;
+    return;
+  }
+  const cap = mCap(tr), free = Math.max(0, tot - await mBusy(env, V.row.id));
+  if (op === 'send'){
+    const R = resIn(b.res);
+    if (!R._s) throw ue('ยังไม่ได้ใส่จำนวน');
+    for (const x of RES) if (d.res[x] + 1e-6 < R[x]) throw ue('ทรัพยากรไม่พอ');
+    const need = Math.ceil(R._s / cap);
+    if (need > free) throw ue('พ่อค้าไม่พอ (ต้องใช้ ' + need + ' · ว่าง ' + free + ')');
+    const tv = await DB.prepare('SELECT v.id, v.uid, p.is_bot FROM villages v JOIN players p ON p.uid=v.uid WHERE v.x=? AND v.y=?')
+      .bind(b.tx | 0, b.ty | 0).first();
+    if (!tv) throw ue('ไม่มีเมืองที่พิกัดนี้');
+    if (tv.id === V.row.id) throw ue('ส่งให้เมืองตัวเองไม่ได้');
+    if (tv.is_bot === 2) throw ue('ส่งให้เมืองร้างไม่ได้');
+    const loot = { m:need };
+    for (const x of RES) if (R[x]){ d.res[x] -= R[x]; loot[x] = R[x]; }
+    ctx.ins.push({ t:'moves', guard:V, cols:MVC,
+      vals:tradeRow(uid, V.row.id, V.row.x, V.row.y, b.tx | 0, b.ty | 0, tv.id, tv.uid, loot, t, mSpd(tr)) });
+    V.dirty = true;
+    return { need };
+  }
+  if (op === 'offer'){
+    const g = String(b.give), w = String(b.want), gn = Math.floor(b.gn), wn = Math.floor(b.wn);
+    if (!RES.includes(g) || !RES.includes(w) || g === w) throw ue('เลือกชนิดทรัพยากรให้ถูกต้อง');
+    if (!(gn >= 100) || !(wn >= 100)) throw ue('จำนวนขั้นต่ำ 100');
+    if (wn > gn * 2 || gn > wn * 2) throw ue('อัตราแลกต้องไม่เกิน 1:2');
+    if (d.res[g] + 1e-6 < gn) throw ue('ทรัพยากรไม่พอ');
+    const need = Math.ceil(gn / cap);
+    if (need > free) throw ue('พ่อค้าไม่พอ (ต้องใช้ ' + need + ' · ว่าง ' + free + ')');
+    const n0 = ((await DB.prepare('SELECT COUNT(*) n FROM offers WHERE uid=?').bind(uid).first()) || {}).n || 0;
+    if (n0 >= OFFER_MAX) throw ue('ตั้งข้อเสนอได้สูงสุด ' + OFFER_MAX + ' รายการ');
+    d.res[g] -= gn;
+    ctx.ins.push({ t:'offers', guard:V, cols:'uid,vid,x,y,give_r,give_n,want_r,want_n,m,at,taker,taken_at',
+      vals:[uid, V.row.id, V.row.x, V.row.y, g, gn, w, wn, need, t, null, 0] });
+    V.dirty = true;
+    return;
+  }
+  if (op === 'accept'){
+    const o = await DB.prepare('SELECT o.*, p.tribe AS ptr FROM offers o JOIN players p ON p.uid=o.uid WHERE o.id=?').bind(b.id | 0).first();
+    if (!o) throw ue('ข้อเสนอนี้ไม่มีแล้ว');
+    if (o.uid === uid) throw ue('รับข้อเสนอของตัวเองไม่ได้');
+    const c = await DB.prepare('UPDATE offers SET taker=?, taken_at=? WHERE id=? AND (taker IS NULL OR taker=? OR taken_at<?)')
+      .bind(uid, t, o.id, uid, t - 60000).run();
+    if (!c.meta.changes) throw ue('มีผู้เล่นรับข้อเสนอนี้ไปแล้ว');
+    const need = Math.ceil(o.want_n / cap);
+    const why = d.res[o.want_r] + 1e-6 < o.want_n ? 'ทรัพยากรไม่พอ' : need > free ? 'พ่อค้าไม่พอ' : null;
+    if (why){
+      await DB.prepare('UPDATE offers SET taker=NULL, taken_at=0 WHERE id=? AND taker=?').bind(o.id, uid).run();
+      throw ue(why);
+    }
+    d.res[o.want_r] -= o.want_n;
+    ctx.ins.push({ t:'moves', guard:V, cols:MVC, vals:tradeRow(uid, V.row.id, V.row.x, V.row.y, o.x, o.y, o.vid, o.uid,
+      { m:need, [o.want_r]:o.want_n }, t, mSpd(tr)) });
+    ctx.ins.push({ t:'moves', guard:V, cols:MVC, vals:tradeRow(o.uid, o.vid, o.x, o.y, V.row.x, V.row.y, V.row.id, uid,
+      { m:o.m, [o.give_r]:o.give_n }, t, mSpd(o.ptr | 0)) });
+    ctx.sql.push(DB.prepare('DELETE FROM offers WHERE id=?' + GUARD).bind(o.id, V.row.id, V.row.ver + 1));
+    V.dirty = true;
+    return;
+  }
+  throw ue('ไม่รู้จักคำสั่งตลาด');
+}
+async function marketList(env, uid, b){
+  const DB = env.DB, t = Date.now(), me = await getP(env, uid);
+  if (!me) throw ue('ยังไม่ได้ลงทะเบียน');
+  const v = await DB.prepare('SELECT * FROM villages WHERE id=? AND uid=?').bind(b.vid | 0, uid).first();
+  if (!v) throw ue('ไม่พบเมืองนี้');
+  const tot = lvl(JSON.parse(v.data), 'market');
+  const offers = (await DB.prepare('SELECT o.id, o.x, o.y, o.give_r, o.give_n, o.want_r, o.want_n, o.at, p.name FROM offers o JOIN players p ON p.uid=o.uid WHERE o.uid<>? AND (o.taker IS NULL OR o.taken_at<?) ORDER BY o.id DESC LIMIT 100')
+    .bind(uid, t - 60000).all()).results || [];
+  const mine = (await DB.prepare('SELECT id, vid, x, y, give_r, give_n, want_r, want_n, at FROM offers WHERE uid=? ORDER BY id DESC').bind(uid).all()).results || [];
+  return json({ ok:true, tot, free:Math.max(0, tot - await mBusy(env, v.id)), cap:mCap(me.tribe | 0), spd:mSpd(me.tribe | 0),
+    offers, mine }, 200, env);
+}
+async function tradeArrive(env, m){
+  const DB = env.DB, at = m.arrive, lo = JSON.parse(m.loot || '{}');
+  const r = await DB.prepare("UPDATE moves SET state='back', loot=?, fx=?, fy=?, tx=?, ty=?, depart=?, arrive=?, lock=0, tries=0 WHERE id=? AND state='go'")
+    .bind(JSON.stringify({ m:lo.m | 0 }), m.tx, m.ty, m.fx, m.fy, at, at + (at - m.depart), m.id).run();
+  if (!r.meta.changes) return true;
+  const res = {};
+  for (const x of RES) res[x] = lo[x] | 0;
+  const hv = m.to_vid ? await getV(env, m.to_vid) : null;
+  if (!hv) return true;
+  await patchV(env, hv.id, d => {
+    const c = caps(d);
+    for (const x of RES) if (res[x]) d.res[x] = Math.min(x === 'wheat' ? c.gran : c.store, d.res[x] + res[x]);
+  });
+  if (hv.uid !== m.uid){
+    const aV = await getV(env, m.from_vid), aP = await getP(env, m.uid), hP = await getP(env, hv.uid);
+    const data = JSON.stringify({ trade:1, res, from:aV ? aV.name : '?', sender:aP ? aP.name : '?', to:hv.name });
+    const st = [], R = 'INSERT INTO reports(uid,at,kind,title,data,read) VALUES(?,?,?,?,?,0)';
+    if (hP && hP.is_bot === 0) st.push(DB.prepare(R).bind(hv.uid, at, 'city', '🐫 ได้รับสินค้าจาก ' + (aP ? aP.name : '?'), data));
+    if (aP && aP.is_bot === 0) st.push(DB.prepare(R).bind(m.uid, at, 'city', '🐫 สินค้าถึง ' + hv.name + ' แล้ว', data));
+    if (st.length) await DB.batch(st);
+  }
+  return true;
+}
+
+/* ---------- กิลด์ผู้เล่นจริง ---------- */
+async function guildLeave(env, uid){
+  const DB = env.DB, me = await getP(env, uid);
+  if (!me || !me.guild_id) return;
+  const gid = me.guild_id, g = await DB.prepare('SELECT * FROM guilds WHERE id=?').bind(gid).first();
+  await DB.prepare('UPDATE players SET guild_id=NULL, guild_role=0 WHERE uid=?').bind(uid).run();
+  if (!g || g.is_bot || g.owner !== uid) return;
+  const nx = await DB.prepare('SELECT uid FROM players WHERE guild_id=? ORDER BY guild_role DESC, seen DESC LIMIT 1').bind(gid).first();
+  if (nx) await DB.batch([
+    DB.prepare('UPDATE players SET guild_role=2 WHERE uid=?').bind(nx.uid),
+    DB.prepare('UPDATE guilds SET owner=? WHERE id=?').bind(nx.uid, gid) ]);
+  else await DB.batch([
+    DB.prepare('DELETE FROM guilds WHERE id=?').bind(gid),
+    DB.prepare('DELETE FROM guild_rel WHERE a=? OR b=?').bind(gid, gid),
+    DB.prepare('DELETE FROM guild_req WHERE gid=?').bind(gid) ]);
+}
+async function guildApi(p, b, env, uid){
+  if (p.indexOf('/guild/') !== 0) return null;
+  const DB = env.DB, t = Date.now(), ok = o => json(Object.assign({ ok:true }, o || {}), 200, env);
+  const me = await getP(env, uid);
+  if (!me) throw ue('ยังไม่ได้ลงทะเบียน');
+  if (me.banned) throw ue('บัญชีนี้ถูกระงับ');
+  const gid = me.guild_id || 0, role = me.guild_role | 0;
+  const emb = async u => {
+    let m = 0;
+    for (const r of ((await DB.prepare('SELECT data FROM villages WHERE uid=?').bind(u).all()).results || []))
+      m = Math.max(m, lvl(JSON.parse(r.data), 'embassy'));
+    return m;
+  };
+  const capOf = async g => Math.min(50, 10 + 2 * await emb(g.owner));
+  const cnt = async id => ((await DB.prepare('SELECT COUNT(*) n FROM players WHERE guild_id=?').bind(id).first()) || {}).n || 0;
+  const mem = async u => await DB.prepare('SELECT uid, name, guild_id, guild_role, is_bot FROM players WHERE uid=?').bind(String(u || '')).first();
+  const note = (u, title, tx) => DB.prepare('INSERT INTO reports(uid,at,kind,title,data,read) VALUES(?,?,?,?,?,0)')
+    .bind(u, t, 'city', title, JSON.stringify({ note:tx || title })).run();
+
+  if (p === '/guild/info'){
+    const out = { me:{ gid, role }, emb:await emb(uid), guild:null, members:[], vills:[], reqs:[], sent:[], rels:[],
+      invites:[], applied:[], list:[] };
+    if (gid){
+      const G = await DB.prepare('SELECT * FROM guilds WHERE id=?').bind(gid).first();
+      if (G){
+        out.guild = { id:G.id, name:G.name, tag:G.tag, desc:G.descr || '', owner:G.owner, bot:!!G.is_bot, cap:await capOf(G) };
+        out.members = (await DB.prepare('SELECT p.uid, p.name, p.guild_role AS role, p.seen, COUNT(v.id) AS vc, COALESCE(SUM(v.pop),0) AS pop FROM players p LEFT JOIN villages v ON v.uid=p.uid WHERE p.guild_id=? GROUP BY p.uid ORDER BY p.guild_role DESC, pop DESC').bind(gid).all()).results || [];
+        out.vills = (await DB.prepare('SELECT v.x, v.y, v.name AS n, v.uid FROM villages v JOIN players p ON p.uid=v.uid WHERE p.guild_id=? AND p.uid<>?').bind(gid, uid).all()).results || [];
+        out.rels = (await DB.prepare('SELECT r.b AS gid, r.kind, g.tag, g.name FROM guild_rel r JOIN guilds g ON g.id=r.b WHERE r.a=?').bind(gid).all()).results || [];
+        if (role >= 1){
+          out.reqs = (await DB.prepare("SELECT q.id, q.uid, q.at, p.name, (SELECT COALESCE(SUM(pop),0) FROM villages WHERE uid=q.uid) AS pop FROM guild_req q JOIN players p ON p.uid=q.uid WHERE q.gid=? AND q.kind='app'").bind(gid).all()).results || [];
+          out.sent = (await DB.prepare("SELECT q.id, p.name FROM guild_req q JOIN players p ON p.uid=q.uid WHERE q.gid=? AND q.kind='inv'").bind(gid).all()).results || [];
+        }
+      }
+    } else {
+      out.invites = (await DB.prepare("SELECT q.id, g.tag, g.name FROM guild_req q JOIN guilds g ON g.id=q.gid WHERE q.uid=? AND q.kind='inv'").bind(uid).all()).results || [];
+      out.applied = (await DB.prepare("SELECT id AS rid, gid FROM guild_req WHERE uid=? AND kind='app'").bind(uid).all()).results || [];
+      out.list = (await DB.prepare('SELECT g.id, g.name, g.tag, g.descr, COUNT(DISTINCT p.uid) AS mc, COALESCE(SUM(v.pop),0) AS pop FROM guilds g JOIN players p ON p.guild_id=g.id LEFT JOIN villages v ON v.uid=p.uid WHERE g.is_bot=0 GROUP BY g.id ORDER BY pop DESC LIMIT 30').all()).results || [];
+    }
+    return ok(out);
+  }
+  if (p === '/guild/create'){
+    if (gid) throw ue('คุณอยู่ในกิลด์แล้ว');
+    if (await emb(uid) < 3) throw ue('ต้องมีสถานทูต Lv.3');
+    const name = String(b.name || '').trim(), tag = String(b.tag || '').trim().toUpperCase();
+    const desc = String(b.desc || '').trim().slice(0, 300);
+    if (name.length < 3 || name.length > 24 || /[<>]/.test(name)) throw ue('ชื่อกิลด์ต้องยาว 3-24 ตัวอักษร');
+    if (!/^[A-Z0-9\u0E00-\u0E7F]{2,5}$/.test(tag)) throw ue('แท็กต้องเป็นตัวอักษรหรือตัวเลข 2-5 ตัว');
+    if ((me.gold | 0) < GUILD_COST) throw ue('ทองไม่พอ (ต้องใช้ ' + GUILD_COST + ')');
+    let r;
+    try { r = await DB.prepare('INSERT INTO guilds(name,tag,owner,is_bot,created,descr) VALUES(?,?,?,0,?,?)').bind(name, tag, uid, t, desc).run(); }
+    catch (e){ if (/UNIQUE/i.test(String(e && e.message))) throw ue('ชื่อหรือแท็กกิลด์นี้มีคนใช้แล้ว'); throw e; }
+    const id = r.meta.last_row_id;
+    const u = await DB.batch([
+      DB.prepare('UPDATE players SET gold=gold-?, guild_id=?, guild_role=2 WHERE uid=? AND gold>=? AND guild_id IS NULL').bind(GUILD_COST, id, uid, GUILD_COST),
+      DB.prepare('INSERT INTO ledger(uid,delta,reason,note,at) SELECT ?,?,?,?,? WHERE changes()>0').bind(uid, -GUILD_COST, 'guild', tag, t),
+      DB.prepare('DELETE FROM guild_req WHERE uid=?').bind(uid) ]);
+    if (!u[0].meta.changes){
+      await DB.prepare('DELETE FROM guilds WHERE id=?').bind(id).run();
+      throw ue('ทองไม่พอ หรือคุณเข้ากิลด์อื่นไปแล้ว');
+    }
+    return ok({ id });
+  }
+  if (p === '/guild/apply'){
+    if (gid) throw ue('คุณอยู่ในกิลด์แล้ว');
+    if (await emb(uid) < 1) throw ue('ต้องมีสถานทูต Lv.1 ก่อน');
+    const g = await DB.prepare('SELECT * FROM guilds WHERE id=? AND is_bot=0').bind(b.gid | 0).first();
+    if (!g) throw ue('ไม่พบกิลด์');
+    if (await DB.prepare("SELECT id FROM guild_req WHERE gid=? AND uid=? AND kind='app'").bind(g.id, uid).first()) throw ue('ส่งคำขอไปแล้ว');
+    if ((((await DB.prepare("SELECT COUNT(*) n FROM guild_req WHERE uid=? AND kind='app'").bind(uid).first()) || {}).n || 0) >= 5)
+      throw ue('ส่งคำขอได้พร้อมกันสูงสุด 5 กิลด์');
+    await DB.prepare("INSERT INTO guild_req(gid,uid,kind,at) VALUES(?,?,'app',?)").bind(g.id, uid, t).run();
+    return ok({});
+  }
+  if (p === '/guild/answer'){
+    const q = await DB.prepare('SELECT * FROM guild_req WHERE id=?').bind(b.rid | 0).first();
+    if (!q) throw ue('ไม่พบคำขอนี้แล้ว');
+    const myInv = q.kind === 'inv' && q.uid === uid, myApp = q.kind === 'app' && q.uid === uid;
+    const offApp = q.kind === 'app' && gid === q.gid && role >= 1, offInv = q.kind === 'inv' && gid === q.gid && role >= 1;
+    if (!myInv && !myApp && !offApp && !offInv) throw ue('ไม่มีสิทธิ์');
+    if (b.yes && (myInv || offApp)){
+      const g = await DB.prepare('SELECT * FROM guilds WHERE id=?').bind(q.gid).first();
+      if (!g){ await DB.prepare('DELETE FROM guild_req WHERE id=?').bind(q.id).run(); throw ue('กิลด์นี้ถูกยุบไปแล้ว'); }
+      if (myInv && await emb(uid) < 1) throw ue('ต้องมีสถานทูต Lv.1 ก่อน');
+      if (await cnt(g.id) >= await capOf(g)) throw ue('กิลด์เต็มแล้ว (หัวหน้าต้องอัปสถานทูตเพื่อเพิ่มที่นั่ง)');
+      const r = await DB.batch([
+        DB.prepare('UPDATE players SET guild_id=?, guild_role=0 WHERE uid=? AND guild_id IS NULL').bind(g.id, q.uid),
+        DB.prepare('DELETE FROM guild_req WHERE uid=?').bind(q.uid) ]);
+      if (!r[0].meta.changes) throw ue('ผู้เล่นนี้เข้ากิลด์อื่นไปแล้ว');
+      if (offApp) await note(q.uid, '🏯 ได้รับการตอบรับเข้ากิลด์ [' + g.tag + '] ' + g.name);
+      return ok({});
+    }
+    await DB.prepare('DELETE FROM guild_req WHERE id=?').bind(q.id).run();
+    return ok({});
+  }
+  if (!gid) throw ue('คุณยังไม่มีกิลด์');
+  const G = await DB.prepare('SELECT * FROM guilds WHERE id=?').bind(gid).first();
+  if (!G) throw ue('ไม่พบกิลด์');
+  if (p === '/guild/leave'){
+    if (G.is_bot) throw ue('ออกจากกิลด์บอทไม่ได้');
+    await guildLeave(env, uid);
+    return ok({});
+  }
+  if (role < 1) throw ue('เฉพาะหัวหน้าและรองหัวหน้ากิลด์');
+  if (p === '/guild/invite'){
+    const o = await DB.prepare('SELECT uid, guild_id, is_bot FROM players WHERE name=?').bind(String(b.name || '').trim()).first();
+    if (!o || o.is_bot) throw ue('ไม่พบผู้เล่นชื่อนี้');
+    if (o.guild_id) throw ue('ผู้เล่นนี้มีกิลด์แล้ว');
+    if (await DB.prepare("SELECT id FROM guild_req WHERE gid=? AND uid=? AND kind='inv'").bind(gid, o.uid).first()) throw ue('เชิญไปแล้ว');
+    await DB.prepare("INSERT INTO guild_req(gid,uid,kind,at) VALUES(?,?,'inv',?)").bind(gid, o.uid, t).run();
+    await note(o.uid, '📨 ได้รับคำเชิญเข้ากิลด์ [' + G.tag + '] ' + G.name + ' — ตอบรับได้ที่สถานทูต');
+    return ok({});
+  }
+  if (p === '/guild/kick'){
+    const o = await mem(b.uid);
+    if (!o || o.guild_id !== gid) throw ue('ไม่ใช่สมาชิกกิลด์');
+    if ((o.guild_role | 0) >= role) throw ue('ไม่มีสิทธิ์ปลดสมาชิกระดับนี้');
+    await DB.prepare('UPDATE players SET guild_id=NULL, guild_role=0 WHERE uid=?').bind(o.uid).run();
+    await note(o.uid, '🏯 คุณถูกปลดออกจากกิลด์ [' + G.tag + ']');
+    return ok({});
+  }
+  if (p === '/guild/desc'){
+    await DB.prepare('UPDATE guilds SET descr=? WHERE id=?').bind(String(b.desc || '').trim().slice(0, 300), gid).run();
+    return ok({});
+  }
+  if (p === '/guild/rel'){
+    const o = await DB.prepare('SELECT id FROM guilds WHERE tag=?').bind(String(b.tag || '').trim()).first();
+    if (!o) throw ue('ไม่พบกิลด์แท็กนี้');
+    if (o.id === gid) throw ue('เป็นกิลด์ของคุณเอง');
+    if (b.kind === 'none') await DB.prepare('DELETE FROM guild_rel WHERE a=? AND b=?').bind(gid, o.id).run();
+    else if (b.kind === 'ally' || b.kind === 'enemy')
+      await DB.prepare('INSERT INTO guild_rel(a,b,kind,at) VALUES(?,?,?,?) ON CONFLICT(a,b) DO UPDATE SET kind=excluded.kind, at=excluded.at')
+        .bind(gid, o.id, b.kind, t).run();
+    else throw ue('ประเภทไม่ถูกต้อง');
+    return ok({});
+  }
+  if (p === '/guild/role'){
+    if (role < 2) throw ue('เฉพาะหัวหน้ากิลด์');
+    const o = await mem(b.uid);
+    if (!o || o.guild_id !== gid || o.uid === uid) throw ue('ไม่ใช่สมาชิกกิลด์');
+    const r = b.role | 0;
+    if (r === 2) await DB.batch([
+      DB.prepare('UPDATE players SET guild_role=2 WHERE uid=?').bind(o.uid),
+      DB.prepare('UPDATE players SET guild_role=1 WHERE uid=?').bind(uid),
+      DB.prepare('UPDATE guilds SET owner=? WHERE id=?').bind(o.uid, gid) ]);
+    else await DB.prepare('UPDATE players SET guild_role=? WHERE uid=?').bind(r ? 1 : 0, o.uid).run();
+    return ok({});
   }
   return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
 }
