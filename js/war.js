@@ -3,7 +3,7 @@ var War = (function(){
   var R = { units:[], byId:{} }, ORIG = {}, inst = false, lastArr = 0, REP = [];
   var IC = { inf_a:'⚔️', inf_d:'🛡️', inf_x:'🗡️', scout:'👁️', cav_l:'🐎', cav_h:'🐘', ram:'🐏' };
   var MIS = { attack:{ ic:'⚔️', name:'โจมตี' }, raid:{ ic:'💰', name:'ปล้น' },
-              scout:{ ic:'👁️', name:'สอดแนม' }, support:{ ic:'🛡️', name:'เสริมทัพ' }, settle:{ ic:'🏘️', name:'ตั้งเมืองใหม่' } };
+              scout:{ ic:'👁️', name:'สอดแนม' }, support:{ ic:'🛡️', name:'เสริมทัพ' }, settle:{ ic:'🏘️', name:'ตั้งเมืองใหม่' }, trade:{ ic:'🐫', name:'ส่งสินค้า' } };
   var BLD_OK = { barracks:1, stable:1, workshop:1, residence:1, palace:1 };
 
   function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
@@ -290,6 +290,10 @@ var War = (function(){
   function resLine(r){ return RES.map(function(x){ return RES_IC[x] + fmt((r || {})[x] || 0); }).join(' '); }
   function repBody(d){
     if (d && d.hk && typeof Hero2 !== 'undefined') return Hero2.repBody(d);
+    if (d && d.party) return '<div class="rpt-g">🎉 ได้รับ Culture Points <b>+' + d.cp + '</b></div>';
+    if (d && d.trade) return '<div class="rpt-g">🐫 ' + esc(d.sender) + ' · ' + esc(d.from) + ' → ' + esc(d.to) + '<br>' +
+      RES.map(function(x){ return RES_IC[x] + fmt((d.res || {})[x] || 0); }).join(' ') + '</div>';
+    if (d && d.note) return '<div class="rpt-g">' + esc(d.note) + '</div>'; 
     if (d && d.settle) return '<div class="rpt-g">🏘️ จาก ' + esc(d.from) + ' → (' + d.x + '|' + d.y + ')' +
        (d.why ? '<br>✖ ' + esc(d.why) + ' ผู้ตั้งถิ่นฐานเดินทางกลับ' : '<br>✔ ก่อตั้งเมืองใหม่สำเร็จ') + '</div>';
     if (d && d.sup) return '<div class="rpt-g">🛡 ' + esc(d.from) + ' → ' + esc(d.to) + ' (' + d.x + '|' + d.y + ')<br>' +

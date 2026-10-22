@@ -39,6 +39,7 @@ var Send2 = (function(){
   }
   function defMis(x, y){
     if (ownAt(x, y)) return 'support';
+    if (typeof B53 !== 'undefined' && B53.isMate(x, y)) return 'support';
     try { var t = World.tile(x, y);
       if (!other(x, y) && !t.npc && !t.oasis && !World.canSettle(x, y)) return 'settle'; } catch(e){}
     return 'raid';
@@ -90,9 +91,13 @@ var Send2 = (function(){
     var chips = '';
     if (lt) chips += '<button class="s2c" data-cx="' + lt.x + '" data-cy="' + lt.y + '">🎯 ล่าสุด (' + lt.x + '|' + lt.y + ')</button>';
     Game.villages.forEach(function(g){
-      if (home && g === v) return;
+    if (home && g === v) return;
       chips += '<button class="s2c" data-cx="' + g.x + '" data-cy="' + g.y + '">🏘 ' + esc(g.name) + '</button>';
     });
+    if (home && typeof B53 !== 'undefined') B53.gVills().slice(0, 8).forEach(function(g){
+      chips += '<button class="s2c" data-cx="' + g.x + '" data-cy="' + g.y + '">🤝 ' + esc(g.n) + '</button>';
+    });
+
     h += '<label class="s2l">เป้าหมาย</label><div class="destbox"><div class="drow2"><label>X</label><input type="number" id="s2x" value="' +
       S.tx + '"><label>Y</label><input type="number" id="s2y" value="' + S.ty + '"></div>' +
       (chips ? '<div class="s2chips">' + chips + '</div>' : '') + '<div class="ti-line" id="s2info"></div></div>';

@@ -664,7 +664,7 @@ var Renderer = (function(){
       Net.list().forEach(function(o){
         (o.vills || []).forEach(function(vv){
           if (vv.x < x0 || vv.x > x1 || vv.y < y0 || vv.y > y1) return;
-          drawVillage(screenOf(vv.x, vv.y, ts), ts, 'neutral',
+          drawVillage(screenOf(vv.x, vv.y, ts), ts, (typeof B53 !== 'undefined' ? B53.relOf(o) : 'neutral'),
             label ? '👤 ' + o.name + (o.tag ? ' [' + o.tag + ']' : '') : '', false);
         });
       });

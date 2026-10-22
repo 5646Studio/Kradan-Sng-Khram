@@ -237,6 +237,10 @@ var Hero2 = (function(){
     }).join('') + '<div class="hd-c">' + HeroArt.svg(h.look, h.eq) + '</div></div>';
     o += bar('✨ EXP', h.exp, h.need, '#8fbf5f') + bar('❤ พลังชีวิต', h.hp, 100, h.hp < 30 ? '#c0392b' : '#d0574a');
     o += '<div class="row"><span>สถานะ</span><b>' + st + '</b></div>';
+    if (!h.dead && !h.dung && !h.army && h.hp < 100)
+      o += '<button class="' + (h.hp < 30 ? 'btn-rush' : 'btn-use2') + '" data-pot="1">🧪 ยาฟื้นพลัง — เติมเต็ม 💰' +
+        Math.max(2, Math.ceil((100 - h.hp) / 10)) + '</button>';
+ 
     if (h.dead){
       if (!h.healAt) o += '<div class="hdeadbox">ค่ารักษา ' + RES.map(function(r){ return RES_IC[r] + UI.fmt(h.healCost); }).join(' ') +
         '<br>ใช้เวลา ' + UI.dur(h.healSec) + ' (จวนวีรบุรุษ Lv.' + h.mansion + ')</div><button class="btn-ok" id="hHeal">⛑ เริ่มรักษา</button>';
@@ -331,7 +335,8 @@ var Hero2 = (function(){
         '%</i></div>' + (lock ? '<div class="bc-lock">🔒 ต้องอัปจวนวีรบุรุษเป็น Lv.' + D.req + '</div>'
           : '<button class="btn-ok mini2" data-dg="' + D.i + '"' + (busy ? ' disabled' : '') + '>🕳️ ส่งไปสำรวจ</button>') + '</div>';
     });
-    if (!h.dead && !h.dung && h.hp < 30) o += '<p class="stnone">พลังชีวิตต่ำกว่า 30% รอพักฟื้นก่อน</p>';
+    if (!h.dead && !h.dung && !h.army && h.hp < 30) o += '<p class="stnone">พลังชีวิตต่ำกว่า 30% รอพักฟื้น หรือใช้ยา</p>' +
+      '<button class="btn-rush" data-pot="1">🧪 ยาฟื้นพลัง 💰' + Math.max(2, Math.ceil((100 - h.hp) / 10)) + '</button>';
     return o;
   }
 
@@ -348,6 +353,9 @@ var Hero2 = (function(){
     on('hPtSave', function(){ var a = pend; cmd('points', { add:a }, function(){ pend = {}; open('doll'); }); });
     on('hHeal', function(){ cmd('heal', {}, function(){ open('doll'); }); });
     on('hHealNow', function(){ cmd('healnow', {}, function(){ open('doll'); }); });
+    document.querySelectorAll('[data-pot]').forEach(function(b){
+    b.onclick = function(){ b.disabled = true; cmd('potion', {}, function(){ Sync.toast('🧪 พลังชีวิตเต็มแล้ว'); open(); }); };
+    });
     document.querySelectorAll('[data-it]').forEach(function(n){ n.onclick = function(){ itemModal(+n.dataset.it); }; });
     document.querySelectorAll('[data-dg]').forEach(function(b){
       b.onclick = function(){
