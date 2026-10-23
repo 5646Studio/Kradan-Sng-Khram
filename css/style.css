@@ -867,3 +867,19 @@ body.day #modalbox .s2c,body.day #modalbox .btab{background:#f3e7c9!important;co
 body.day #modalbox .btab.on{background:#e9c766!important}
 body.day .scene{filter:brightness(1.1) saturate(1.05)}
 body.day #map{filter:brightness(1.08)}
+
+/* ===== v14k ===== */
+/* แก้แถบค้นหาพิกัดเป็นสีขาวในโหมดกลางวัน */
+body.day #searchbar{background:transparent!important;box-shadow:none!important;border:none!important}
+
+/* ฤดูกาล */
+.pf-id .pf-day{color:#c9a24a!important}
+.sea-bar{position:relative;height:16px;background:#100d09;border:1px solid #2f2618;border-radius:8px;margin:10px 0 2px}
+.sea-bar>i{display:block;height:100%;border-radius:8px;background:linear-gradient(90deg,#6a8f36,#c9a24a)}
+.sea-m{position:absolute;top:-4px;transform:translateX(-50%);font-size:13px}
+.sea-sub{display:flex;justify-content:space-between;font-size:9.5px;color:#8a7a55;margin-bottom:8px}
+.sea-win{text-align:center;background:linear-gradient(135deg,#5a4a1e,#2a2216);border:2px solid #ffcf40;
+  border-radius:12px;padding:12px;margin-bottom:8px;color:#ffe9a8;line-height:1.7}
+.sea-win b{font-size:18px;color:#ffcf40}
+.sea-win i{font-style:normal;font-size:10.5px}
+body.day .sea-bar{background:#fffaf0!important;border-color:#dcc9a0!important}
