@@ -15,6 +15,9 @@ body{background:#0d0b08;color:#f0e6cc;font-family:'Noto Sans Thai',system-ui,san
 .srv{display:inline-block;margin-top:10px;background:#1c1710;border:1px solid #4a3a22;border-radius:18px;
   padding:5px 16px;font-size:11px;color:#c7b78e}
 .srv b{color:#8fbf5f}
+.sday{font-size:11px;color:#a89468;margin-top:8px;line-height:1.7}
+.sday b{color:#ffcf40}
+
 .card{background:#14110c;border:1px solid #2f2618;border-radius:12px;padding:14px;margin-top:13px}
 .card h2{font-size:14px;color:#ffcf40;margin-bottom:10px;border-bottom:1px solid #2f2618;padding-bottom:7px}
 .card p,.card li{font-size:11.5px;color:#b9ac92;line-height:1.75}
@@ -68,6 +71,7 @@ input::placeholder{color:#5f553e}
     <h1>สุวรรณภูมิ</h1>
     <p>สงครามเจ้านคร · เกมวางแผนสร้างอาณาจักร</p>
     <div class="srv">เซิร์ฟเวอร์ <b id="srvname">ทวารวดี</b> · <span id="mode">กำลังตรวจสอบ…</span></div>
+    <div class="sday" id="sday"></div>
   </div>
 
   <div class="card" id="scrLoad"><p class="center">⏳ กำลังเชื่อมต่อ…</p></div>
@@ -174,7 +178,14 @@ input::placeholder{color:#5f553e}
   var ONLINE = Net.enabled() && !!Api.base();
   $('mode').textContent = ONLINE ? '🌐 ออนไลน์' : '📴 ออฟไลน์';
   var myName = '';
-
+  if (ONLINE) Api.get('/season', null, false).then(function(r){
+    if (!r || !r.ok) return;
+    var e = Math.max(0, r.now - r.start), d = Math.floor(e / 86400000), h = Math.floor(e % 86400000 / 3600000);
+    $('sday').innerHTML = '📅 เปิดมาแล้ว <b>' + d + '</b> วัน ' + h + ' ชม. · วันที่ ' + r.day + '/' + r.len +
+      (r.winner ? '<br>🏆 ผู้ชนะ: <b>' + esc(r.winner.name) + '</b>'
+        : r.day >= r.capDay ? '<br>👑 ศึกชิงเมืองหลวงโลกเปิดแล้ว' : r.day >= r.fortDay ? '<br>🏰 ป้อมปราการเปิดแล้ว' : '');
+  });
+  
   /* ================= ออนไลน์ ================= */
   if (ONLINE){
     $('lgGoogle').classList.toggle('hide', !Net.feature('google'));

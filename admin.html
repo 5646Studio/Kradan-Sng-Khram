@@ -110,6 +110,13 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
       </div>
     </div>
 
+      <div class="card"><b>👑 ฤดูกาล</b>
+      <p id="seinfo" style="font-size:11.5px;color:#b9ac92;margin-top:6px;line-height:1.7">กำลังโหลด…</p>
+      <input id="seday" type="number" placeholder="ตั้งให้วันนี้เป็นวันที่ เช่น 1 หรือ 20">
+      <button class="btn b2" id="seSet">📅 ตั้งวันเซิร์ฟเวอร์</button>
+      <button class="btn b2" id="seTick">▶ ประมวลผลฤดูกาลตอนนี้</button>
+      <button class="btn red" id="seReset">↺ ล้างผู้ชนะ / ผู้ครองเมืองหลวง</button>
+      <div id="semsg"></div></div>
     <button class="btn b3" id="refresh">🔄 โหลดข้อมูลใหม่</button>
     <button class="btn b3" id="out">ออกจากระบบ</button>
   </div>
@@ -336,6 +343,23 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
     });
   };
 
+  function seShow(r){
+    if (!r || !r.ok) return;
+    $('seinfo').innerHTML = 'วันที่ <b>' + r.day + '</b> · เปิดเมื่อ ' + dt(r.start) +
+      '<br>ผู้ครองเมืองหลวง: ' + (r.holderName ? esc(r.holderName) + ' (ตั้งแต่ ' + dt(r.holdSince) + ')' : '—') +
+      '<br>ผู้ชนะ: ' + (r.winner ? esc(r.winner.name) : '—');
+  }
+  Api.get('/season', null, false).then(seShow);
+  function seAct(body){
+    Api.post('/admin/season', body).then(function(r){ note('semsg', r.ok ? '✔ เรียบร้อย' : r.err, r.ok); seShow(r); });
+  }
+  $('seSet').onclick = function(){
+    var d = parseInt($('seday').value, 10);
+    if (!(d >= 1)) return note('semsg', 'ใส่วันที่ตั้งแต่ 1 ขึ้นไป');
+    if (confirm('ตั้งให้วันนี้เป็นวันที่ ' + d + ' ของเซิร์ฟเวอร์?')) seAct({ action:'day', day:d });
+  };
+  $('seTick').onclick = function(){ seAct({ action:'tick' }); };
+  $('seReset').onclick = function(){ if (confirm('ล้างผู้ชนะและผู้ครองเมืองหลวง?')) seAct({ action:'reset' }); };
   function paintLedger(r){
     var L = (r && r.list) || [];
     $('llist').innerHTML = L.length ? L.map(function(g){
