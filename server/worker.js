@@ -15,7 +15,7 @@ const RTH = { wheat:'ข้าว', wood:'ไม้', iron:'เหล็ก', cl
 const RUIN_UID = '__ruins__', RUIN_NAME = 'เมืองร้าง';
 
 const FEATURES = { build:true, gold:true, military:true, hero:true, dungeon:true, market:true,
-  guild:true, oasis:true, settle:true, station:true, quest:false, schedule:true, endgame:false,
+  guild:true, oasis:true, settle:true, station:true, quest:false, schedule:true, endgame:true,
   chat:true, rename:true };
 
 const PACKAGES = [
@@ -340,6 +340,7 @@ function reqCheck(d, k, VS){
 function ue(m){ const e = new Error(m); e.user = true; return e; }
 
 function enqueue(d, P, VS, t, kind, slot, key){
+  if (d.fort) throw ue('ป้อมและเมืองหลวงโลกก่อสร้างไม่ได้');
   slot = slot | 0;
   if (d.queue.some(q => q.kind === kind && q.slot === slot)) throw ue('ช่องนี้กำลังก่อสร้างอยู่แล้ว');
   const nb = bCount(P, t);
@@ -390,7 +391,7 @@ function cancelQ(d, P, t, idx){
 }
 function finishNow(d, P, t, q){ accrue(d, t); applyQ(d, q); d.queue.splice(d.queue.indexOf(q), 1); fill(d, t, P); }
 function cpPerDay(VS){
-  let s = VS.length * CP_BASE;
+  let s = VS.length * CP_BASE + VS.filter(V => V.d.fort).length * FORT_CP;
   for (const V of VS) for (const c of V.d.city)
     if (c.k && c.level > 0) s += Math.floor((BD[c.k].cp || 0) * Math.pow(1.18, c.level - 1));
   return s;
@@ -413,6 +414,7 @@ function SJ(d){ return JSON.stringify(d, (k, v) => (k && k[0] === '_') ? undefin
 /* ---------- ฝึกทหาร ---------- */
 function eachSec(u, bl){ return Math.max(5, Math.round(u.time * Math.pow(0.9, bl - 1) / SPEED)); }
 function trainUnits(d, tribe, t, id, n){
+  if (d.fort) throw ue('ฝึกทหารในป้อมไม่ได้ ให้ส่งกำลังหนุนมาประจำการแทน');
   const u = UNITS[id];
   if (!u || u.tribe !== tribe) throw ue('ไม่พบหน่วยนี้ในเผ่าของคุณ');
   n = Math.floor(n);
@@ -550,6 +552,7 @@ export default {
       }
       if (new Date(ev.scheduledTime).getUTCMinutes() % 5 === 0){
       try { await botTick(env); } catch (e){ console.log('bot', e && e.message); }
+      try { await seasonTick(env); } catch (e){ console.log('season', e && e.message); }
       }
     })());
   }
@@ -563,6 +566,7 @@ async function route(req, env){
 
   if (p === '/') return json({ ok:true, name:'Suwannaphum API', version:VERSION }, 200, env);
   if (p === '/health') return health(env);
+  if (p === '/season') return await seasonInfo(env); 
   if (p === '/world') return world(env);
   if (p === '/rank') return rank(env, q);
   if (p === '/rules') return json({ ok:true, version:VERSION, speed:SPEED, features:FEATURES,
@@ -631,6 +635,7 @@ async function route(req, env){
     '/gold': ctx => goldItem(ctx, b),
     '/rename': ctx => {
       const V = findV(ctx, b.vid), nm = String(b.name || '').trim();
+      if (V.d.fort) throw ue('เปลี่ยนชื่อป้อมไม่ได้');
       if (nm.length < 2 || nm.length > 20) throw ue('ชื่อเมืองต้องยาว 2-20 ตัวอักษร');
       if (/[<>]/.test(nm)) throw ue('ห้ามใช้อักขระ < >');
       V.row.name = nm; V.dirty = true;
@@ -778,7 +783,7 @@ function stateOf(ctx, err){
     player:{ uid:P.uid, name:P.name, gold:P.gold, cp:cpNow(P, VS, t), cpRate:cpPerDay(VS), tribe:P.tribe, zone:P.zone,
     builders:bCount(P, t), builderUntil:P.builder_until, protectUntil:P.protect_until, created:P.created,
     renameN:P.rename_n | 0, renameAt:P.rename_at || 0, oldName:P.old_name || null,
-    schedUntil:P.sched_until || 0, cpNext:CPN[VS.length + 1] || 0, guild:P.guild_id || 0, grole:P.guild_role | 0 },
+    schedUntil:P.sched_until || 0, cpNext:CPN[nReal(VS, V => V.d) + 1] || 0, guild:P.guild_id || 0, grole:P.guild_role | 0 },
     msgUnread:ctx.msgUnread || 0,
     rooms:ctx.rooms || null,
     quest:questOut(P, ctx),
@@ -787,7 +792,7 @@ function stateOf(ctx, err){
       const d = V.d;
       return { id:V.row.id, x:V.row.x, y:V.row.y, name:V.row.name, first:!!d.first, bio:d.bio, fields:d.fields,
         city:d.city, wallLv:d.wallLv || 0, res:d.res, resAt:d.resAt, queue:d.queue, pop:population(d), caps:caps(d),
-        party:d.party || null, loy:Math.round(loyNow(d, t)), exp:{ slots:expSlots(d), used:d.expUsed | 0, chief:chiefCap(d) }, oa:d.oa || [], hero:heroOut(d, t), troops:d.troops || {}, train:d.train || {}, upkeep:tUp(d.troops) + (d._away || 0),
+        fort:d.fort | 0, cap:d.cap | 0, party:d.party || null, loy:Math.round(loyNow(d, t)), exp:{ slots:expSlots(d), used:d.expUsed | 0, chief:chiefCap(d) }, oa:d.oa || [], hero:heroOut(d, t), troops:d.troops || {}, train:d.train || {}, upkeep:tUp(d.troops) + (d._away || 0),
         rate:{ wheat:rate(d,'wheat'), wood:rate(d,'wood'), iron:rate(d,'iron'), clay:rate(d,'clay') } };
     }),
     moves:ctx.moves.filter(m => m.uid === P.uid).map(mvOut),
@@ -892,13 +897,13 @@ async function deleteAccount(env, uid, b){
   if (!P) throw ue('ไม่พบบัญชี');
   if (String(b.name || '').trim() !== P.name) throw ue('พิมพ์ชื่อไม่ตรง');
   await guildLeave(env, uid);
-  await ensureRuins(env);
+  await ensureRuins(env); await ensureFortOwner(env);
   const vs = (await env.DB.prepare('SELECT * FROM villages WHERE uid=?').bind(uid).all()).results || [];
   const t = Date.now(), DB = env.DB, st = [];
   for (const r of vs){
     const d = JSON.parse(r.data);
     d.queue = []; d.train = {}; d.oa = [];
-    st.push(DB.prepare('UPDATE villages SET uid=?, name=?, data=?, ver=ver+1, updated=? WHERE id=?').bind(RUIN_UID, RUIN_NAME, SJ(d), t, r.id));
+    st.push(DB.prepare('UPDATE villages SET uid=?, name=?, data=?, ver=ver+1, updated=? WHERE id=?').bind(d.fort ? FORT_UID : RUIN_UID, d.fort ? r.name : RUIN_NAME, SJ(d), t, r.id));
   }
   st.push(DB.prepare('DELETE FROM moves WHERE uid=?').bind(uid));
   st.push(DB.prepare('UPDATE moves SET to_uid=? WHERE to_uid=?').bind(RUIN_UID, uid));
@@ -1027,7 +1032,13 @@ async function admin(p, b, q, env, by){
     await DB.prepare('UPDATE players SET cp=cp+? WHERE uid=?').bind(b.cp | 0, pl.uid).run();
     return json({ ok:true }, 200, env);
   }
-
+  if (p === '/admin/season'){
+    if (b.action === 'day') await setMeta(env, 'start', t - (Math.max(1, b.day | 0) - 1) * 86400000 / SPEED);
+    else if (b.action === 'reset') await DB.prepare("DELETE FROM meta WHERE k IN ('winner','holder','hold_since','holder_name')").run();
+    else if (b.action !== 'tick') throw ue('action ต้องเป็น day / tick / reset');
+    await seasonTick(env);
+    return json(Object.assign({ ok:true }, await seasonState(env)), 200, env);
+  }
   return json({ ok:false, err:'ไม่พบคำสั่งแอดมิน' }, 404, env);
 }
 
@@ -1372,6 +1383,7 @@ function botAttack(d, r, W, t){
   let best = null, bs = -1;
   for (const o of W.vills){
     if (o.uid === r.uid) continue;
+    if (o.is_bot === 3) continue;
     const g = grudge[o.uid], gr = (g && t - g.at < 3 * 86400000) ? g.n : 0;
     const dist = Math.hypot(o.x - r.x, o.y - r.y);
     if (dist > (gr ? BOT_RANGE * 3 : BOT_RANGE)) continue;
@@ -1686,6 +1698,7 @@ function dungRoll(h, D){
 /* เรียกทุกครั้งที่โหลดเมือง: สร้างวีรบุรุษ · รักษาเสร็จ · กลับจากดันเจี้ยน */
 function heroTick(V, ctx){
   const d = V.d, t = ctx.t;
+  if (d.fort) return false;
   if (!d.hero || d.hero.v !== 4){ d.hero = heroNew(t); return true; }
   const h = d.hero;
   let ch = false;
@@ -1923,7 +1936,7 @@ async function sendArmy(ctx, env, b){
   } else {
     const T = tile(tx, ty);
     if (T.oasis && mis === 'scout') throw ue('สอดแนมโอเอซิสไม่ได้');
-    if (isFort(tx, ty) || (tx === 0 && ty === 0)) throw ue('ป้อมและเมืองหลวงโลกจะเปิดในเฟส B5');
+    if (isFort(tx, ty) || (tx === 0 && ty === 0)) throw ue(fortClosed());
     if (!T.npc && !T.oasis) throw ue('ไม่มีเมืองที่พิกัดนี้');
   }
   const spd = minS * (1 + 0.03 * lvl(d, 'trainground'));
@@ -2291,7 +2304,7 @@ async function stationApi(p, b, env, uid){
       toVid = tv.id; toUid = tv.uid;
     } else {
       const T = tile(tx, ty);
-      if (isFort(tx, ty) || (tx === 0 && ty === 0)) throw ue('ป้อมและเมืองหลวงโลกจะเปิดใน B5-4');
+      if (isFort(tx, ty) || (tx === 0 && ty === 0)) throw ue(fortClosed());
       if (T.oasis && mis === 'scout') throw ue('สอดแนมโอเอซิสไม่ได้');
       if (!T.npc && !T.oasis) throw ue('ไม่มีเมืองที่พิกัดนี้');
     }
@@ -2386,7 +2399,7 @@ function settleCheck(ctx, tr, hj, tx, ty, tv){
   const why = canSettle(tx, ty);
   if (why) throw ue('ตั้งเมืองไม่ได้: ' + why);
   const pend = ctx.moves.filter(m => m.uid === ctx.P.uid && m.mission === 'settle' && m.state === 'go').length;
-  const need = CPN[ctx.VS.length + pend + 1] || 1e12, cp = cpNow(ctx.P, ctx.VS, ctx.t);
+  const need = CPN[nReal(ctx.VS, V => V.d) + pend + 1] || 1e12, cp = cpNow(ctx.P, ctx.VS, ctx.t);
   if (cp < need) throw ue('Culture Points ไม่พอ (' + Math.floor(cp) + ' / ' + need + ')');
 }
 async function settleArrive(env, m){
@@ -2397,7 +2410,7 @@ async function settleArrive(env, m){
   if (!why && await DB.prepare('SELECT id FROM villages WHERE x=? AND y=?').bind(m.tx, m.ty).first()) why = 'มีผู้อื่นตั้งเมืองไปก่อนแล้ว';
   if (!why){
     const rows = (await DB.prepare('SELECT data FROM villages WHERE uid=?').bind(m.uid).all()).results || [];
-    const cp = cpNow(P, rows.map(r => ({ d:JSON.parse(r.data) })), at), need = CPN[rows.length + 1] || 1e12;
+    const cp = cpNow(P, rows.map(r => ({ d:JSON.parse(r.data) })), at), need = CPN[nReal(rows, r => JSON.parse(r.data)) + 1] || 1e12;
     if (cp < need) why = 'Culture Points ไม่พอ (' + Math.floor(cp) + ' / ' + need + ')';
   }
   const data = { settle:1, x:m.tx, y:m.ty, from:aV.name, why };
@@ -2435,26 +2448,28 @@ async function conquerCheck(env, m, dr, dd, dP, aP, left, rep, at){
   const DB = env.DB, l0 = loyNow(dd, at);
   let why = null;
   if (lvl(dd, 'palace') > 0) why = 'เมืองหลวง (มีพระราชวัง) ยึดไม่ได้';
-  else if (dP.is_bot !== 2){
+  else if (!dd.fort && dP.is_bot !== 2){
     const n = ((await DB.prepare('SELECT COUNT(*) n FROM villages WHERE uid=?').bind(dr.uid).first()) || {}).n || 0;
     if (n <= 1) why = 'เป็นเมืองสุดท้ายของเจ้าของ ยึดไม่ได้';
   }
+  if (!why) why = await fortWhy(env, dd, aP); 
   if (why){ rep.loy = { a:Math.round(l0), b:Math.round(l0), why }; return; }
   const l1 = l0 - LOY_DROP[Math.min(4, nc)];
   dd.loyAt = at;
   if (l1 > 0){ dd.loy = l1; rep.loy = { a:Math.round(l0), b:Math.round(l1) }; return; }
   const rows = (await DB.prepare('SELECT data FROM villages WHERE uid=?').bind(m.uid).all()).results || [];
-  const cp = cpNow(aP, rows.map(r => ({ d:JSON.parse(r.data) })), at), need = CPN[rows.length + 1] || 1e12;
-  if (cp < need){ dd.loy = 0; rep.loy = { a:Math.round(l0), b:0, why:'Culture Points ไม่พอ (' + Math.floor(cp) + ' / ' + need + ')' }; return; }
+  const cp = cpNow(aP, rows.map(r => ({ d:JSON.parse(r.data) })), at), need = CPN[nReal(rows, r => JSON.parse(r.data)) + 1] || 1e12;
+  if (!dd.fort && cp < need){ dd.loy = 0; rep.loy = { a:Math.round(l0), b:0, why:'Culture Points ไม่พอ (' + Math.floor(cp) + ' / ' + need + ')' }; return; }
 
   left[ck[0]] -= 1;
   if (left[ck[0]] <= 0) delete left[ck[0]];
   dd.loy = 25; dd.loyAt = at; dd.troops = {}; dd.queue = []; dd.train = {}; dd.oa = []; dd.grudge = {};
-  dd.expUsed = 0; dd.first = false; dd.hero = heroNew(at);
+  dd.expUsed = 0; dd.first = false; dd.hero = dd.fort ? null : heroNew(at);
+  if (dd.fort){ m._sx = m._sx || []; m._sx.push(DB.prepare("INSERT INTO msgs(conv,from_uid,to_uid,text,at,read,reported) SELECT 'r:world',?,NULL,?,?,1,0 WHERE (SELECT ver FROM villages WHERE id=?)=?").bind(FORT_UID, '📢 ' + aP.name + ' ยึด ' + dr.name + ' ได้แล้ว!', at, dr.id, dr.ver + 1)); }
   rep.loy = { a:Math.round(l0), b:0 }; rep.captured = true;
   const G = ' AND (SELECT ver FROM villages WHERE id=?)=?', gb = [dr.id, dr.ver + 1];
   m._sx = (m._sx || []).concat([
-    DB.prepare('UPDATE villages SET uid=?, name=? WHERE id=?' + G).bind(m.uid, 'เมืองยึดได้', dr.id, ...gb),
+    DB.prepare('UPDATE villages SET uid=?, name=? WHERE id=?' + G).bind(m.uid, dd.fort ? dr.name : 'เมืองยึดได้', dr.id, ...gb),
     DB.prepare('DELETE FROM oasis WHERE vid=?' + G).bind(dr.id, ...gb),
     DB.prepare('DELETE FROM stations WHERE owner_vid=?' + G).bind(dr.id, ...gb),
     DB.prepare("INSERT INTO moves(uid,from_vid,fx,fy,tx,ty,to_vid,to_uid,mission,troops,loot,depart,arrive,state,lock,tries) SELECT s.owner_uid, s.owner_vid, s.x, s.y, v.x, v.y, NULL, NULL, 'support', s.troops, '{}', ?, ?, 'back', 0, 0 FROM stations s JOIN villages v ON v.id=s.owner_vid WHERE s.host_vid=? AND s.owner_uid<>?" + G)
@@ -2848,4 +2863,121 @@ async function guildApi(p, b, env, uid){
     return ok({});
   }
   return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
+}
+
+/* =====================================================================
+   B5-4 : ฤดูกาล · ป้อม 8 แห่ง · เมืองหลวงโลก · ผู้ชนะเซิร์ฟเวอร์
+   ===================================================================== */
+const SEASON_DAYS = 45, FORT_DAY = 20, CAP_DAY = 30, HOLD_DAYS = 5, CAP_NEED_FORTS = 2, FORT_CP = 50;
+const FORT_UID = '__fort__', FORT_NAME = 'ผู้พิทักษ์แผ่นดิน', CAP_NAME = 'นครหลวงสุวรรณภูมิ';
+const FORT_NAMES = ['ป้อมอุดร','ป้อมอีสาน','ป้อมบูรพา','ป้อมอาคเนย์','ป้อมทักษิณ','ป้อมหรดี','ป้อมประจิม','ป้อมพายัพ'];
+const FORT_G = { u0_inf_d:1500, u0_inf_a:500, u0_cav_h:300 };
+const CAP_G  = { u0_inf_d:6000, u0_inf_a:2000, u0_cav_h:1500 };
+
+function nReal(arr, f){ let n = 0; for (const x of arr) if (!f(x).fort) n++; return n; }
+function fortClosed(){ return 'ป้อมเปิดวันที่ ' + FORT_DAY + ' · เมืองหลวงโลกเปิดวันที่ ' + CAP_DAY + ' ของเซิร์ฟเวอร์'; }
+async function getMeta(env, k){ const r = await env.DB.prepare('SELECT v FROM meta WHERE k=?').bind(k).first(); return r ? r.v : null; }
+async function setMeta(env, k, v){
+  await env.DB.prepare('INSERT INTO meta(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v').bind(k, String(v)).run();
+}
+async function serverStart(env){
+  let s = +(await getMeta(env, 'start')) || 0;
+  if (!s){ s = Date.now(); await setMeta(env, 'start', s); }
+  return s;
+}
+async function seasonState(env){
+  const t = Date.now(), start = await serverStart(env), w = await getMeta(env, 'winner');
+  return { start, now:t, day:Math.floor((t - start) / 86400000 * SPEED) + 1,
+    holder:(await getMeta(env, 'holder')) || '', holdSince:+(await getMeta(env, 'hold_since')) || 0,
+    holderName:(await getMeta(env, 'holder_name')) || '', winner:w ? JSON.parse(w) : null };
+}
+async function ensureFortOwner(env){
+  const t = Date.now();
+  await env.DB.prepare("INSERT OR IGNORE INTO players(uid,name,is_bot,tribe,zone,gold,cp,cp_at,prov,created,seen) VALUES(?,?,3,0,1,0,0,0,'fort',?,?)")
+    .bind(FORT_UID, FORT_NAME, t, t).run();
+}
+function fortData(x, y, cap, t){
+  const d = newVillage(x, y, false, t), L2 = cap ? 20 : 15;
+  d.fields = [];
+  for (const [r, n] of [['wheat',14],['wood',2],['iron',2],['clay',2]]) for (let i = 0; i < n; i++) d.fields.push({ res:r, level:15 });
+  d.city[0] = { k:'main', level:L2 }; d.city[2] = { k:'warehouse', level:L2 }; d.city[3] = { k:'granary', level:L2 };
+  d.wallLv = L2; d.fort = 1; if (cap) d.cap = 1;
+  d.hero = null; d.troops = Object.assign({}, cap ? CAP_G : FORT_G);
+  for (const r of RES) d.res[r] = 5000;
+  d.loy = 100; d.loyAt = t;
+  return d;
+}
+async function worldSay(env, text, t){
+  await ensureFortOwner(env);
+  await env.DB.prepare("INSERT INTO msgs(conv,from_uid,to_uid,text,at,read,reported) VALUES('r:world',?,NULL,?,?,1,0)").bind(FORT_UID, text, t).run();
+}
+async function spawnForts(env, cap, t){
+  await ensureFortOwner(env);
+  const L = cap ? [[0, 0, CAP_NAME]] : FORTS.map((f, i) => [f[0], f[1], FORT_NAMES[i]]);
+  await env.DB.batch(L.map(([x, y, n]) => {
+    const d = fortData(x, y, cap, t);
+    return env.DB.prepare('INSERT OR IGNORE INTO villages(uid,x,y,name,pop,data,ver,updated) VALUES(?,?,?,?,?,?,0,?)')
+      .bind(FORT_UID, x, y, n, population(d), SJ(d), t);
+  }));
+  await setMeta(env, cap ? 'cap_on' : 'forts_on', 1);
+  await worldSay(env, cap
+    ? '📢 เมืองหลวงโลก (0|0) ปรากฏแล้ว! กิลด์ที่มีป้อม ' + CAP_NEED_FORTS + ' แห่งขึ้นไปยึดได้ ครองครบ ' + HOLD_DAYS + ' วันชนะเซิร์ฟเวอร์'
+    : '📢 ป้อมปราการ 8 แห่งปรากฏรอบใจกลางแผนที่แล้ว! ยึดด้วยขุนพล (ต้องอยู่ในกิลด์)', t);
+}
+async function regenForts(env, t){
+  const rows = (await env.DB.prepare('SELECT * FROM villages WHERE uid=?').bind(FORT_UID).all()).results || [];
+  const st = [], P = { builders:2, builder_until:0 };
+  for (const r of rows){
+    const d = JSON.parse(r.data);
+    if (!d.fort) continue;
+    if (!d.troops) d.troops = {};
+    d._away = 0;
+    advance(d, t, P);
+    const B0 = d.cap ? CAP_G : FORT_G;
+    for (const k in B0) d.troops[k] = Math.min(B0[k], (d.troops[k] || 0) + Math.ceil(B0[k] * 0.01));
+    st.push(vUpd(env, r, d, t));
+  }
+  if (st.length) await env.DB.batch(st);
+}
+async function fortWhy(env, dd, aP){
+  if (!dd.fort) return null;
+  if (!aP.guild_id) return 'ต้องอยู่ในกิลด์จึงจะยึดป้อมหรือเมืองหลวงโลกได้';
+  if (!dd.cap) return null;
+  const n = ((await env.DB.prepare("SELECT COUNT(*) n FROM villages v JOIN players p ON p.uid=v.uid WHERE p.guild_id=? AND json_extract(v.data,'$.fort')=1 AND IFNULL(json_extract(v.data,'$.cap'),0)=0")
+    .bind(aP.guild_id).first()) || {}).n || 0;
+  return n < CAP_NEED_FORTS ? 'กิลด์ต้องครองป้อมอย่างน้อย ' + CAP_NEED_FORTS + ' แห่ง (ตอนนี้ ' + n + ')' : null;
+}
+async function declareWin(env, name, how, t){
+  await setMeta(env, 'winner', JSON.stringify({ name, how, at:t }));
+  await worldSay(env, '🏆 ' + name + ' ชนะเซิร์ฟเวอร์ ' + 'แล้ว! ขอแสดงความยินดี', t);
+}
+async function seasonTick(env){
+  const t = Date.now(), S = await seasonState(env);
+  if (S.winner) return;
+  if (S.day >= FORT_DAY && !(await getMeta(env, 'forts_on'))) await spawnForts(env, false, t);
+  if (S.day >= CAP_DAY && !(await getMeta(env, 'cap_on'))) await spawnForts(env, true, t);
+  if (S.day >= FORT_DAY) await regenForts(env, t);
+  const c = await env.DB.prepare('SELECT v.uid, p.name, p.guild_id AS gid, g.tag, g.name AS gn FROM villages v JOIN players p ON p.uid=v.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE v.x=0 AND v.y=0').first();
+  const hk = (c && c.uid !== FORT_UID && c.uid !== RUIN_UID) ? (c.gid ? 'g' + c.gid : 'u' + c.uid) : '';
+  const hn = !hk ? '' : c.gid ? '[' + c.tag + '] ' + c.gn : c.name;
+  if (hk !== S.holder){
+    await setMeta(env, 'holder', hk); await setMeta(env, 'hold_since', hk ? t : 0); await setMeta(env, 'holder_name', hn);
+    if (hk) await worldSay(env, '👑 ' + hn + ' ครองเมืองหลวงโลกแล้ว! ต้องรักษาไว้ ' + HOLD_DAYS + ' วัน', t);
+  } else if (hk && t - S.holdSince >= HOLD_DAYS * 86400000 / SPEED) return await declareWin(env, hn, 'hold', t);
+  if (S.day > SEASON_DAYS){
+    if (hk) return await declareWin(env, hn, 'end', t);
+    const g = await env.DB.prepare('SELECT g.name, g.tag, COALESCE(SUM(v.pop),0) AS pop FROM guilds g JOIN players p ON p.guild_id=g.id LEFT JOIN villages v ON v.uid=p.uid GROUP BY g.id ORDER BY g.is_bot ASC, pop DESC LIMIT 1').first();
+    if (g) await declareWin(env, '[' + g.tag + '] ' + g.name, 'pop', t);
+  }
+}
+async function seasonInfo(env){
+  const t = Date.now(), S = await seasonState(env);
+  const rows = (await env.DB.prepare("SELECT v.x, v.y, v.name, v.data, p.name AS pn, p.is_bot, g.tag FROM villages v JOIN players p ON p.uid=v.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE json_extract(v.data,'$.fort')=1").all()).results || [];
+  const forts = rows.map(r => {
+    const d = JSON.parse(r.data), npc = r.is_bot === 3;
+    return { x:r.x, y:r.y, name:r.name, cap:!!d.cap, owner:npc ? null : r.pn, tag:r.tag || null,
+      loy:Math.round(loyNow(d, t)), wall:d.wallLv | 0, garrison:npc ? tcount(d.troops) : null };
+  });
+  return json(Object.assign({ ok:true, len:SEASON_DAYS, fortDay:FORT_DAY, capDay:CAP_DAY, hold:HOLD_DAYS,
+    needForts:CAP_NEED_FORTS, fortCp:FORT_CP, forts }, S), 200, env);
 }
