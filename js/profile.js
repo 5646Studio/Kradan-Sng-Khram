@@ -22,7 +22,7 @@ var Profile = (function(){
       var t = g.troops || {};
       for (var k in t) tr += t[k] | 0;
     });
-    var cp = Math.floor(G.cp || 0), next = cpForVillage(vs.length + 1);
+    var cp = Math.floor(G.cp || 0), next = Game.cpNext || cpForVillage(vs.length + 1);
     var rate = on && typeof B53 !== 'undefined' ? B53.rate() : (typeof cpPerDay === 'function' ? cpPerDay() : 0);
     var pct = Math.min(100, Math.round(cp / Math.max(1, next) * 100));
     var eta = cp >= next ? '✔ พร้อมขยายเมือง' : rate > 0 ? 'อีกประมาณ ' + ((next - cp) / rate).toFixed(1) + ' วัน' : '—';
@@ -46,7 +46,7 @@ var Profile = (function(){
 
     var h = '<div class="pf"><div class="pf-head"><div class="pf-av">' + av + '</div><div class="pf-id"><b>' + esc(G.name) +
       (tag ? ' <span class="gt">[' + esc(tag) + ']</span>' : '') + '</b><i>' + pv + '</i><i>เผ่า' + tribe +
-      ' · เซิร์ฟเวอร์ ' + CFG.SERVER_NAME + '</i></div></div>' +
+      ' · เซิร์ฟเวอร์ ' + CFG.SERVER_NAME + '</i>' + (typeof Season !== 'undefined' ? Season.line() : '') + '</div></div>' +
       '<div class="pf-stats">' + stat('🏘', vs.length, 'เมือง') + stat('👥', UI.fmt(pop), 'ประชากร') +
       stat('💰', UI.fmt(G.gold), 'ทอง') + stat('⚔', UI.fmt(tr), 'ทหาร') + '</div>' +
       '<div class="pf-cp"><div class="pf-cph"><span>🎭 Culture Points</span><b>' + UI.fmt(cp) + ' / ' + UI.fmt(next) + '</b></div>' +
@@ -58,6 +58,7 @@ var Profile = (function(){
       [['day', '☀️ กลางวัน'], ['night', '🌙 กลางคืน'], ['auto', '🔄 อัตโนมัติ']].map(function(t){
         return '<button class="pf-th' + (th === t[0] ? ' on' : '') + '" data-th="' + t[0] + '">' + t[1] + '</button>';
       }).join('') + '</div><div class="pf-list">' +
+      '<button class="pf-li" id="pfSea"><span>👑</span>ศึกชิงเมืองหลวงโลก<em>›</em></button>' +
       '<button class="pf-li" id="pfRn"><span>✎</span>เปลี่ยนชื่อผู้เล่น<em>›</em></button>' +
       '<button class="pf-li" id="pfSet"><span>⚙</span>ตั้งค่าและบัญชี<em>›</em></button>' +
       '<button class="pf-li" id="pfBug"><span>🐞</span>แจ้งปัญหา<em>›</em></button></div></div>' +
@@ -66,6 +67,8 @@ var Profile = (function(){
     Q.forEach(function(q){ document.getElementById(q[0]).onclick = q[3]; });
     document.querySelectorAll('[data-th]').forEach(function(b){ b.onclick = function(){ setTheme(b.dataset.th); }; });
     document.getElementById('pfRn').onclick = function(){ if (typeof Social !== 'undefined') Social.renamePlayer(); };
+    document.getElementById('pfSea').onclick = function(){
+    if (typeof Season !== 'undefined' && online()) Season.open(); else if (typeof Conquest !== 'undefined') Conquest.openEndgame();};
     document.getElementById('pfSet').onclick = function(){ Settings.openSettings(); };
     document.getElementById('pfBug').onclick = function(){ if (typeof Bug !== 'undefined') Bug.open(); };
   }

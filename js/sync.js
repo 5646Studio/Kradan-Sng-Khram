@@ -97,6 +97,7 @@ var Sync = (function(){
     o.srvHero = sv.hero || null;
     o.srvExp = sv.exp || null;
     o.srvParty = sv.party || null;
+    o.isFort = !!sv.fort; o.isCap = !!sv.cap;
     o.loyalty = sv.loy == null ? 100 : sv.loy; o.loyaltyAt = now();
     return o;
   }
@@ -192,7 +193,7 @@ var Sync = (function(){
       (r.v || []).forEach(function(v){
         if (v.uid === S.uid) return;
         var o = by[v.uid];
-        if (!o){ o = by[v.uid] = { uid:v.uid, name:v.pn, tag:v.gt || null, gid:v.gid || 0, ruin:v.bot === 2, vills:[] }; L.push(o); }
+        if (!o){ o = by[v.uid] = { uid:v.uid, name:v.pn, tag:v.gt || null, gid:v.gid || 0, ruin:v.bot >= 2, fort:v.bot === 3, vills:[] }; L.push(o); }
         idx[v.x + ',' + v.y] = { p:o, vi:o.vills.length };
         o.vills.push({ x:v.x, y:v.y, n:v.vn, p:v.pop });
       });
@@ -288,6 +289,7 @@ var Sync = (function(){
     if (typeof Hero2 !== 'undefined') Hero2.install();
     if (typeof Send2 !== 'undefined') Send2.install();
     if (typeof B53 !== 'undefined') B53.install();
+    if (typeof Season !== 'undefined') Season.install();
   }
 
   /* ---------- ทอง ---------- */
