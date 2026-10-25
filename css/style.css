@@ -883,3 +883,31 @@ body.day #searchbar{background:transparent!important;box-shadow:none!important;b
 .sea-win b{font-size:18px;color:#ffcf40}
 .sea-win i{font-style:normal;font-size:10.5px}
 body.day .sea-bar{background:#fffaf0!important;border-color:#dcc9a0!important}
+
+/* ===== v14L ===== */
+/* รูปอาคาร */
+.bcard.hasbimg{position:relative;padding-left:78px!important;min-height:82px}
+.bcard .bimg{position:absolute;left:6px;top:8px;width:66px;height:66px;object-fit:contain;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}
+#modalbox .bhero{display:block;margin:-2px auto 6px;max-width:150px;max-height:110px;object-fit:contain;
+  filter:drop-shadow(0 3px 5px rgba(0,0,0,.6))}
+
+/* เช็คอิน */
+.ckgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin:6px 0}
+.ck{position:relative;background:#100d09;border:1px solid #2f2618;border-radius:8px;padding:3px 1px 4px;
+  text-align:center;min-height:58px}
+.ck em{position:absolute;top:1px;left:4px;font-style:normal;font-size:8.5px;color:#7a6c4e}
+.ck span{display:block;font-size:18px;margin-top:9px}
+.ck i{display:block;font-style:normal;font-size:8px;color:#b9ac92;line-height:1.2}
+.ck.gold{border-color:#c9a24a}
+.ck.got{opacity:.45}
+.ck.got span{color:#6fd35a}
+.ck.now{border:2px solid #ffcf40;box-shadow:0 0 10px rgba(255,207,64,.6);animation:ckp 1.4s infinite}
+@keyframes ckp{50%{box-shadow:0 0 2px rgba(255,207,64,.2)}}
+#setbtn{position:relative}
+#setbtn.ckdot::after{content:'';position:absolute;top:2px;right:2px;width:9px;height:9px;border-radius:50%;
+  background:#e74c3c;border:1px solid #0d0b08}
+.ckred{color:#e74c3c}
+body.day .ck{background:#fffaf0!important;border-color:#dcc9a0!important}
+body.day .ck.gold{border-color:#c9a24a!important}
+body.day .ck i{color:#6a5434!important}
