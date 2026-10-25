@@ -571,7 +571,7 @@ async function route(req, env){
   if (p === '/rank') return rank(env, q);
   if (p === '/rules') return json({ ok:true, version:VERSION, speed:SPEED, features:FEATURES,
     tribes:TRIBES.map(t => ({ name:t.name, desc:t.desc })), units:UNIT_LIST,
-    items:ITEM_LIST, dungeons:DUNG, heroCfg:{ maxLv:HERO_MAX, tierReq:TIER_REQ } }, 200, env);
+    items:ITEM_LIST, dungeons:DUNG, heroCfg:{ maxLv:HERO_MAX, tierReq:TIER_REQ }, checkin:CHECKIN }, 200, env);
 
   if (p === '/shop' && req.method === 'GET')
     return json({ ok:true, enabled:env.PAYMENT_ENABLED === '1', packages:PACKAGES }, 200, env);
@@ -649,6 +649,7 @@ async function route(req, env){
   if (p.indexOf('/hero/') === 0) ACT[p] = ctx => heroAct(ctx, b, p.slice(6));
   if (p === '/train') ACT[p] = ctx => trainEx(ctx, b);
   if (p === '/party') ACT[p] = ctx => partyStart(ctx, b);
+  if (p === '/checkin') ACT[p] = ctx => checkin(ctx, b);
   if (p.indexOf('/market/') === 0) ACT[p] = ctx => marketAct(ctx, env, b, p.slice(8));
   if (!(p in ACT)) return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
   const out = await session(env, uid, ACT[p]);
@@ -783,7 +784,7 @@ function stateOf(ctx, err){
     player:{ uid:P.uid, name:P.name, gold:P.gold, cp:cpNow(P, VS, t), cpRate:cpPerDay(VS), tribe:P.tribe, zone:P.zone,
     builders:bCount(P, t), builderUntil:P.builder_until, protectUntil:P.protect_until, created:P.created,
     renameN:P.rename_n | 0, renameAt:P.rename_at || 0, oldName:P.old_name || null,
-    schedUntil:P.sched_until || 0, cpNext:CPN[nReal(VS, V => V.d) + 1] || 0, guild:P.guild_id || 0, grole:P.guild_role | 0 },
+    schedUntil:P.sched_until || 0, cpNext:CPN[nReal(VS, V => V.d) + 1] || 0, guild:P.guild_id || 0, grole:P.guild_role | 0, ck:{ today:thDay(t), last:P.ck_day | 0, n:P.ck_n | 0 } },
     msgUnread:ctx.msgUnread || 0,
     rooms:ctx.rooms || null,
     quest:questOut(P, ctx),
@@ -1035,7 +1036,12 @@ async function admin(p, b, q, env, by){
   if (p === '/admin/season'){
     if (b.action === 'day') await setMeta(env, 'start', t - (Math.max(1, b.day | 0) - 1) * 86400000 / SPEED);
     else if (b.action === 'reset') await DB.prepare("DELETE FROM meta WHERE k IN ('winner','holder','hold_since','holder_name')").run();
-    else if (b.action !== 'tick') throw ue('action ต้องเป็น day / tick / reset');
+        else if (b.action === 'win'){
+      const nm = String(b.name || '').trim();
+      if (!nm) throw ue('ใส่ชื่อผู้ชนะ');
+      await declareWin(env, nm, 'admin', t);
+    }
+    else if (b.action !== 'tick') throw ue('action ไม่ถูกต้อง');
     await seasonTick(env);
     return json(Object.assign({ ok:true }, await seasonState(env)), 200, env);
   }
@@ -1700,6 +1706,7 @@ function heroTick(V, ctx){
   const d = V.d, t = ctx.t;
   if (d.fort) return false;
   if (!d.hero || d.hero.v !== 4){ d.hero = heroNew(t); return true; }
+  if (d.hero.box && d.hero.box.length && d.hero.bag.length < bagMax(d)){ while (d.hero.box.length && d.hero.bag.length < bagMax(d)) d.hero.bag.push(d.hero.box.shift()); V.dirty = true; }
   const h = d.hero;
   let ch = false;
   if (h.dead && h.healAt && t >= h.healAt){ h.dead = false; h.healAt = 0; h.hp = 100; h.hpAt = t; ch = true; }
@@ -1801,7 +1808,7 @@ function heroAct(ctx, b, op){
     const sec = Math.max(60, Math.round(D.min * 60 * (1 - eqStat(h, 'spd') / 100) / SPEED));
     h.dung = { i:D.i, back:t + sec * 1000, out:dungRoll(h, D) };
     ret = { sec };
-  } else if (op === 'potion'){ out(); if (h.dead) throw ue('วีรบุรุษบาดเจ็บสาหัส ต้องรักษาก่อน'); if (h.hp >= 99.5) throw ue('พลังชีวิตเต็มแล้ว'); spend(ctx, potionCost(h.hp), 'potion'); h.hp = 100; h.hpAt = t; } else throw ue('ไม่รู้จักคำสั่งวีรบุรุษ');
+  } else if (op === 'potion'){ out(); if (h.dead) throw ue('วีรบุรุษบาดเจ็บสาหัส ต้องรักษาก่อน'); if (h.hp >= 99.5) throw ue('พลังชีวิตเต็มแล้ว'); if ((h.pot | 0) > 0) h.pot--; else spend(ctx, potionCost(h.hp), 'potion'); h.hp = 100; h.hpAt = t; } else throw ue('ไม่รู้จักคำสั่งวีรบุรุษ');
   V.dirty = true;
   return ret;
 }
@@ -1813,7 +1820,7 @@ function heroOut(d, t){
     hp:Math.floor(heroHp(h, t)), dead:h.dead, healAt:h.healAt,
     dung:h.dung ? { i:h.dung.i, back:h.dung.back } : null, army:!!h.army,
     look:h.look, lookN:h.lookN, eq:h.eq, bag:h.bag, bagMax:bagMax(d), prod:heroProd(d),
-    mansion:lvl(d, 'hero'), healCost:80 + h.lv * 40, healSec:healSec(d) };
+    pot:h.pot | 0, box:(h.box || []).length, mansion:lvl(d, 'hero'), healCost:80 + h.lv * 40, healSec:healSec(d) };
 }
 /* =====================================================================
    B4-2 : วีรบุรุษออกรบ · ป้องกันเมือง · ยึดโอเอซิส
@@ -2962,13 +2969,8 @@ async function seasonTick(env){
   const hn = !hk ? '' : c.gid ? '[' + c.tag + '] ' + c.gn : c.name;
   if (hk !== S.holder){
     await setMeta(env, 'holder', hk); await setMeta(env, 'hold_since', hk ? t : 0); await setMeta(env, 'holder_name', hn);
-    if (hk) await worldSay(env, '👑 ' + hn + ' ครองเมืองหลวงโลกแล้ว! ต้องรักษาไว้ ' + HOLD_DAYS + ' วัน', t);
-  } else if (hk && t - S.holdSince >= HOLD_DAYS * 86400000 / SPEED) return await declareWin(env, hn, 'hold', t);
-  if (S.day > SEASON_DAYS){
-    if (hk) return await declareWin(env, hn, 'end', t);
-    const g = await env.DB.prepare('SELECT g.name, g.tag, COALESCE(SUM(v.pop),0) AS pop FROM guilds g JOIN players p ON p.guild_id=g.id LEFT JOIN villages v ON v.uid=p.uid GROUP BY g.id ORDER BY g.is_bot ASC, pop DESC LIMIT 1').first();
-    if (g) await declareWin(env, '[' + g.tag + '] ' + g.name, 'pop', t);
-  }
+    if (hk) await worldSay(env, '👑 ' + hn + ' ต้องรักษาไว้ ' + holdNeed(S.day) + ' วัน', t);
+  } else if (hk && t - S.holdSince >= holdNeed(S.day) * 86400000 / SPEED) return await declareWin(env, hn, 'hold', t);
 }
 async function seasonInfo(env){
   const t = Date.now(), S = await seasonState(env);
@@ -2978,6 +2980,62 @@ async function seasonInfo(env){
     return { x:r.x, y:r.y, name:r.name, cap:!!d.cap, owner:npc ? null : r.pn, tag:r.tag || null,
       loy:Math.round(loyNow(d, t)), wall:d.wallLv | 0, garrison:npc ? tcount(d.troops) : null };
   });
-  return json(Object.assign({ ok:true, len:SEASON_DAYS, fortDay:FORT_DAY, capDay:CAP_DAY, hold:HOLD_DAYS,
+  return json(Object.assign({ ok:true, len:SEASON_DAYS, fortDay:FORT_DAY, capDay:CAP_DAY, hold:holdNeed(S.day), over:S.day > SEASON_DAYS,
     needForts:CAP_NEED_FORTS, fortCp:FORT_CP, forts }, S), 200, env);
+}
+
+/* =====================================================================
+   B5.5 : ช่วงต่อเวลาฤดูกาล · เช็คอินรายวัน 30 วัน
+   ===================================================================== */
+/* หลังวันที่ 45 ลดวันครองลง 1 วันทุก 5 วัน ต่ำสุด 2 วัน */
+function holdNeed(day){
+  if (day <= SEASON_DAYS) return HOLD_DAYS;
+  return Math.max(2, HOLD_DAYS - Math.ceil((day - SEASON_DAYS) / 5));
+}
+
+/* item = ระดับอุปกรณ์ (2 ดี · 3 หายาก · 4 ตำนาน) · builder = ช่างคนที่ 3 24 ชม. · sched = แผนการรบ (วัน) */
+const CHECKIN = [null,
+  { res:300 }, { res:400 }, { exp:50 }, { res:500 }, { pot:1 }, { res:600 }, { gold:5 }, { res:800 }, { exp:100 }, { builder:1 },
+  { res:1000 }, { exp:150 }, { res:1200 }, { gold:10 }, { item:2 }, { res:1500 }, { exp:300 }, { res:1800 }, { pot:1 }, { item:3 },
+  { gold:15 }, { res:2000 }, { exp:400 }, { res:2500 }, { item:3 }, { res:3000 }, { sched:3 }, { gold:20 }, { exp:500 }, { item:4, gold:30 }
+];
+function thDay(t){ return Math.floor((t + 7 * 3600000) / 86400000); }
+
+function checkin(ctx, b){
+  const t = ctx.t, P = ctx.P, today = thDay(t), last = P.ck_day | 0, n = P.ck_n | 0;
+  if (last === today) throw ue('เช็คอินวันนี้แล้ว กลับมาใหม่หลังเที่ยงคืน');
+  const day = (last === today - 1 && n < 30) ? n + 1 : 1, R = CHECKIN[day];
+  const V = ctx.VS.find(x => x.row.id === (b.vid | 0) && !x.d.fort) || ctx.VS.find(x => !x.d.fort);
+  if (!V) throw ue('ไม่พบเมือง');
+  const d = V.d, h = (d.hero && d.hero.v === 4) ? d.hero : null, out = { day };
+
+  if (R.res){
+    const c = caps(d);
+    for (const r of RES) d.res[r] = Math.min(r === 'wheat' ? c.gran : c.store, d.res[r] + R.res);
+  }
+  if (R.exp && h) gainExp(h, R.exp);
+  if (R.pot && h) h.pot = (h.pot | 0) + R.pot;
+  if (R.item && h){
+    const it = { id:h.iid++, k:SLOTS[rnd(SLOTS.length)] + '_' + R.item };
+    if (h.bag.length < bagMax(d)) h.bag.push(it); else (h.box || (h.box = [])).push(it);
+    out.item = it.k;
+  }
+  ctx.pset += ', ck_day=?, ck_n=?'; ctx.pbind.push(today, day);
+  if (R.gold){
+    ctx.pset += ', gold=gold+?'; ctx.pbind.push(R.gold); P.gold += R.gold;
+    ctx.ins.push({ t:'ledger', guard:V, cols:'uid,delta,reason,note,at', vals:[P.uid, R.gold, 'checkin', 'วันที่ ' + day, t] });
+  }
+  if (R.builder){
+    const u = Math.max(t, P.builder_until || 0) + 86400000;
+    ctx.pset += ', builders=3, builder_until=?'; ctx.pbind.push(u);
+    P.builders = 3; P.builder_until = u;
+    for (const W of ctx.VS){ fill(W.d, t, P); W.dirty = true; }
+  }
+  if (R.sched){
+    const u = Math.max(t, P.sched_until || 0) + R.sched * 86400000;
+    ctx.pset += ', sched_until=?'; ctx.pbind.push(u); P.sched_until = u;
+  }
+  P.ck_day = today; P.ck_n = day;
+  V.dirty = true;
+  return out;
 }
