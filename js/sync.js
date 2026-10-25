@@ -48,6 +48,7 @@ var Sync = (function(){
       Api.get('/rules', null, false).then(function(rr){
         if (rr && rr.ok){ S.features = rr.features || {}; if (typeof War !== 'undefined') War.setRules(rr); }
         if (rr && rr.ok && typeof Hero2 !== 'undefined') Hero2.setRules(rr);
+        if (rr && rr.ok && typeof Checkin !== 'undefined') Checkin.setRules(rr);
         return Api.post('/me', {});
       }).then(function(r){
         if (r.err === 'auth') return cb('nologin');

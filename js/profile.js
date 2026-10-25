@@ -58,6 +58,7 @@ var Profile = (function(){
       [['day', '☀️ กลางวัน'], ['night', '🌙 กลางคืน'], ['auto', '🔄 อัตโนมัติ']].map(function(t){
         return '<button class="pf-th' + (th === t[0] ? ' on' : '') + '" data-th="' + t[0] + '">' + t[1] + '</button>';
       }).join('') + '</div><div class="pf-list">' +
+      (online() ? '<button class="pf-li" id="pfCk"><span>📅</span>เช็คอินรายวัน' + (typeof Checkin !== 'undefined' && Checkin.pending() ? ' <b class="ckred">●</b>' : '') + '<em>›</em></button>' : '') +
       '<button class="pf-li" id="pfSea"><span>👑</span>ศึกชิงเมืองหลวงโลก<em>›</em></button>' +
       '<button class="pf-li" id="pfRn"><span>✎</span>เปลี่ยนชื่อผู้เล่น<em>›</em></button>' +
       '<button class="pf-li" id="pfSet"><span>⚙</span>ตั้งค่าและบัญชี<em>›</em></button>' +
@@ -67,6 +68,7 @@ var Profile = (function(){
     Q.forEach(function(q){ document.getElementById(q[0]).onclick = q[3]; });
     document.querySelectorAll('[data-th]').forEach(function(b){ b.onclick = function(){ setTheme(b.dataset.th); }; });
     document.getElementById('pfRn').onclick = function(){ if (typeof Social !== 'undefined') Social.renamePlayer(); };
+    var ckb = document.getElementById('pfCk'); if (ckb) ckb.onclick = function(){ Checkin.open(); };
     document.getElementById('pfSea').onclick = function(){
     if (typeof Season !== 'undefined' && online()) Season.open(); else if (typeof Conquest !== 'undefined') Conquest.openEndgame();};
     document.getElementById('pfSet').onclick = function(){ Settings.openSettings(); };

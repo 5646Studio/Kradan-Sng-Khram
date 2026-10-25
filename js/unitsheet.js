@@ -1,5 +1,7 @@
-/* ============ Sheets v14g — แผ่นภาพรวมทุกหมวด · ตัดอัตโนมัติ · ลบพื้นขาว ============
-   ลำดับการใช้ภาพ: ไฟล์แยก > แผ่นรวม > ภาพที่โค้ดวาดเอง */
+/* ============ Sheets v14L — แผ่นภาพรวมทุกหมวด · ใช้ได้ทั้งแผ่นรวมและไฟล์แยก ============
+   ลำดับการใช้ภาพ: ไฟล์แยก > แผ่นรวม > ภาพที่โค้ดวาดเอง
+   mode: fit = ลบพื้นขาว ตัดขอบ จัดกลาง · tile = ไม่ลบพื้น ย่อเป็นสี่เหลี่ยม
+         raw = ลบพื้นขาวจากขอบ ไม่ตัดขอบ (ชั้นซ้อนต้องตรงตำแหน่ง) · rawall = ลบสีขาวทั้งภาพ · photo = ภาพเต็ม (JPEG) */
 var Sheets = (function(){
   var got = {}, LIST = [], EXT = ['png', 'webp', 'jpg'];
   var TRIBE = ['sukhothai', 'lanna', 'khmer', 'srivijaya'];
@@ -18,14 +20,15 @@ var Sheets = (function(){
     ['attack','defense','army','cavalry','scout','u_elite','u_elephant','u_ram','train','target','distance','speed',
      'loot','dead','away','protect','loyalty','ally','fort','crown'],
     ['hero','heal','exp','amulet','boots','gloves','star','star2','d_bat','d_naga','oasis','stats','merchant','hammer',
-     null,null,null,null,null,null],
+     'profile','party','night','day','calendar',null],
     ['b_main','b_warehouse','b_granary','b_market','b_embassy','b_armoury','b_tower','b_cranny','b_townhall','b_temple',
      'b_trainground','b_greatstable','b_greatwarehouse','b_mill','b_royalmill','b_sawmill','b_brickyard','b_foundry',null,null]
   ];
   function grid(c, r, fn){ var a = []; for (var y = 0; y < r; y++) for (var x = 0; x < c; x++) a.push(fn(x, y)); return a; }
   function add(dir, file, cols, rows, names, o){
     o = o || {};
-    LIST.push({ dir:dir, file:file, cols:cols, rows:rows, names:names, size:o.size || 256, keep:!!o.keep, kind:o.kind || 'asset' });
+    LIST.push({ dir:dir, file:file, cols:cols, rows:rows, names:names, size:o.size || 256,
+      mode:o.mode || 'fit', ow:o.ow || 0, oh:o.oh || 0, kind:o.kind || 'asset' });
   }
 
   add('units/', 'units_sheet', 5, 4, U20.map(function(n){ return 'u_' + n; }), { size:128, kind:'unit' });
@@ -36,13 +39,19 @@ var Sheets = (function(){
     add('buildings/', 'buildings_sheet_' + (s + 1), 5, 4,
       grid(5, 4, function(c, r){ var b = BLD[s * 5 + c]; return b ? 'bd_' + b + '_' + (r + 1) : null; }));
   })(s);
+  add('buildings/', 'walls_sheet', 4, 1, ['bd_wall_1','bd_wall_2','bd_wall_3','bd_wall_4'], { mode:'rawall', ow:768, oh:768 });
   add('fields/', 'fields_sheet', 5, 4, grid(5, 4, function(c, r){ return 'fd_' + ['wheat','wood','iron','clay'][r] + '_' + c; }));
   add('items/', 'items_sheet', 5, 7, grid(5, 7, function(c, r){ return 'it_' + SLOT[r] + '_' + (c + 1); }), { size:128, kind:'item' });
-  add('map/', 'terrain_sheet', 3, 9, grid(3, 9, function(c, r){ return 'tr_' + BIO[r] + '_' + c; }), { keep:true });
+  add('map/', 'terrain_sheet', 3, 9, grid(3, 9, function(c, r){ return 'tr_' + BIO[r] + '_' + c; }), { mode:'tile' });
   add('map/', 'markers_sheet', 6, 3, ['oa_wheat','oa_wood','oa_iron','oa_clay','oa_double','vl_own',
     'vl_capital','vl_ally','vl_enemy','vl_neutral','vl_npc','ov_tree_small',
     'ov_tree_cluster','ov_rock_small','ov_peak','ov_clay_pit','ov_wheat_patch','ov_reed']);
   add('scenes/', 'hub_sheet', 5, 1, ['hub_0','hub_1','hub_2','hub_3','hub_4'], { kind:'hub' });
+  add('scenes/', 'scenes_sheet', 3, 2, ['sc_city_grass','sc_city_lowland','sc_city_forest',
+    'sc_field_grass','sc_field_lowland','sc_field_forest'], { mode:'photo' });
+  add('hero/', 'hero_body_sheet', 2, 1, ['body_0','body_1'], { mode:'raw', ow:400, oh:600, kind:'hero' });
+  add('hero/', 'hero_gear_sheet', 5, 7, grid(5, 7, function(c, r){ return 'gear_' + SLOT[r] + '_' + (c + 1); }),
+    { mode:'raw', ow:400, oh:600, kind:'hero' });
   UIS.forEach(function(a, i){
     add('ui/', 'ui_sheet_' + (i + 1), 5, 4, a.map(function(n){ return n ? 'ui_' + n : null; }), { size:128, kind:'ui' });
   });
@@ -52,39 +61,57 @@ var Sheets = (function(){
     var mn = Math.min(d[i], d[i + 1], d[i + 2]), mx = Math.max(d[i], d[i + 1], d[i + 2]);
     return mn >= 222 && mx - mn <= 28;
   }
-  function cut(img, cx, cy, cw, ch, S, keep){
+  function flood(d, w, h){
+    var gone = new Uint8Array(w * h), st = [];
+    function push(p){ if (!gone[p] && isBg(d, p * 4)){ gone[p] = 1; st.push(p); } }
+    for (var i = 0; i < w; i++){ push(i); push((h - 1) * w + i); }
+    for (var j = 0; j < h; j++){ push(j * w); push(j * w + w - 1); }
+    while (st.length){
+      var p = st.pop(), px = p % w, py = (p - px) / w;
+      d[p * 4 + 3] = 0;
+      if (px > 0) push(p - 1); if (px < w - 1) push(p + 1);
+      if (py > 0) push(p - w); if (py < h - 1) push(p + w);
+    }
+    return gone;
+  }
+  function whiteAll(d, w, h){
+    var gone = new Uint8Array(w * h);
+    for (var p = 0; p < w * h; p++) if (isBg(d, p * 4)){ gone[p] = 1; d[p * 4 + 3] = 0; }
+    return gone;
+  }
+  function soften(d, gone, w, h){
+    for (var q = 0; q < w * h; q++){
+      if (gone[q]) continue;
+      var qx = q % w, near = (qx > 0 && gone[q - 1]) || (qx < w - 1 && gone[q + 1]) ||
+        (q >= w && gone[q - w]) || (q < w * (h - 1) && gone[q + w]);
+      if (near && Math.min(d[q * 4], d[q * 4 + 1], d[q * 4 + 2]) > 200) d[q * 4 + 3] = 110;
+    }
+  }
+  function out(c, w, h, type){
+    var o = document.createElement('canvas'); o.width = w; o.height = h;
+    var ox = o.getContext('2d');
+    ox.imageSmoothingQuality = 'high';
+    ox.drawImage(c, 0, 0, c.width, c.height, 0, 0, w, h);
+    try { return o.toDataURL(type, 0.88); } catch(e){ return null; }
+  }
+  function cut(img, cx, cy, cw, ch, sh){
     var c = document.createElement('canvas'); c.width = cw; c.height = ch;
     var x = c.getContext('2d');
     x.drawImage(img, cx, cy, cw, ch, 0, 0, cw, ch);
-    if (keep){
-      var k = document.createElement('canvas'); k.width = k.height = S;
-      k.getContext('2d').drawImage(c, 0, 0, cw, ch, 0, 0, S, S);
-      try { return k.toDataURL('image/png'); } catch(e){ return null; }
-    }
-    var id = x.getImageData(0, 0, cw, ch), d = id.data, gone = new Uint8Array(cw * ch), st = [];
-    function push(p){ if (!gone[p] && isBg(d, p * 4)){ gone[p] = 1; st.push(p); } }
-    for (var i = 0; i < cw; i++){ push(i); push((ch - 1) * cw + i); }
-    for (var j = 0; j < ch; j++){ push(j * cw); push(j * cw + cw - 1); }
-    while (st.length){
-      var p = st.pop(), px = p % cw, py = (p - px) / cw;
-      d[p * 4 + 3] = 0;
-      if (px > 0) push(p - 1); if (px < cw - 1) push(p + 1);
-      if (py > 0) push(p - cw); if (py < ch - 1) push(p + cw);
-    }
-    for (var q = 0; q < cw * ch; q++){
-      if (gone[q]) continue;
-      var qx = q % cw, near = (qx > 0 && gone[q - 1]) || (qx < cw - 1 && gone[q + 1]) ||
-        (q >= cw && gone[q - cw]) || (q < cw * (ch - 1) && gone[q + cw]);
-      if (near && Math.min(d[q * 4], d[q * 4 + 1], d[q * 4 + 2]) > 200) d[q * 4 + 3] = 110;
-    }
+    if (sh.mode === 'tile') return out(c, sh.size, sh.size, 'image/png');
+    if (sh.mode === 'photo'){ var k = Math.min(1, 1080 / cw); return out(c, Math.round(cw * k), Math.round(ch * k), 'image/jpeg'); }
+    var id = x.getImageData(0, 0, cw, ch), d = id.data;
+    var gone = sh.mode === 'rawall' ? whiteAll(d, cw, ch) : flood(d, cw, ch);
+    soften(d, gone, cw, ch);
+    x.putImageData(id, 0, 0);
+    if (sh.mode !== 'fit') return out(c, sh.ow || cw, sh.oh || ch, 'image/png');
     var x0 = cw, y0 = ch, x1 = -1, y1 = -1;
     for (var yy = 0; yy < ch; yy++) for (var xx = 0; xx < cw; xx++)
       if (d[(yy * cw + xx) * 4 + 3] > 30){
         if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy;
       }
     if (x1 < 0) return null;
-    x.putImageData(id, 0, 0);
-    var w = x1 - x0 + 1, h = y1 - y0 + 1, sc = Math.min((S - 6) / w, (S - 6) / h);
+    var S = sh.size, w = x1 - x0 + 1, h = y1 - y0 + 1, sc = Math.min((S - 6) / w, (S - 6) / h);
     var o = document.createElement('canvas'); o.width = o.height = S;
     var ox = o.getContext('2d');
     ox.imageSmoothingQuality = 'high';
@@ -95,7 +122,7 @@ var Sheets = (function(){
     var cw = Math.floor(img.naturalWidth / sh.cols), ch = Math.floor(img.naturalHeight / sh.rows);
     sh.names.forEach(function(key, i){
       if (!key) return;
-      var src = cut(img, (i % sh.cols) * cw, Math.floor(i / sh.cols) * ch, cw, ch, sh.size, sh.keep);
+      var src = cut(img, (i % sh.cols) * cw, Math.floor(i / sh.cols) * ch, cw, ch, sh);
       if (!src) return;
       got[key] = src;
       if (sh.kind === 'asset' && typeof Assets !== 'undefined' && Assets.provide) Assets.provide(key, src);
@@ -109,7 +136,7 @@ var Sheets = (function(){
       Icons.provide('cavalry', got[p + 'cav_l']);
     }
     if (sh.kind === 'hub') try { FieldView.render(); } catch(e){}
-    if (sh.kind === 'item') try { Hero2.repaint(); } catch(e){}
+    if (sh.kind === 'item' || sh.kind === 'hero') try { Hero2.repaint(); } catch(e){}
   }
   function load(sh){
     var i = 0;

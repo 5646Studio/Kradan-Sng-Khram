@@ -23,8 +23,8 @@ var HeroArt = (function(){
     im.onload = function(){ if (im.naturalWidth){ img[k] = im.src; if (typeof Hero2 !== 'undefined') Hero2.repaint(); } };
     im.src = CFG.ASSET_PATH + 'hero/' + k.split('_')[0] + '/' + k + '.png';
   }
-  function lay(k){ ld(k); return img[k] ? '<image href="' + img[k] + '" x="0" y="0" width="200" height="300" preserveAspectRatio="none"/>' : null; }
-
+  function lay(k){ var shx = (typeof Sheets !== 'undefined') ? Sheets.get(k) : null; if (shx && !img[k]) img[k] = shx; ld(k);
+  return img[k] ? '<image href="' + img[k] + '" x="0" y="0" width="200" height="300" preserveAspectRatio="none"/>' : null; }
   function body(s, fem){
     var cl = fem ? '#8a3a5a' : '#7a3b2a', top = fem ? '#b5652f' : s;
     return '<rect x="82" y="196" width="15" height="78" rx="6" fill="' + s + '"/><rect x="103" y="196" width="15" height="78" rx="6" fill="' + s + '"/>' +
@@ -239,7 +239,8 @@ var Hero2 = (function(){
     o += '<div class="row"><span>สถานะ</span><b>' + st + '</b></div>';
     if (!h.dead && !h.dung && !h.army && h.hp < 100)
       o += '<button class="' + (h.hp < 30 ? 'btn-rush' : 'btn-use2') + '" data-pot="1">🧪 ยาฟื้นพลัง — เติมเต็ม 💰' +
-        Math.max(2, Math.ceil((100 - h.hp) / 10)) + '</button>';
+        (h.pot ? '0 · ใช้ยาในคลัง (มี ' + h.pot + ')' : Math.max(2, Math.ceil((100 - h.hp) / 10)))
+ + '</button>';
  
     if (h.dead){
       if (!h.healAt) o += '<div class="hdeadbox">ค่ารักษา ' + RES.map(function(r){ return RES_IC[r] + UI.fmt(h.healCost); }).join(' ') +
@@ -275,7 +276,7 @@ var Hero2 = (function(){
       o += '<div data-it="' + x.id + '" style="border-color:' + TC[it.tier || 0] + '" class="' +
         (h.lv < (it.req || 0) ? 'lk' : '') + '">' + itIcon(x.k) + '</div>';
     }
-    return o + '</div><p class="stnone" style="padding:4px">ได้อุปกรณ์จากการสำรวจ 🕳️ ดันเจี้ยน · ' +
+  return o + '</div>' + (h.box ? '<div class="infobox">📦 อุปกรณ์รอเข้ากระเป๋า ' + h.box + ' ชิ้น — จะเข้าเองเมื่อมีช่องว่าง</div>' : '') + '<p class="stnone" style="padding:4px">ได้อุปกรณ์จากการสำรวจ 🕳️ ดันเจี้ยน · ' +
       'อัปเกรดจวนวีรบุรุษเพื่อขยายกระเป๋า</p>';
   }
   function itemModal(iid, eqSlot){
@@ -336,7 +337,8 @@ var Hero2 = (function(){
           : '<button class="btn-ok mini2" data-dg="' + D.i + '"' + (busy ? ' disabled' : '') + '>🕳️ ส่งไปสำรวจ</button>') + '</div>';
     });
     if (!h.dead && !h.dung && !h.army && h.hp < 30) o += '<p class="stnone">พลังชีวิตต่ำกว่า 30% รอพักฟื้น หรือใช้ยา</p>' +
-      '<button class="btn-rush" data-pot="1">🧪 ยาฟื้นพลัง 💰' + Math.max(2, Math.ceil((100 - h.hp) / 10)) + '</button>';
+      '<button class="btn-rush" data-pot="1">🧪 ยาฟื้นพลัง 💰' + (h.pot ? '0 · ใช้ยาในคลัง (มี ' + h.pot + ')' : Math.max(2, Math.ceil((100 - h.hp) / 10)))
+ + '</button>';
     return o;
   }
 

@@ -14,7 +14,7 @@ var Season = (function(){
   function line(){
     if (!S) return '';
     var e = Math.max(0, sNow() - S.start), d = Math.floor(e / D), h = Math.floor(e % D / 3600000);
-    return '<i class="pf-day">📅 เปิดมาแล้ว ' + d + ' วัน ' + h + ' ชม. · วันที่ ' + S.day + '/' + S.len + '</i>';
+    return '<i class="pf-day">📅 เปิดมาแล้ว ' + d + ' วัน ' + h + ' ชม. · วันที่ ' + S.day + (S.over ? ' · ⏳ ต่อเวลา' : '/' + S.len) + '</i>';
   }
   function card(f){
     return '<div class="stcard"><div class="vh"><b>' + (f.cap ? '👑 ' : '🏰 ') + esc(f.name) + '</b><span>(' + f.x + '|' + f.y + ')</span></div>' +
@@ -27,9 +27,9 @@ var Season = (function(){
     var n = sNow(), pct = Math.min(100, S.day / S.len * 100), h = '<h3>👑 ศึกชิงเมืองหลวงโลก</h3>';
     function mk(day, ic){ return '<span class="sea-m" style="left:' + (day / S.len * 100) + '%">' + ic + '</span>'; }
     h += '<div class="sea-bar"><i style="width:' + pct + '%"></i>' + mk(S.fortDay, '🏰') + mk(S.capDay, '👑') + mk(S.len, '🏁') + '</div>' +
-      '<div class="sea-sub"><span>วันที่ ' + S.day + ' / ' + S.len + '</span><span>🏰 วันที่ ' + S.fortDay + ' · 👑 วันที่ ' + S.capDay + '</span></div>';
+      '<div class="sea-sub"><span>วันที่ ' + S.day + (S.over ? ' · ⏳ ต่อเวลา (ต้องครอง ' + S.hold + ' วัน)' : ' / ' + S.len) + '</span><span>🏰 วันที่ ' + S.fortDay + ' · 👑 วันที่ ' + S.capDay + '</span></div>';
     if (S.winner) h += '<div class="sea-win">🏆 ผู้ชนะเซิร์ฟเวอร์<br><b>' + esc(S.winner.name) + '</b><br><i>' +
-      (S.winner.how === 'hold' ? 'ครองเมืองหลวงโลกครบ ' + S.hold + ' วัน' : S.winner.how === 'end' ? 'ครองเมืองหลวงเมื่อจบฤดูกาล'
+      (S.winner.how === 'hold' ? 'ครองเมืองหลวงโลกครบ ' + S.hold + ' วัน' : S.winner.how === 'admin' ? 'ประกาศโดยทีมงาน'
         : 'ประชากรสูงสุดเมื่อจบฤดูกาล') + '</i></div>';
     else if (S.day < S.fortDay) h += '<div class="dgrun">🏰 ป้อมทั้ง 8 แห่งจะปรากฏในอีก ' + UI.dur((at(S.fortDay) - n) / 1000) + '</div>';
     else if (S.day < S.capDay) h += '<div class="dgrun">👑 เมืองหลวงโลกจะปรากฏในอีก ' + UI.dur((at(S.capDay) - n) / 1000) + '</div>';
@@ -42,7 +42,7 @@ var Season = (function(){
     h += '<div class="infobox" style="line-height:1.7">• วันที่ ' + S.fortDay + ' ป้อม 8 แห่งปรากฏ ยึดด้วยขุนพล (ต้องอยู่ในกิลด์ ไม่ใช้ CP)<br>' +
       '• ป้อมให้ +' + S.fortCp + ' CP/วัน · สร้างหรือฝึกทหารในป้อมไม่ได้ ให้ส่งกำลังหนุนไปประจำการ<br>' +
       '• วันที่ ' + S.capDay + ' เมืองหลวงโลก (0|0) ปรากฏ กิลด์ต้องมีป้อม ' + S.needForts + ' แห่งขึ้นไปจึงจะยึดได้<br>' +
-      '• ครองเมืองหลวงครบ ' + S.hold + ' วันติดต่อกันชนะเซิร์ฟเวอร์ · ครบ ' + S.len + ' วันแล้วยังไม่มีใคร ผู้ครองขณะนั้นหรือกิลด์ประชากรสูงสุดชนะ</div>' +
+      '• ครองเมืองหลวงครบ 5 วันติดต่อกันชนะเซิร์ฟเวอร์<br>• หลังวันที่ ' + S.len + ' เกมยังไม่จบจนกว่าจะมีผู้ครองครบ แต่วันที่ต้องครองจะลดลง 1 วันทุก 5 วัน (ต่ำสุด 2 วัน) · ตอนนี้ต้องครอง <b>' + S.hold + '</b> วัน</div>' +
       '<button class="btn-cancel" onclick="UI.close()">ปิด</button>';
     UI.modal(h);
     document.querySelectorAll('[data-fs]').forEach(function(b){
