@@ -115,6 +115,7 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
       <input id="seday" type="number" placeholder="ตั้งให้วันนี้เป็นวันที่ เช่น 1 หรือ 20">
       <button class="btn b2" id="seSet">📅 ตั้งวันเซิร์ฟเวอร์</button>
       <button class="btn b2" id="seTick">▶ ประมวลผลฤดูกาลตอนนี้</button>
+      <input id="sewin" placeholder="ชื่อผู้ชนะ เช่น [SUK] สุโขทัยรวมใจ"><button class="btn b2" id="seWin">🏆 ประกาศผู้ชนะ (ฉุกเฉิน)</button>
       <button class="btn red" id="seReset">↺ ล้างผู้ชนะ / ผู้ครองเมืองหลวง</button>
       <div id="semsg"></div></div>
     <button class="btn b3" id="refresh">🔄 โหลดข้อมูลใหม่</button>
@@ -360,6 +361,12 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
   };
   $('seTick').onclick = function(){ seAct({ action:'tick' }); };
   $('seReset').onclick = function(){ if (confirm('ล้างผู้ชนะและผู้ครองเมืองหลวง?')) seAct({ action:'reset' }); };
+  $('seWin').onclick = function(){
+    var n = $('sewin').value.trim();
+    if (!n) return note('semsg', 'ใส่ชื่อผู้ชนะ');
+    if (confirm('ประกาศให้ ' + n + ' ชนะเซิร์ฟเวอร์?')) seAct({ action:'win', name:n });
+  };
+
   function paintLedger(r){
     var L = (r && r.list) || [];
     $('llist').innerHTML = L.length ? L.map(function(g){
