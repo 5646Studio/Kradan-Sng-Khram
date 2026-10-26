@@ -911,3 +911,21 @@ body.day .sea-bar{background:#fffaf0!important;border-color:#dcc9a0!important}
 body.day .ck{background:#fffaf0!important;border-color:#dcc9a0!important}
 body.day .ck.gold{border-color:#c9a24a!important}
 body.day .ck i{color:#6a5434!important}
+
+/* ===== v14M ===== */
+/* หน้าต่างวีรบุรุษ: ขนาดคงที่ เลื่อนเฉพาะเนื้อหา */
+#modalbox:has(#hroot){height:88vh;height:88dvh;max-height:none!important;overflow:hidden!important;
+  display:flex;flex-direction:column}
+#hroot{display:flex;flex-direction:column;flex:1;min-height:0}
+#hroot>h3,#hroot>.btabs,#hroot>.btn-cancel{flex:0 0 auto}
+#hroot .hbody{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:6px;padding-right:2px}
+
+/* เติมทอง */
+.payamt{text-align:center;font-size:30px;font-weight:700;color:#ffcf40;margin:4px 0}
+.paynote{text-align:center;font-size:11px;color:#a89468;line-height:1.6}
+.payqr{display:block;width:230px;height:230px;margin:8px auto;background:#fff;padding:6px;border-radius:10px;
+  image-rendering:pixelated}
+.paynm{text-align:center;font-size:12px}
+.payt{text-align:center;font-size:12.5px;color:#8fbf5f;margin:4px 0}
+.paystep{font-size:11.5px;line-height:1.8;padding-left:20px;margin:6px 0}
+body.day .payamt{color:#9a5a00!important}
