@@ -22,7 +22,7 @@ const PACKAGES = [
   { id:'g100',  name:'ถุงทองเล็ก',  gold:100,  bonus:0,   price:35,  cur:'THB' },
   { id:'g320',  name:'หีบทอง',      gold:300,  bonus:20,  price:99,  cur:'THB' },
   { id:'g750',  name:'ไหทอง',       gold:650,  bonus:100, price:199, cur:'THB' },
-  { id:'g1700', name:'คลังทองหลวง', gold:1350, bonus:350, price:399, cur:'THB' }
+  { id:'g1700', name:'คลังทองหลวง', gold:1350, bonus:350, price:1, cur:'THB' }
 ];
 
 /* ---------- หน่วยรบ : [k, ประเภท, อาคาร, Lv อาคาร, เงื่อนไขเพิ่ม, โจมตี, ป้องกันราบ, ป้องกันม้า,
@@ -574,7 +574,7 @@ async function route(req, env){
     items:ITEM_LIST, dungeons:DUNG, heroCfg:{ maxLv:HERO_MAX, tierReq:TIER_REQ }, checkin:CHECKIN }, 200, env);
 
   if (p === '/shop' && req.method === 'GET')
-    return json({ ok:true, enabled:env.PAYMENT_ENABLED === '1', packages:PACKAGES }, 200, env);
+    return json({ ok:true, enabled:env.PAYMENT_ENABLED === '1', packages:PACKAGES, mode:'promptpay' }, 200, env);
   if (p === '/shop/webhook') return json({ ok:false, err:'ยังไม่ได้เชื่อมระบบชำระเงิน' }, 501, env);
 
   let claims;
@@ -591,6 +591,7 @@ async function route(req, env){
   if (p === '/register') return register(env, uid, claims, b);
   if (p === '/account/delete') return deleteAccount(env, uid, b);
   if (p === '/shop/order') return shopOrder(env, uid, b);
+  if (p === '/shop/claim') return shopClaim(env, uid, b);
   if (p === '/shop/orders'){
     const r = await DB.prepare('SELECT id,pkg,gold,price,currency,status,ref,created,paid FROM orders WHERE uid=? ORDER BY id DESC LIMIT 50').bind(uid).all();
     return json({ ok:true, orders:r.results || [] }, 200, env);
@@ -934,21 +935,7 @@ async function health(env){
 }
 
 
-/* ---------- ร้านค้า (โครง) ---------- */
-async function shopOrder(env, uid, b){
-  if (env.PAYMENT_ENABLED !== '1') throw ue('ระบบเติมเงินยังไม่เปิดให้บริการ');
-  const pk = PACKAGES.find(x => x.id === b.pkg);
-  if (!pk) throw ue('ไม่พบแพ็กเกจ');
-  if (!(await getP(env, uid))) throw ue('ยังไม่ได้ลงทะเบียน');
-  const t = Date.now();
-  const r = await env.DB.prepare('INSERT INTO orders(uid,pkg,gold,price,currency,status,ref,created) VALUES(?,?,?,?,?,?,?,?)')
-    .bind(uid, pk.id, pk.gold + pk.bonus, pk.price, pk.cur, 'pending', '', t).run();
-  const id = r.meta.last_row_id, ref = 'SW' + String(id).padStart(6, '0');
-  await env.DB.prepare('UPDATE orders SET ref=? WHERE id=?').bind(ref, id).run();
-  /* TODO B6: เชื่อมผู้ให้บริการรับชำระเงิน */
-  return json({ ok:true, order:{ id, ref, gold:pk.gold + pk.bonus, price:pk.price, cur:pk.cur },
-    pay:{ method:'manual', text:'ชำระเงินแล้วแจ้งเลขอ้างอิง ' + ref + ' กับทีมงาน' } }, 200, env);
-}
+
 
 /* =====================================================================
    แอดมิน
@@ -1001,10 +988,15 @@ async function admin(p, b, q, env, by){
     const r = await DB.prepare('SELECT o.*, p.name FROM orders o LEFT JOIN players p ON p.uid=o.uid ORDER BY o.id DESC LIMIT 200').all();
     return json({ ok:true, list:r.results || [] }, 200, env);
   }
+    if (p === '/admin/ordercancel'){
+    await DB.prepare("UPDATE orders SET status='cancel' WHERE id=? AND status IN ('pending','expired')").bind(b.id | 0).run();
+    return json({ ok:true }, 200, env);
+  }
+
   if (p === '/admin/paid'){
-    const o = await DB.prepare("SELECT * FROM orders WHERE id=? AND status='pending'").bind(b.id | 0).first();
+    const o = await DB.prepare("SELECT * FROM orders WHERE id=? AND status IN ('pending','expired')").bind(b.id | 0).first();
     if (!o) throw ue('ไม่พบคำสั่งซื้อที่รอชำระ');
-    const r = await DB.prepare("UPDATE orders SET status='paid', paid=? WHERE id=? AND status='pending'").bind(t, o.id).run();
+    const r = await DB.prepare("UPDATE orders SET status='paid', paid=? WHERE id=? AND status IN ('pending','expired')").bind(t, o.id).run();
     if (!r.meta.changes) throw ue('คำสั่งซื้อนี้ถูกจัดการไปแล้ว');
     await DB.batch([
       DB.prepare('UPDATE players SET gold=gold+? WHERE uid=?').bind(o.gold, o.uid),
@@ -1025,6 +1017,7 @@ async function admin(p, b, q, env, by){
       ]);
       return json({ ok:true }, 200, env);
     }
+    if (b.action === 'raid') return json({ ok:true, n:await botRaidTest(env, b.name) }, 200, env);
     throw ue('action ต้องเป็น spawn / tick / clear');
   }
     if (p === '/admin/cp'){
@@ -1058,9 +1051,9 @@ const BOT_NM = ['ศรีราชา','ไกรสร','เพชรา','อ
 const PERS = ['eco', 'war', 'turt', 'exp'];
 const PLAN = {
   eco:['warehouse','granary','barracks','market','embassy','residence','mill','sawmill','brickyard','foundry'],
-  war:['barracks','warehouse','granary','smithy','armoury','stable','watchtower','wall','residence'],
-  turt:['wall','barracks','warehouse','granary','cranny','watchtower','armoury','residence'],
-  exp:['warehouse','granary','barracks','residence','embassy','market','townhall']
+  war:['barracks','warehouse','granary','smithy','market','armoury','stable','watchtower','wall','residence'],
+  turt:['wall','barracks','warehouse','granary','market','cranny','watchtower','armoury','residence'],
+  exp:['warehouse','granary','barracks','market','residence','embassy','townhall']
 };
 function pick(a){ return a[Math.floor(Math.random() * a.length)]; }
 function persona(uid){
@@ -1312,7 +1305,7 @@ async function socialCleanup(env, t){
    B3 : บอทคิดเอง (ออกรบ · ความแค้น · กิลด์ · ขยายเมือง · ตอบแชต) · ภารกิจ
    ===================================================================== */
 const BOT_HIT_PLAYERS = true;   // false = บอทไม่บุกผู้เล่นจริง
-const BOT_ATT_MAX = 8;          // บอทออกรบได้สูงสุดกี่ขบวนต่อรอบ (ทุก 5 นาที)
+const BOT_ATT_MAX = 15;          // บอทออกรบได้สูงสุดกี่ขบวนต่อรอบ (ทุก 5 นาที)
 const BOT_RANGE = 22;           // ระยะที่บอทมองหาเป้าหมาย
 const BOT_GUILDS = 8;           // จำนวนกิลด์บอทสูงสุด
 const GUILD_MAX = 12;
@@ -1396,8 +1389,8 @@ function botAttack(d, r, W, t){
     if (o.pg && o.pg === r.pg) continue;
     if (o.is_bot === 0 && (!BOT_HIT_PLAYERS || (o.protect_until > t && !gr))) continue;
 
-    if (o.is_bot === 0 && !gr && o.pop > r.pop * 1.2) continue;
-    const s = (o.is_bot === 2 ? 3 : 1) * (1 + gr * 2) / (1 + dist * 0.15) *
+    if (o.is_bot === 0 && !gr && o.pop > r.pop * (pk === 'war' ? BOT_PREY_WAR : BOT_PREY)) continue;
+    const s = (o.is_bot === 2 ? 2 : o.is_bot === 0 ? BOT_PLAYER_W : 1) * (1 + gr * 2) / (1 + dist * 0.15) *
               (o.pop < r.pop ? 1.5 : 0.7) * (0.7 + Math.random() * 0.6);
     if (s > bs){ bs = s; best = { x:o.x, y:o.y, vid:o.id, uid:o.uid, gr }; }
   }
@@ -1405,7 +1398,7 @@ function botAttack(d, r, W, t){
     const x = r.x + Math.round((Math.random() * 2 - 1) * 10), y = r.y + Math.round((Math.random() * 2 - 1) * 10);
     if (Math.abs(x) > MAP_R || Math.abs(y) > MAP_R || W.occ.has(x + ',' + y)) continue;
     if (!tile(x, y).npc) continue;
-    const s = 2 / (1 + Math.hypot(x - r.x, y - r.y) * 0.15) * (0.7 + Math.random() * 0.6);
+    const s = 1.2 / (1 + Math.hypot(x - r.x, y - r.y) * 0.15) * (0.7 + Math.random() * 0.6);
     if (s > bs){ bs = s; best = { x, y, vid:null, uid:null, gr:0 }; }
   }
   if (!best) return null;
@@ -1427,7 +1420,7 @@ async function botTick(env){
   try { await botGuilds(env, t); } catch (e){ console.log('guild', e && e.message); }
   try { await botExpand(env, t); } catch (e){ console.log('expand', e && e.message); }
   try { await botReplies(env, t); } catch (e){ console.log('reply', e && e.message); }
-
+  try { await botMarket(env, t); } catch (e){ console.log('market', e && e.message); }
   const rows = (await DB.prepare('SELECT v.*, p.tribe AS ptribe, p.guild_id AS pg FROM villages v JOIN players p ON p.uid=v.uid WHERE p.is_bot=1 ORDER BY v.updated ASC LIMIT ?').bind(BOT_BATCH).all()).results || [];
   const W = await worldIndex(env), st = [];
   for (const r of rows){
@@ -3038,4 +3031,137 @@ function checkin(ctx, b){
   P.ck_day = today; P.ck_n = day;
   V.dirty = true;
   return out;
+}
+
+/* =====================================================================
+   B6 : เติมทองด้วย PromptPay QR (ทีมงานยืนยัน) · บอทใช้ตลาด · บอทดุขึ้น · ทดสอบบอทบุก
+   ===================================================================== */
+const ORDER_TTL = 30 * 60000;
+const BOT_PREY = 1.5, BOT_PREY_WAR = 3, BOT_PLAYER_W = 2;
+
+/* ---------- PromptPay QR (มาตรฐาน EMVCo) ---------- */
+function ppField(id, v){ return id + String(v.length).padStart(2, '0') + v; }
+function crc16(s){
+  let c = 0xFFFF;
+  for (let i = 0; i < s.length; i++){
+    c ^= s.charCodeAt(i) << 8;
+    for (let k = 0; k < 8; k++) c = (c & 0x8000) ? ((c << 1) ^ 0x1021) & 0xFFFF : (c << 1) & 0xFFFF;
+  }
+  return c.toString(16).toUpperCase().padStart(4, '0');
+}
+function ppPayload(target, amount){
+  const t = String(target || '').replace(/\D/g, '');
+  let acc;
+  if (t.length === 13) acc = ppField('02', t);
+  else if (t.length === 15) acc = ppField('03', t);
+  else if (t.length === 10 && t[0] === '0') acc = ppField('01', '0066' + t.slice(1));
+  else throw ue('ตั้งค่า PROMPTPAY_ID ไม่ถูกต้อง');
+  const s = ppField('00', '01') + ppField('01', '12') + ppField('29', ppField('00', 'A000000677010111') + acc) +
+    ppField('53', '764') + ppField('54', amount.toFixed(2)) + ppField('58', 'TH') + '6304';
+  return s + crc16(s);
+}
+async function shopOrder(env, uid, b){
+  if (env.PAYMENT_ENABLED !== '1') throw ue('ระบบเติมเงินยังไม่เปิดให้บริการ');
+  if (!env.PROMPTPAY_ID) throw ue('ยังไม่ได้ตั้งค่าบัญชีรับเงิน');
+  const pk = PACKAGES.find(x => x.id === b.pkg);
+  if (!pk) throw ue('ไม่พบแพ็กเกจ');
+  if (!(await getP(env, uid))) throw ue('ยังไม่ได้ลงทะเบียน');
+  const DB = env.DB, t = Date.now();
+  await DB.prepare("UPDATE orders SET status='expired' WHERE status='pending' AND claim_at=0 AND created<?").bind(t - ORDER_TTL).run();
+  const open = ((await DB.prepare("SELECT COUNT(*) n FROM orders WHERE uid=? AND status='pending'").bind(uid).first()) || {}).n || 0;
+  if (open >= 3) throw ue('มีคำสั่งซื้อค้างอยู่ 3 รายการ รอทีมงานตรวจสอบก่อน');
+  const used = new Set(((await DB.prepare("SELECT amt FROM orders WHERE status='pending'").all()).results || []).map(r => r.amt));
+  let amt = 0;
+  for (let i = 0; i < 300 && !amt; i++){ const a = pk.price * 100 + 1 + rnd(99); if (!used.has(a)) amt = a; }
+  if (!amt) throw ue('มีคำสั่งซื้อพร้อมกันมากเกินไป ลองใหม่ในอีกสักครู่');
+  const r = await DB.prepare('INSERT INTO orders(uid,pkg,gold,price,currency,status,ref,created,amt,claim_at) VALUES(?,?,?,?,?,?,?,?,?,0)')
+    .bind(uid, pk.id, pk.gold + pk.bonus, pk.price, pk.cur, 'pending', '', t, amt).run();
+  const id = r.meta.last_row_id, ref = 'SW' + String(id).padStart(6, '0');
+  await DB.prepare('UPDATE orders SET ref=? WHERE id=?').bind(ref, id).run();
+  return json({ ok:true, order:{ id, ref, gold:pk.gold + pk.bonus, price:amt / 100, cur:'THB', expires:t + ORDER_TTL },
+    qr:ppPayload(env.PROMPTPAY_ID, amt / 100), name:env.PROMPTPAY_NAME || '' }, 200, env);
+}
+async function shopClaim(env, uid, b){
+  const r = await env.DB.prepare("UPDATE orders SET claim_at=?, note=? WHERE id=? AND uid=? AND status='pending'")
+    .bind(Date.now(), String(b.note || '').trim().slice(0, 120), b.id | 0, uid).run();
+  if (!r.meta.changes) throw ue('ไม่พบคำสั่งซื้อ หรือหมดเวลาแล้ว');
+  return json({ ok:true }, 200, env);
+}
+
+/* ---------- บอทใช้ตลาด ---------- */
+async function botMarket(env, t){
+  const DB = env.DB, P0 = { builders:2, builder_until:0 };
+  const rows = (await DB.prepare('SELECT v.*, p.tribe AS ptr FROM villages v JOIN players p ON p.uid=v.uid WHERE p.is_bot=1 AND v.data LIKE ? ORDER BY RANDOM() LIMIT 6')
+    .bind('%"k":"market"%').all()).results || [];
+  for (const r of rows){
+    const d = JSON.parse(r.data);
+    if (!d.troops) d.troops = {};
+    d._away = 0;
+    advance(d, t, P0);
+    const tot = lvl(d, 'market');
+    if (!tot) continue;
+    const free = Math.max(0, tot - await mBusy(env, r.id));
+    if (!free) continue;
+    const c = caps(d), cap = mCap(r.ptr | 0), CP = x => x === 'wheat' ? c.gran : c.store, fr = x => d.res[x] / CP(x);
+    const srt = RES.slice().sort((a, b) => fr(b) - fr(a)), hi = srt[0], lo = srt[3];
+    if (fr(hi) - fr(lo) < 0.2) continue;
+    const G = ' WHERE (SELECT ver FROM villages WHERE id=?)=?', gb = [r.id, r.ver + 1];
+    const MVI = 'INSERT INTO moves(' + MVC + ') SELECT ' + MVC.split(',').map(() => '?').join(',') + G;
+    const o = await DB.prepare('SELECT o.*, p.tribe AS ptr2 FROM offers o JOIN players p ON p.uid=o.uid WHERE p.is_bot=0 AND (o.taker IS NULL OR o.taken_at<?) AND o.give_r=? AND o.want_r=? AND o.want_n<=o.give_n*1.25 ORDER BY ((o.x-?)*(o.x-?)+(o.y-?)*(o.y-?)) LIMIT 1')
+      .bind(t - 60000, lo, hi, r.x, r.x, r.y, r.y).first();
+    if (o && Math.random() < 0.7 && Math.ceil(o.want_n / cap) <= free && d.res[hi] - o.want_n > CP(hi) * 0.25){
+      const lk = await DB.prepare('UPDATE offers SET taker=?, taken_at=? WHERE id=? AND (taker IS NULL OR taken_at<?)').bind(r.uid, t, o.id, t - 60000).run();
+      if (lk.meta.changes){
+        d.res[hi] -= o.want_n;
+        await DB.batch([ vUpd(env, r, d, t),
+          DB.prepare(MVI).bind(...tradeRow(r.uid, r.id, r.x, r.y, o.x, o.y, o.vid, o.uid, { m:Math.ceil(o.want_n / cap), [hi]:o.want_n }, t, mSpd(r.ptr | 0)), ...gb),
+          DB.prepare(MVI).bind(...tradeRow(o.uid, o.vid, o.x, o.y, r.x, r.y, r.id, r.uid, { m:o.m, [o.give_r]:o.give_n }, t, mSpd(o.ptr2 | 0)), ...gb),
+          DB.prepare('DELETE FROM offers WHERE id=?' + G.replace(' WHERE', ' AND')).bind(o.id, ...gb) ]);
+        continue;
+      }
+    }
+    const mine = ((await DB.prepare('SELECT COUNT(*) n FROM offers WHERE uid=?').bind(r.uid).first()) || {}).n || 0;
+    if (mine < 2 && fr(hi) > 0.55 && Math.random() < 0.5){
+      const gn = Math.min(free * cap, Math.floor(d.res[hi] * 0.3 / 100) * 100);
+      if (gn < 200) continue;
+      const wn = Math.max(100, Math.round(gn * (0.8 + Math.random() * 0.5) / 10) * 10);
+      d.res[hi] -= gn;
+      await DB.batch([ vUpd(env, r, d, t),
+        DB.prepare('INSERT INTO offers(uid,vid,x,y,give_r,give_n,want_r,want_n,m,at,taker,taken_at) SELECT ?,?,?,?,?,?,?,?,?,?,NULL,0' + G)
+          .bind(r.uid, r.id, r.x, r.y, hi, gn, lo, wn, Math.ceil(gn / cap), t, ...gb) ]);
+    }
+  }
+  /* ถอนข้อเสนอของบอทที่ค้างเกิน 24 ชม. แล้วคืนทรัพยากร */
+  const old = (await DB.prepare('SELECT o.* FROM offers o JOIN players p ON p.uid=o.uid WHERE p.is_bot=1 AND o.at<? AND o.taker IS NULL LIMIT 3').bind(t - 86400000).all()).results || [];
+  for (const o of old){
+    const del = await DB.prepare('DELETE FROM offers WHERE id=? AND taker IS NULL').bind(o.id).run();
+    if (del.meta.changes) await patchV(env, o.vid, d => {
+      const c = caps(d);
+      d.res[o.give_r] = Math.min(o.give_r === 'wheat' ? c.gran : c.store, d.res[o.give_r] + o.give_n);
+    });
+  }
+}
+
+/* ---------- ทดสอบ: บอท 3 ตัวที่ใกล้ที่สุดยกทัพไปปล้นผู้เล่น ---------- */
+async function botRaidTest(env, name){
+  const DB = env.DB, t = Date.now();
+  const P = await DB.prepare('SELECT uid FROM players WHERE name=? AND is_bot=0').bind(String(name || '').trim()).first();
+  if (!P) throw ue('ไม่พบผู้เล่นชื่อนี้');
+  const tv = await DB.prepare('SELECT * FROM villages WHERE uid=? ORDER BY id LIMIT 1').bind(P.uid).first();
+  if (!tv) throw ue('ผู้เล่นนี้ไม่มีเมือง');
+  const bs = (await DB.prepare('SELECT v.*, p.tribe AS ptr FROM villages v JOIN players p ON p.uid=v.uid WHERE p.is_bot=1 ORDER BY ((v.x-?)*(v.x-?)+(v.y-?)*(v.y-?)) LIMIT 3')
+    .bind(tv.x, tv.x, tv.y, tv.y).all()).results || [];
+  const st = [];
+  for (const r of bs){
+    const d = JSON.parse(r.data), id = 'u' + (r.ptr | 0) + '_inf_a';
+    if (!d.troops) d.troops = {};
+    const tr = { [id]:(d.troops[id] || 0) + 20 };
+    delete d.troops[id];
+    const sec = Math.max(60, Math.round(Math.hypot(tv.x - r.x, tv.y - r.y) / minSpd(tr) * 3600 / SPEED));
+    st.push(vUpd(env, r, d, t));
+    st.push(DB.prepare('INSERT INTO moves(' + MVC + ') SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT ver FROM villages WHERE id=?)=?')
+      .bind(r.uid, r.id, r.x, r.y, tv.x, tv.y, tv.id, P.uid, 'raid', JSON.stringify(tr), '{}', t, t + sec * 1000, 'go', 0, 0, null, r.id, r.ver + 1));
+  }
+  if (st.length) await DB.batch(st);
+  return bs.length;
 }
