@@ -366,7 +366,8 @@ var Sync = (function(){
   }
 
   /* ---------- ร้านค้า (ยังไม่เชื่อมระบบจ่ายเงินจริง) ---------- */
-  function openShop(){
+  function openShop(){ if (typeof Pay !== 'undefined') return Pay.open(); return openShopOld(); }
+  function openShopOld(){
     UI.modal('<h3>💳 เติมทอง</h3><p class="stnone">กำลังโหลด…</p>');
     Api.get('/shop', null, false).then(function(r){
       var en = !!(r && r.enabled);

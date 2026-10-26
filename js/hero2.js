@@ -202,7 +202,9 @@ var Hero2 = (function(){
   /* ---------- หน้าหลัก ---------- */
   function openExt(t){ pend = {}; draft = null; open(t || 'doll'); }
   function open(t){
-    if (t) tab = t;
+  var hb0 = document.querySelector('#hroot .hbody'), keepY = (hb0 && (!t || t === tab)) ? hb0.scrollTop : 0;
+  if (t) tab = t;
+
     var v = V(), h = H();
     if (!h){
       UI.modal('<h3>🗿 วีรบุรุษ</h3><p class="stnone">กำลังโหลด…</p>');
@@ -215,11 +217,14 @@ var Hero2 = (function(){
     UI.modal('<div id="hroot"><h3>🗿 ' + esc(h.name) + ' · Lv.' + h.lv + '</h3><div class="btabs">' +
       [['doll','🗿 ตัวละคร'],['bag','🎒 กระเป๋า'],['look','🎨 ปั้นหน้า'],['dung','🕳️ ดันเจี้ยน']].map(function(x){
         return '<button class="btab' + (x[0] === tab ? ' on' : '') + '" data-ht="' + x[0] + '">' + x[1] + '</button>';
-      }).join('') + '</div>' + body + '<button class="btn-cancel" onclick="UI.close()">ปิด</button></div>');
+      }).join('') + '</div><div class="hbody">' + body + '</div><button class="btn-cancel" onclick="UI.close()">ปิด</button></div>');
     document.querySelectorAll('[data-ht]').forEach(function(b){
       b.onclick = function(){ if (b.dataset.ht !== 'look') draft = null; open(b.dataset.ht); };
     });
     bindAll(h);
+    var hb1 = document.querySelector('#hroot .hbody');
+    if (hb1 && keepY) hb1.scrollTop = keepY;
+
   }
   function repaint(){ if (document.getElementById('hroot')) open(); }
 
