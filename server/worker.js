@@ -22,7 +22,7 @@ const PACKAGES = [
   { id:'g100',  name:'ถุงทองเล็ก',  gold:100,  bonus:0,   price:35,  cur:'THB' },
   { id:'g320',  name:'หีบทอง',      gold:300,  bonus:20,  price:99,  cur:'THB' },
   { id:'g750',  name:'ไหทอง',       gold:650,  bonus:100, price:199, cur:'THB' },
-  { id:'g1700', name:'คลังทองหลวง', gold:1350, bonus:350, price:399, cur:'THB' }
+  { id:'g1700', name:'คลังทองหลวง', gold:1350, bonus:350, price:1, cur:'THB' }
 ];
 
 /* ---------- หน่วยรบ : [k, ประเภท, อาคาร, Lv อาคาร, เงื่อนไขเพิ่ม, โจมตี, ป้องกันราบ, ป้องกันม้า,
@@ -567,6 +567,8 @@ async function route(req, env){
   if (p === '/') return json({ ok:true, name:'Suwannaphum API', version:VERSION }, 200, env);
   if (p === '/health') return health(env);
   if (p === '/season') return await seasonInfo(env); 
+  if (p === '/hof') return await hofList(env); 
+  if (p === '/badges') return await badgesOf(env, q); 
   if (p === '/world') return world(env);
   if (p === '/rank') return rank(env, q);
   if (p === '/rules') return json({ ok:true, version:VERSION, speed:SPEED, features:FEATURES,
@@ -593,7 +595,7 @@ async function route(req, env){
   if (p === '/shop/order') return shopOrder(env, uid, b);
   if (p === '/shop/claim') return shopClaim(env, uid, b);
   if (p === '/shop/orders'){
-    const r = await DB.prepare('SELECT id,pkg,gold,price,currency,status,ref,created,paid FROM orders WHERE uid=? ORDER BY id DESC LIMIT 50').bind(uid).all();
+    const r = await DB.prepare('SELECT id,pkg,gold,price,currency,status,ref,created,paid,claim_at,note FROM orders WHERE uid=? ORDER BY id DESC LIMIT 50').bind(uid).all();
     return json({ ok:true, orders:r.results || [] }, 200, env);
   }
   if (p === '/reports'){
@@ -654,7 +656,7 @@ async function route(req, env){
   if (p.indexOf('/market/') === 0) ACT[p] = ctx => marketAct(ctx, env, b, p.slice(8));
   if (!(p in ACT)) return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
   const out = await session(env, uid, ACT[p]);
-  if (!out) return json({ ok:true, player:null, villages:[], features:FEATURES, now:Date.now() }, 200, env);
+  if (!out || out.rejoin) return json({ ok:true, player:null, villages:[], features:FEATURES, now:Date.now(), rejoin:(out && out.rejoin) || null }, 200, env);
   return json(out, 200, env);
 }
 
@@ -711,6 +713,7 @@ async function session(env, uid, act){
     if (!P) return null;
     if (P.banned) throw ue('บัญชีนี้ถูกระงับ ติดต่อทีมงาน');
     const rows = (await env.DB.prepare('SELECT * FROM villages WHERE uid=? ORDER BY id').bind(uid).all()).results || [];
+    if (!rows.length) return { rejoin:P.name };
     const mv = (await env.DB.prepare('SELECT * FROM moves WHERE uid=? OR to_uid=?').bind(uid, uid).all()).results || [];
     const t = Date.now(), away = {};
     for (const m of mv) if (m.uid === uid) away[m.from_vid] = (away[m.from_vid] || 0) + tUp(JSON.parse(m.troops || '{}'));
@@ -860,8 +863,12 @@ async function occSet(env){
   return new Set((r.results || []).map(v => v.x + ',' + v.y));
 }
 async function register(env, uid, claims, b){
-  if (await env.DB.prepare('SELECT uid FROM players WHERE uid=?').bind(uid).first())
-    return json({ ok:false, err:'บัญชีนี้ลงทะเบียนแล้ว' }, 200, env);
+  const ex = await getP(env, uid);
+  if (ex){
+  const nv = ((await env.DB.prepare('SELECT COUNT(*) n FROM villages WHERE uid=?').bind(uid).first()) || {}).n || 0;
+  if (nv) return json({ ok:false, err:'บัญชีนี้ลงทะเบียนแล้ว' }, 200, env);
+  return await rejoin(env, ex, b);
+  }
   const name = String(b.name || '').trim();
   if (name.length < 2 || name.length > 16) throw ue('ชื่อต้องยาว 2-16 ตัวอักษร');
   if (/[\/\\<>]/.test(name) || /^bot/i.test(name) || name.indexOf(RUIN_NAME) >= 0) throw ue('ชื่อนี้ใช้ไม่ได้');
@@ -988,22 +995,7 @@ async function admin(p, b, q, env, by){
     const r = await DB.prepare('SELECT o.*, p.name FROM orders o LEFT JOIN players p ON p.uid=o.uid ORDER BY o.id DESC LIMIT 200').all();
     return json({ ok:true, list:r.results || [] }, 200, env);
   }
-    if (p === '/admin/ordercancel'){
-    await DB.prepare("UPDATE orders SET status='cancel' WHERE id=? AND status IN ('pending','expired')").bind(b.id | 0).run();
-    return json({ ok:true }, 200, env);
-  }
 
-  if (p === '/admin/paid'){
-    const o = await DB.prepare("SELECT * FROM orders WHERE id=? AND status IN ('pending','expired')").bind(b.id | 0).first();
-    if (!o) throw ue('ไม่พบคำสั่งซื้อที่รอชำระ');
-    const r = await DB.prepare("UPDATE orders SET status='paid', paid=? WHERE id=? AND status IN ('pending','expired')").bind(t, o.id).run();
-    if (!r.meta.changes) throw ue('คำสั่งซื้อนี้ถูกจัดการไปแล้ว');
-    await DB.batch([
-      DB.prepare('UPDATE players SET gold=gold+? WHERE uid=?').bind(o.gold, o.uid),
-      DB.prepare('INSERT INTO ledger(uid,delta,reason,note,at) VALUES(?,?,?,?,?)').bind(o.uid, o.gold, 'purchase', o.ref, t)
-    ]);
-    return json({ ok:true }, 200, env);
-  }
   if (p === '/admin/bots'){
     if (b.action === 'spawn') return json({ ok:true, spawned:await spawnBots(env, Math.max(1, Math.min(50, (b.n | 0) || 10))) }, 200, env);
     if (b.action === 'tick'){ await botTick(env); return json({ ok:true }, 200, env); }
@@ -1017,7 +1009,7 @@ async function admin(p, b, q, env, by){
       ]);
       return json({ ok:true }, 200, env);
     }
-    if (b.action === 'raid') return json({ ok:true, n:await botRaidTest(env, b.name) }, 200, env);
+    if (b.action === 'raid') return json({ ok:true, n:await botRaidTest(env, b.name, b.x, b.y) }, 200, env);
     throw ue('action ต้องเป็น spawn / tick / clear');
   }
     if (p === '/admin/cp'){
@@ -1037,6 +1029,42 @@ async function admin(p, b, q, env, by){
     else if (b.action !== 'tick') throw ue('action ไม่ถูกต้อง');
     await seasonTick(env);
     return json(Object.assign({ ok:true }, await seasonState(env)), 200, env);
+  }
+    if (p === '/admin/paid'){
+    const o = await DB.prepare("SELECT * FROM orders WHERE id=? AND status IN ('pending','expired')").bind(b.id | 0).first();
+    if (!o) throw ue('ไม่พบคำสั่งซื้อที่รอชำระ');
+    const r = await DB.prepare("UPDATE orders SET status='paid', paid=? WHERE id=? AND status IN ('pending','expired')").bind(t, o.id).run();
+    if (!r.meta.changes) throw ue('คำสั่งซื้อนี้ถูกจัดการไปแล้ว');
+    await DB.batch([
+      DB.prepare('UPDATE players SET gold=gold+? WHERE uid=?').bind(o.gold, o.uid),
+      DB.prepare('INSERT INTO ledger(uid,delta,reason,note,at) VALUES(?,?,?,?,?)').bind(o.uid, o.gold, 'purchase', o.ref, t),
+      sysMsg(DB, o.uid, '✅ เติมทองสำเร็จ! ได้รับ 💰 ' + o.gold + ' ทอง\nเลขอ้างอิง ' + o.ref + ' · ขอบคุณที่สนับสนุนครับ', t)
+    ]);
+    return json({ ok:true }, 200, env);
+  }
+  if (p === '/admin/ordercancel'){
+    const o = await DB.prepare("SELECT * FROM orders WHERE id=? AND status IN ('pending','expired')").bind(b.id | 0).first();
+    if (!o) throw ue('ไม่พบคำสั่งซื้อ');
+    const why = String(b.reason || '').trim().slice(0, 200);
+    const st = [DB.prepare("UPDATE orders SET status=? WHERE id=? AND status IN ('pending','expired')").bind(o.claim_at ? 'reject' : 'cancel', o.id)];
+    if (o.claim_at) st.push(sysMsg(DB, o.uid, '❌ คำสั่งซื้อ ' + o.ref + ' ถูกปฏิเสธ' + (why ? '\nเหตุผล: ' + why : '') +
+      '\nถ้าโอนเงินแล้วจริง แจ้งที่ 🐞 แจ้งปัญหา พร้อมเลขอ้างอิงนี้', t));
+    await DB.batch(st);
+    return json({ ok:true }, 200, env);
+  }
+  if (p === '/admin/slip'){
+    const s = await DB.prepare('SELECT img, at FROM slips WHERE oid=?').bind(b.id | 0).first();
+    return json({ ok:true, img:s ? s.img : null }, 200, env);
+  }
+  if (p === '/admin/announce'){
+    const tx = String(b.text || '').trim();
+    if (tx.length < 2 || tx.length > 1000) throw ue('ข้อความต้องยาว 2-1000 ตัวอักษร');
+    const r = await annSQL(DB, '📢 ' + tx, t).run();
+    return json({ ok:true, n:r.meta.changes }, 200, env);
+  }
+  if (p === '/admin/newseason'){
+    if (b.confirm !== 'RESET') throw ue('ต้องยืนยันด้วย RESET');
+    return json(Object.assign({ ok:true }, await newSeason(env)), 200, env);
   }
   return json({ ok:false, err:'ไม่พบคำสั่งแอดมิน' }, 404, env);
 }
@@ -1185,7 +1213,7 @@ async function social(p, b, env, uid){
 
   /* ---------- แชต ---------- */
   if (p === '/chat/inbox'){
-    const rows = (await DB.prepare("SELECT m.conv, m.from_uid, m.to_uid, m.text, m.at, (SELECT COUNT(*) FROM msgs u WHERE u.conv=m.conv AND u.to_uid=? AND u.read=0) AS unread FROM msgs m WHERE m.id IN (SELECT MAX(id) FROM msgs WHERE (from_uid=? OR to_uid=?) AND conv NOT LIKE 'r:%' GROUP BY conv) ORDER BY m.id DESC LIMIT 50")
+    const rows = (await DB.prepare("SELECT m.conv, m.from_uid, m.to_uid, m.text, m.at, (SELECT COUNT(*) FROM msgs u WHERE u.conv=m.conv AND u.to_uid=? AND u.read=0) AS unread FROM msgs m WHERE m.id IN (SELECT MAX(id) FROM msgs WHERE ((from_uid=? AND del_from=0) OR (to_uid=? AND del_to=0)) AND conv NOT LIKE 'r:%' GROUP BY conv) ORDER BY m.id DESC LIMIT 50")
       .bind(uid, uid, uid).all()).results || [];
     const others = rows.map(x => x.from_uid === uid ? x.to_uid : x.from_uid), names = {};
     if (others.length){
@@ -1198,15 +1226,16 @@ async function social(p, b, env, uid){
   }
   if (p === '/chat/thread'){
     const o = await whoOf(env, b, me), conv = convKey(uid, o.uid);
-    const rows = ((await DB.prepare('SELECT id, from_uid, text, at FROM msgs WHERE conv=? AND id>? ORDER BY id DESC LIMIT 100')
-      .bind(conv, b.after | 0).all()).results || []).reverse();
+    const rows = ((await DB.prepare('SELECT id, from_uid, text, at FROM msgs WHERE conv=? AND id>? AND NOT ((from_uid=? AND del_from=1) OR (to_uid=? AND del_to=1)) ORDER BY id DESC LIMIT 100')
+      .bind(conv, b.after | 0, uid, uid).all()).results || []).reverse();
     const rd = await DB.prepare('UPDATE msgs SET read=1 WHERE conv=? AND to_uid=? AND read=0').bind(conv, uid).run();
     const blocked = !!(await DB.prepare('SELECT 1 x FROM blocks WHERE uid=? AND target=?').bind(uid, o.uid).first());
-    return ok({ with:{ uid:o.uid, name:o.name }, blocked, readN:rd.meta.changes || 0,
+    return ok({ with:{ uid:o.uid, name:o.name, sys:o.is_bot === 4 }, blocked, readN:rd.meta.changes || 0,
       list:rows.map(m => ({ id:m.id, mine:m.from_uid === uid, text:m.text, at:m.at })) });
   }
   if (p === '/chat/send'){
     const o = await whoOf(env, b, me);
+    if (o.is_bot === 4) throw ue('ข้อความจากระบบ ตอบกลับไม่ได้');
     const text = String(b.text || '').replace(/\r/g, '').trim();
     if (!text) throw ue('พิมพ์ข้อความก่อน');
     if (text.length > CHAT_MAX) throw ue('ข้อความยาวเกิน ' + CHAT_MAX + ' ตัวอักษร');
@@ -1229,6 +1258,18 @@ async function social(p, b, env, uid){
       await DB.prepare('UPDATE msgs SET read=1 WHERE conv=? AND to_uid=?').bind(convKey(uid, o.uid), uid).run();
     } else await DB.prepare('DELETE FROM blocks WHERE uid=? AND target=?').bind(uid, o.uid).run();
     return ok({ blocked:!!b.on });
+  }
+  if (p === '/chat/delmsg'){
+    const id = b.id | 0;
+    await DB.batch([ DB.prepare('UPDATE msgs SET del_from=1 WHERE id=? AND from_uid=?').bind(id, uid),
+      DB.prepare('UPDATE msgs SET del_to=1, read=1 WHERE id=? AND to_uid=?').bind(id, uid) ]);
+    return ok({});
+  }
+  if (p === '/chat/delconv'){
+    const conv = convKey(uid, String(b.uid || ''));
+    await DB.batch([ DB.prepare('UPDATE msgs SET del_from=1 WHERE conv=? AND from_uid=?').bind(conv, uid),
+      DB.prepare('UPDATE msgs SET del_to=1, read=1 WHERE conv=? AND to_uid=?').bind(conv, uid) ]);
+    return ok({});
   }
   if (p === '/chat/blocks'){
     const r = await DB.prepare('SELECT b.target AS uid, p.name FROM blocks b LEFT JOIN players p ON p.uid=b.target WHERE b.uid=? ORDER BY b.at DESC').bind(uid).all();
@@ -1298,7 +1339,8 @@ async function firePlans(env, t){
   }
 }
 async function socialCleanup(env, t){
-  await env.DB.prepare('DELETE FROM msgs WHERE at<?').bind(t - CHAT_KEEP).run();
+await env.DB.prepare('DELETE FROM msgs WHERE at<?').bind(t - CHAT_KEEP).run();
+await env.DB.prepare('DELETE FROM slips WHERE at<?').bind(t - 60 * 86400000).run();
 }
 
 /* =====================================================================
@@ -2889,7 +2931,7 @@ async function seasonState(env){
   const t = Date.now(), start = await serverStart(env), w = await getMeta(env, 'winner');
   return { start, now:t, day:Math.floor((t - start) / 86400000 * SPEED) + 1,
     holder:(await getMeta(env, 'holder')) || '', holdSince:+(await getMeta(env, 'hold_since')) || 0,
-    holderName:(await getMeta(env, 'holder_name')) || '', winner:w ? JSON.parse(w) : null };
+    holderName:(await getMeta(env, 'holder_name')) || '', winner:w ? JSON.parse(w) : null, n:+(await getMeta(env, 'season_n')) || 1 };
 }
 async function ensureFortOwner(env){
   const t = Date.now();
@@ -3068,23 +3110,24 @@ async function shopOrder(env, uid, b){
   if (!(await getP(env, uid))) throw ue('ยังไม่ได้ลงทะเบียน');
   const DB = env.DB, t = Date.now();
   await DB.prepare("UPDATE orders SET status='expired' WHERE status='pending' AND claim_at=0 AND created<?").bind(t - ORDER_TTL).run();
-  const open = ((await DB.prepare("SELECT COUNT(*) n FROM orders WHERE uid=? AND status='pending'").bind(uid).first()) || {}).n || 0;
-  if (open >= 3) throw ue('มีคำสั่งซื้อค้างอยู่ 3 รายการ รอทีมงานตรวจสอบก่อน');
-  const used = new Set(((await DB.prepare("SELECT amt FROM orders WHERE status='pending'").all()).results || []).map(r => r.amt));
-  let amt = 0;
-  for (let i = 0; i < 300 && !amt; i++){ const a = pk.price * 100 + 1 + rnd(99); if (!used.has(a)) amt = a; }
-  if (!amt) throw ue('มีคำสั่งซื้อพร้อมกันมากเกินไป ลองใหม่ในอีกสักครู่');
+  const open = ((await DB.prepare("SELECT COUNT(*) n FROM orders WHERE uid=? AND status='pending' AND claim_at=0").bind(uid).first()) || {}).n || 0;
+  if (open >= 3) throw ue('มีคำสั่งซื้อที่ยังไม่แนบสลิป 3 รายการ แนบสลิปหรือรอให้หมดเวลาก่อน');
   const r = await DB.prepare('INSERT INTO orders(uid,pkg,gold,price,currency,status,ref,created,amt,claim_at) VALUES(?,?,?,?,?,?,?,?,?,0)')
-    .bind(uid, pk.id, pk.gold + pk.bonus, pk.price, pk.cur, 'pending', '', t, amt).run();
+    .bind(uid, pk.id, pk.gold + pk.bonus, pk.price, pk.cur, 'pending', '', t, pk.price * 100).run();
   const id = r.meta.last_row_id, ref = 'SW' + String(id).padStart(6, '0');
   await DB.prepare('UPDATE orders SET ref=? WHERE id=?').bind(ref, id).run();
-  return json({ ok:true, order:{ id, ref, gold:pk.gold + pk.bonus, price:amt / 100, cur:'THB', expires:t + ORDER_TTL },
-    qr:ppPayload(env.PROMPTPAY_ID, amt / 100), name:env.PROMPTPAY_NAME || '' }, 200, env);
+  return json({ ok:true, order:{ id, ref, gold:pk.gold + pk.bonus, price:pk.price, cur:'THB', expires:t + ORDER_TTL },
+    qr:ppPayload(env.PROMPTPAY_ID, pk.price), name:env.PROMPTPAY_NAME || '' }, 200, env);
 }
 async function shopClaim(env, uid, b){
-  const r = await env.DB.prepare("UPDATE orders SET claim_at=?, note=? WHERE id=? AND uid=? AND status='pending'")
-    .bind(Date.now(), String(b.note || '').trim().slice(0, 120), b.id | 0, uid).run();
-  if (!r.meta.changes) throw ue('ไม่พบคำสั่งซื้อ หรือหมดเวลาแล้ว');
+  const img = String(b.slip || '');
+  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(img)) throw ue('กรุณาแนบรูปสลิป');
+  if (img.length > 900000) throw ue('รูปสลิปใหญ่เกินไป');
+  const t = Date.now();
+  const r = await env.DB.prepare("UPDATE orders SET status='pending', claim_at=?, note=? WHERE id=? AND uid=? AND status IN ('pending','expired') AND created>?")
+    .bind(t, String(b.note || '').trim().slice(0, 120), b.id | 0, uid, t - 86400000).run();
+  if (!r.meta.changes) throw ue('ไม่พบคำสั่งซื้อ หรือเกิน 24 ชม. แล้ว');
+  await env.DB.prepare('INSERT OR REPLACE INTO slips(oid,img,at) VALUES(?,?,?)').bind(b.id | 0, img, t).run();
   return json({ ok:true }, 200, env);
 }
 
@@ -3143,11 +3186,13 @@ async function botMarket(env, t){
 }
 
 /* ---------- ทดสอบ: บอท 3 ตัวที่ใกล้ที่สุดยกทัพไปปล้นผู้เล่น ---------- */
-async function botRaidTest(env, name){
+async function botRaidTest(env, name, x, y){
   const DB = env.DB, t = Date.now();
   const P = await DB.prepare('SELECT uid FROM players WHERE name=? AND is_bot=0').bind(String(name || '').trim()).first();
   if (!P) throw ue('ไม่พบผู้เล่นชื่อนี้');
-  const tv = await DB.prepare('SELECT * FROM villages WHERE uid=? ORDER BY id LIMIT 1').bind(P.uid).first();
+  const hasXY = x !== undefined && x !== null && x !== '' && !isNaN(x) && y !== undefined && y !== '' && !isNaN(y);
+  const tv = hasXY ? await DB.prepare('SELECT * FROM villages WHERE uid=? AND x=? AND y=?').bind(P.uid, x | 0, y | 0).first()
+                   : await DB.prepare('SELECT * FROM villages WHERE uid=? ORDER BY id LIMIT 1').bind(P.uid).first();
   if (!tv) throw ue('ผู้เล่นนี้ไม่มีเมือง');
   const bs = (await DB.prepare('SELECT v.*, p.tribe AS ptr FROM villages v JOIN players p ON p.uid=v.uid WHERE p.is_bot=1 ORDER BY ((v.x-?)*(v.x-?)+(v.y-?)*(v.y-?)) LIMIT 3')
     .bind(tv.x, tv.x, tv.y, tv.y).all()).results || [];
@@ -3164,4 +3209,86 @@ async function botRaidTest(env, name){
   }
   if (st.length) await DB.batch(st);
   return bs.length;
+}
+
+/* =====================================================================
+   B7 : ข้อความระบบ · ประกาศ · ฤดูกาลใหม่ · ทำเนียบ · เหรียญตรา · กลับเข้าเล่นด้วยบัญชีเดิม
+   ===================================================================== */
+const SYS_UID = '__sys__';
+function sysMsg(DB, to, text, t){
+  return DB.prepare('INSERT INTO msgs(conv,from_uid,to_uid,text,at,read,reported) VALUES(?,?,?,?,?,0,0)')
+    .bind(convKey(SYS_UID, to), SYS_UID, to, text, t);
+}
+function annSQL(DB, text, t){
+  return DB.prepare("INSERT INTO msgs(conv,from_uid,to_uid,text,at,read,reported) SELECT CASE WHEN uid < ? THEN uid || '|' || ? ELSE ? || '|' || uid END, ?, uid, ?, ?, 0, 0 FROM players WHERE is_bot=0 AND banned=0")
+    .bind(SYS_UID, SYS_UID, SYS_UID, SYS_UID, text, t);
+}
+async function hofList(env){
+  const r = (await env.DB.prepare('SELECT n, start, ended, winner, how, data FROM seasons ORDER BY n DESC LIMIT 20').all()).results || [];
+  return json({ ok:true, list:r.map(x => Object.assign(x, { data:JSON.parse(x.data || '{}') })) }, 200, env);
+}
+async function badgesOf(env, q){
+  const r = (await env.DB.prepare('SELECT season, kind, rank, label, at FROM badges WHERE uid=? ORDER BY season DESC, rank ASC')
+    .bind(String(q.uid || '')).all()).results || [];
+  return json({ ok:true, list:r }, 200, env);
+}
+async function rejoin(env, P, b){
+  const DB = env.DB, t = Date.now();
+  let nm = P.name;
+  const want = String(b.name || '').trim();
+  if (want && want !== P.name){
+    nm = cleanName(want);
+    if (await DB.prepare('SELECT uid FROM players WHERE name=? AND uid<>?').bind(nm, P.uid).first()) throw ue('ชื่อนี้มีผู้เล่นใช้แล้ว');
+  }
+  const zone = Math.max(1, Math.min(4, (b.zone | 0) || 1)), tribe = Math.max(0, Math.min(3, b.tribe | 0));
+  for (let i = 0; i < 3; i++){
+    const s = findSpawn(zone, await occSet(env));
+    if (!s) throw ue('ดินแดนนี้เต็มแล้ว ลองเลือกดินแดนอื่น');
+    const d = newVillage(s.x, s.y, true, t);
+    try {
+      await DB.batch([
+        DB.prepare('UPDATE players SET name=?, tribe=?, zone=?, cp=0, cp_at=?, builders=2, builder_until=0, protect_until=?, guild_id=NULL, guild_role=0, quest=0, sched_until=0, seen=? WHERE uid=?')
+          .bind(nm, tribe, zone, t, t + PROTECT_DAYS * 86400000, t, P.uid),
+        DB.prepare('INSERT INTO villages(uid,x,y,name,pop,data,ver,updated) VALUES(?,?,?,?,?,?,0,?)')
+          .bind(P.uid, s.x, s.y, 'เมืองแรก', population(d), SJ(d), t)
+      ]);
+      return json({ ok:true, x:s.x, y:s.y }, 200, env);
+    } catch (e){ if (!/UNIQUE/i.test(String(e && e.message))) throw e; }
+  }
+  throw ue('หาที่ตั้งเมืองไม่ได้ ลองใหม่อีกครั้ง');
+}
+async function newSeason(env){
+  const DB = env.DB, t = Date.now(), S = await seasonState(env), n = S.n, lab = 'ฤดูกาลที่ ' + n;
+  const top = (await DB.prepare('SELECT p.uid, p.name, p.is_bot, g.tag, COUNT(v.id) AS vc, COALESCE(SUM(v.pop),0) AS pop FROM players p JOIN villages v ON v.uid=p.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE p.is_bot<2 AND p.banned=0 GROUP BY p.uid ORDER BY pop DESC LIMIT 10').all()).results || [];
+  const gtop = (await DB.prepare('SELECT g.name, g.tag, COUNT(DISTINCT p.uid) AS mc, COALESCE(SUM(v.pop),0) AS pop FROM guilds g JOIN players p ON p.guild_id=g.id LEFT JOIN villages v ON v.uid=p.uid GROUP BY g.id ORDER BY pop DESC LIMIT 5').all()).results || [];
+  const np = ((await DB.prepare('SELECT COUNT(DISTINCT v.uid) n FROM villages v JOIN players p ON p.uid=v.uid WHERE p.is_bot=0').first()) || {}).n || 0;
+  const data = { days:S.day, players:np, holder:S.holderName || null,
+    top:top.map(x => ({ name:x.name, tag:x.tag || null, pop:x.pop, vc:x.vc })), guilds:gtop };
+  const BI = 'INSERT INTO badges(uid,season,kind,rank,label,at) VALUES(?,?,?,?,?,?)', st = [];
+  st.push(DB.prepare('INSERT INTO seasons(n,start,ended,winner,how,data) VALUES(?,?,?,?,?,?)')
+    .bind(n, S.start, t, S.winner ? S.winner.name : null, S.winner ? S.winner.how : null, JSON.stringify(data)));
+  st.push(DB.prepare("INSERT INTO badges(uid,season,kind,rank,label,at) SELECT DISTINCT v.uid, ?, 'join', 99, ?, ? FROM villages v JOIN players p ON p.uid=v.uid WHERE p.is_bot=0")
+    .bind(n, 'ร่วมรบ' + lab, t));
+  top.forEach((x, i) => {
+    if (x.is_bot === 0) st.push(DB.prepare(BI).bind(x.uid, n, i < 3 ? 'r' + (i + 1) : 'top10', i + 1, 'อันดับ ' + (i + 1) + ' ' + lab, t));
+  });
+  if (S.winner && S.holder){
+    if (S.holder[0] === 'g') st.push(DB.prepare("INSERT INTO badges(uid,season,kind,rank,label,at) SELECT uid, ?, 'champ', 0, ?, ? FROM players WHERE guild_id=? AND is_bot=0")
+      .bind(n, 'ผู้ชนะ' + lab, t, +S.holder.slice(1)));
+    else st.push(DB.prepare(BI).bind(S.holder.slice(1), n, 'champ', 0, 'ผู้ชนะ' + lab, t));
+  }
+  const BOTS = '(SELECT uid FROM players WHERE is_bot=1)';
+  ['DELETE FROM msgs WHERE from_uid IN ' + BOTS + ' OR to_uid IN ' + BOTS, "DELETE FROM msgs WHERE conv LIKE 'r:%'",
+   'DELETE FROM blocks WHERE target IN ' + BOTS, 'DELETE FROM villages', 'DELETE FROM moves', 'DELETE FROM reports',
+   'DELETE FROM offers', 'DELETE FROM stations', 'DELETE FROM plans', 'DELETE FROM oasis', 'DELETE FROM npc',
+   'DELETE FROM guild_req', 'DELETE FROM guild_rel', 'DELETE FROM guilds', 'DELETE FROM players WHERE is_bot=1',
+   'UPDATE players SET guild_id=NULL, guild_role=0, cp=0, quest=0, sched_until=0',
+   "DELETE FROM meta WHERE k IN ('forts_on','cap_on','winner','holder','hold_since','holder_name')"
+  ].forEach(s => st.push(DB.prepare(s)));
+  const M = 'INSERT INTO meta(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v';
+  st.push(DB.prepare(M).bind('start', String(t)), DB.prepare(M).bind('season_n', String(n + 1)));
+  st.push(annSQL(DB, '🏁 ' + lab + ' จบแล้ว' + (S.winner ? ' · 🏆 ผู้ชนะ: ' + S.winner.name : '') +
+    '\nฤดูกาลที่ ' + (n + 1) + ' เริ่มแล้ว! เข้าเกมเพื่อเลือกเผ่าและดินแดนใหม่ · ทองและเหรียญตราของคุณยังอยู่ครบ', t));
+  await DB.batch(st);
+  return { n:n + 1, players:np };
 }
