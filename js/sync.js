@@ -55,7 +55,7 @@ var Sync = (function(){
         if (r.net || r._status >= 500 || !('player' in r)) return cb('error', r.err || 'ไม่ทราบสาเหตุ');
         S.features = r.features || S.features;
         install();
-        if (!r.player) return cb('new');
+        if (!r.player){ if (r.rejoin && !Store.get('sw_s1_name')) Store.set('sw_s1_name', r.rejoin); return cb('new'); }
         apply(r, true); goLive(); cb('ok');
       });
     });
@@ -164,6 +164,7 @@ var Sync = (function(){
       setTimeout(function(){ poll(true); }, 5000);
       return;
     }
+    if (S.on && ('player' in r) && !r.player){ location.replace('index.html'); return; }
     if (r.player && r.villages) apply(r, false);
     if (isCmd && !r.ok && r.err) alert(r.err);
   }

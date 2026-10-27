@@ -127,6 +127,9 @@ var Social = (function(){
       if (tt) tt.textContent = '✉ ' + r.with.name;
       var bb = document.getElementById('cBlock');
       if (bb) bb.textContent = S.cur.blocked ? '✔ ปลดบล็อก' : '🚫 บล็อก';
+      var ci = document.querySelector('.chatin');
+      if (ci) ci.style.display = r.with.sys ? 'none' : '';
+      if (bb) bb.style.display = r.with.sys ? 'none' : '';
       if (r.readN){ S.unread = Math.max(0, S.unread - r.readN); S.last = S.unread; badge(); }
       if (!r.list.length && !first) return;
       r.list.forEach(function(m){ S.msgs.push(m); S.lastId = Math.max(S.lastId, m.id); });
@@ -139,7 +142,7 @@ var Social = (function(){
     if (!S.msgs.length){ box.innerHTML = '<p class="stnone">ยังไม่มีข้อความ เริ่มทักทายได้เลย</p>'; return; }
     var bottom = first || box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     box.innerHTML = S.msgs.map(function(m){
-      return '<div class="cmsg' + (m.mine ? ' me' : '') + '"><div class="cb">' +
+      return '<div class="cmsg' + (m.mine ? ' me' : '') + '" data-mid="' + m.id + '"><div class="cb">' +
         esc(m.text).replace(/\n/g, '<br>') + '</div><i>' + when(m.at) +
         (m.mine ? '' : ' · <a data-rep="' + m.id + '">⚠ รายงาน</a>') + '</i></div>';
     }).join('');
@@ -432,6 +435,6 @@ var Social = (function(){
   }
 
     return { install:install, onState:onState, openInbox:openInbox, openThread:openThread,
-    newMsg:newMsg, openBlocks:openBlocks, when:when,
+    newMsg:newMsg, openBlocks:openBlocks, when:when, dropMsg:function(id){ S.msgs = S.msgs.filter(function(m){ return m.id !== id; }); },
     renamePlayer:renamePlayer, renameVillage:renameVillage, openPlan:openPlan };
 })();
