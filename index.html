@@ -63,6 +63,9 @@ input::placeholder{color:#5f553e}
 .rkv{font-size:13px;font-weight:700;color:#ffcf40}
 .ft{text-align:center;font-size:10px;color:#4f4635;margin-top:22px;line-height:1.9}
 .hide{display:none!important}
+.hs{background:#100d09;border:1px solid #251e14;border-radius:8px;padding:8px;margin-bottom:6px;font-size:11.5px;line-height:1.7}
+.hs b{color:#ffcf40}.hs i{font-style:normal;color:#8a7a55}
+
 </style>
 </head>
 <body>
@@ -155,12 +158,12 @@ input::placeholder{color:#5f553e}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="js/store.js?v=14M"></script>
-<script src="js/config.js?v=14M"></script>
-<script src="js/firebase-config.js?v=14M"></script>
-<script src="js/net.js?v=14M"></script>
-<script src="js/api.js?v=14M"></script>
-<script src="js/update.js?v=14M"></script>
+<script src="js/store.js?v=14N"></script>
+<script src="js/config.js?v=14N"></script>
+<script src="js/firebase-config.js?v=14N"></script>
+<script src="js/net.js?v=14N"></script>
+<script src="js/api.js?v=14N"></script>
+<script src="js/update.js?v=14N"></script>
 <script>
 (function(){
   function $(i){ return document.getElementById(i); }
@@ -181,8 +184,9 @@ input::placeholder{color:#5f553e}
   var myName = '';
   if (ONLINE) Api.get('/season', null, false).then(function(r){
     if (!r || !r.ok) return;
-    var e = Math.max(0, r.now - r.start), d = Math.floor(e / 86400000), h = Math.floor(e % 86400000 / 3600000);
-    $('sday').innerHTML = '📅 เปิดมาแล้ว <b>' + d + '</b> วัน ' + h + ' ชม. · วันที่ ' + r.day + (r.day > r.len ? ' · ⏳ ต่อเวลา' : '/' + r.len) +
+  var e = Math.max(0, r.now - r.start), d = Math.floor(e / 86400000), h = Math.floor(e % 86400000 / 3600000);
+  $('sday').innerHTML = '📅 ฤดูกาลที่ ' + (r.n || 1) + ' · เปิดมาแล้ว <b>'
+ + d + '</b> วัน ' + h + ' ชม. · วันที่ ' + r.day + (r.day > r.len ? ' · ⏳ ต่อเวลา' : '/' + r.len) +
       (r.winner ? '<br>🏆 ผู้ชนะ: <b>' + esc(r.winner.name) + '</b>'
         : r.day >= r.capDay ? '<br>👑 ศึกชิงเมืองหลวงโลกเปิดแล้ว' : r.day >= r.fortDay ? '<br>🏰 ป้อมปราการเปิดแล้ว' : '');
   });
@@ -210,9 +214,11 @@ input::placeholder{color:#5f553e}
         }
         if (!r.player){
           show('scrName');
-          $('nmIn').value = Store.get('sw_s1_name') || (u.displayName || '').slice(0, 16);
+          $('nmIn').value = r.rejoin || Store.get('sw_s1_name') || (u.displayName || '').slice(0, 16);
+          $('nmMsg').innerHTML = r.rejoin ? '<div class="ok">🏁 ฤดูกาลใหม่เริ่มแล้ว! ทองและเหรียญตราของคุณยังอยู่ ใช้ชื่อเดิมหรือตั้งชื่อใหม่ก็ได้</div>' : '';
           return;
         }
+
         lobby(r, u);
       });
     });
@@ -296,8 +302,20 @@ input::placeholder{color:#5f553e}
   }
 
   /* ================= หอเกียรติยศ ================= */
-  var TABS = [{ k:'pop', n:'👥 ประชากร' }, { k:'vc', n:'🏘 จำนวนเมือง' }];
+  var TABS = [{ k:'pop', n:'👥 ประชากร' }, { k:'vc', n:'🏘 เมือง' }, { k:'h', n:'🏛 ทำเนียบ' }];
   var cur = 'pop';
+  function hofPast(el){
+    Api.get('/hof', null, false).then(function(r){
+      var L = (r && r.list) || [];
+      if (!L.length){ el.innerHTML = '<p class="center">ยังไม่มีฤดูกาลที่จบแล้ว</p>'; return; }
+      el.innerHTML = L.map(function(s){
+        var d = s.data || {};
+        return '<div class="hs"><b>ฤดูกาลที่ ' + s.n + '</b> · ' + (d.days || '-') + ' วัน · 👥 ' + (d.players || 0) +
+          '<br>🏆 ' + esc(s.winner || 'ไม่มีผู้ชนะ') +
+          (d.top && d.top[0] ? '<br><i>🥇 ' + esc(d.top[0].name) + ' · 👥 ' + fmt(d.top[0].pop) + '</i>' : '') + '</div>';
+      }).join('');
+    });
+  } 
   function paintHof(){
     $('rtabs').innerHTML = TABS.map(function(t){
       return '<button class="tab' + (t.k === cur ? ' on' : '') + '" data-t="' + t.k + '">' + t.n + '</button>';
@@ -308,6 +326,7 @@ input::placeholder{color:#5f553e}
     var el = $('rlist');
     if (!ONLINE){ el.innerHTML = '<p class="center">อันดับรวมใช้ได้ในโหมดออนไลน์</p>'; return; }
     el.innerHTML = '<p class="center">กำลังโหลด…</p>';
+    if (cur === 'h') return hofPast(el); 
     Api.get('/rank', { f:cur }, false).then(function(r){
       if (!r.ok){ el.innerHTML = '<p class="center">' + esc(r.err || 'โหลดไม่สำเร็จ') + '</p>'; return; }
       var L = r.list || [];

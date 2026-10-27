@@ -103,7 +103,9 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
         <p id="btinfo" style="font-size:11.5px;color:#b9ac92;margin-top:6px;line-height:1.7"></p>
         <button class="btn b2" id="btSpawn">➕ สร้างบอทเพิ่ม 10 ตัว</button>
         <button class="btn b2" id="btTick">▶ สั่งบอทก่อสร้างรอบนี้เลย</button>
-        <input id="btName" placeholder="ชื่อผู้เล่นที่จะให้บอทบุก (ทดสอบ)"><button class="btn b2" id="btRaid">🎯 ทดสอบบอทบุก</button>
+        <input id="btName" placeholder="ชื่อผู้เล่นที่จะให้บอทบุก (ทดสอบ)">
+        <input id="btXY" placeholder="พิกัดเมือง เช่น 12|-30 (เว้นว่าง = เมืองแรก)">
+        <button class="btn b2" id="btRaid">🎯 ทดสอบบอทบุก</button>
         <button class="btn red" id="btClear">🗑 ลบบอททั้งหมด</button>
         <div id="btmsg"></div>
         <p style="font-size:10.5px;color:#7a6c4e;margin-top:8px;line-height:1.6">
@@ -111,14 +113,23 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
       </div>
     </div>
 
-      <div class="card"><b>👑 ฤดูกาล</b>
+      < class="card"><b>👑 ฤดูกาล</b>
       <p id="seinfo" style="font-size:11.5px;color:#b9ac92;margin-top:6px;line-height:1.7">กำลังโหลด…</p>
       <input id="seday" type="number" placeholder="ตั้งให้วันนี้เป็นวันที่ เช่น 1 หรือ 20">
       <button class="btn b2" id="seSet">📅 ตั้งวันเซิร์ฟเวอร์</button>
       <button class="btn b2" id="seTick">▶ ประมวลผลฤดูกาลตอนนี้</button>
       <input id="sewin" placeholder="ชื่อผู้ชนะ เช่น [SUK] สุโขทัยรวมใจ"><button class="btn b2" id="seWin">🏆 ประกาศผู้ชนะ (ฉุกเฉิน)</button>
       <button class="btn red" id="seReset">↺ ล้างผู้ชนะ / ผู้ครองเมืองหลวง</button>
+      <hr style="border-color:#2f2618;margin:10px 0">
+      <b>🏁 จบฤดูกาลและเริ่มฤดูกาลใหม่</b>
+      <p style="font-size:10.5px;color:#7a6c4e;line-height:1.6">บันทึกทำเนียบ แจกเหรียญตรา แล้วล้างโลกทั้งหมด (เมือง ทหาร กิลด์ บอท) · ผู้เล่นยังมีบัญชี ทอง และเหรียญตรา</p>
+      <input id="nsConf" placeholder="พิมพ์ RESET เพื่อยืนยัน">
+      <button class="btn red" id="nsGo">🏁 เริ่มฤดูกาลใหม่</button>
       <div id="semsg"></div></div>
+    <div class="card"><b>📢 ประกาศถึงผู้เล่นทุกคน</b>
+      <textarea id="anTx" maxlength="1000" placeholder="ข้อความประกาศ" style="width:100%;min-height:80px;margin-top:6px;padding:10px;background:#1c1710;border:1px solid #4a3a22;border-radius:8px;color:#f0e6cc;font-family:inherit;font-size:13px"></textarea>
+      <button class="btn b1" id="anGo">📢 ส่งประกาศ</button><div id="anMsg"></div>
+      <p style="font-size:10.5px;color:#7a6c4e;margin-top:6px">ส่งเข้า ✉ ข้อความส่วนตัวของทุกคน จาก "📢 ทีมงานสุวรรณภูมิ" (ผู้เล่นตอบกลับไม่ได้)</p></div>
     <button class="btn b3" id="refresh">🔄 โหลดข้อมูลใหม่</button>
     <button class="btn b3" id="out">ออกจากระบบ</button>
   </div>
@@ -368,6 +379,24 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
     if (confirm('ประกาศให้ ' + n + ' ชนะเซิร์ฟเวอร์?')) seAct({ action:'win', name:n });
   };
 
+    $('anGo').onclick = function(){
+    var tx = $('anTx').value.trim();
+    if (tx.length < 2) return note('anMsg', 'พิมพ์ข้อความก่อน');
+    if (!confirm('ส่งประกาศถึงผู้เล่นทุกคน?')) return;
+    Api.post('/admin/announce', { text:tx }).then(function(r){
+      note('anMsg', r.ok ? '✔ ส่งถึง ' + r.n + ' คนแล้ว' : r.err, r.ok);
+      if (r.ok) $('anTx').value = '';
+    });
+  };
+  $('nsGo').onclick = function(){
+    if ($('nsConf').value.trim() !== 'RESET') return note('semsg', 'พิมพ์ RESET ให้ถูกต้อง');
+    if (!confirm('จบฤดูกาลนี้และล้างโลกทั้งหมด? ย้อนกลับไม่ได้')) return;
+    Api.post('/admin/newseason', { confirm:'RESET' }).then(function(r){
+      note('semsg', r.ok ? '✔ เริ่มฤดูกาลที่ ' + r.n + ' แล้ว' : r.err, r.ok);
+      if (r.ok){ $('nsConf').value = ''; loadAll(); Api.get('/season', null, false).then(seShow); }
+    });
+  };
+  
   function paintLedger(r){
     var L = (r && r.list) || [];
     $('llist').innerHTML = L.length ? L.map(function(g){
@@ -377,30 +406,58 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
         fmt(g.delta) + '</div></div>';
     }).join('') : '<p style="color:#6a5f45;padding:8px">ยังไม่มีรายการ</p>';
   }
-    function paintOrders(r){
-    var L = (r && r.list) || [];
-    var ST = { pending:['รอชำระ','t-pend'], paid:['ชำระแล้ว','t-paid'], expired:['หมดเวลา','t-ban'], cancel:['ยกเลิก','t-ban'] };
+
+    var OL = [];
+  function paintOrders(r){
+    OL = (r && r.list) || [];
+    function pri(o){ return (o.status === 'pending' || o.status === 'expired') && o.claim_at ? 1 : 0; }
+    var L = OL.slice().sort(function(a, b){ return pri(b) - pri(a); });
+    var ST = { pending:['รอชำระ','t-pend'], paid:['ชำระแล้ว','t-paid'], expired:['หมดเวลา','t-ban'], cancel:['ยกเลิก','t-ban'], reject:['ปฏิเสธ','t-ban'] };
     $('olist').innerHTML = L.length ? L.map(function(o){
-      var s = ST[o.status] || [o.status, ''], amt = o.amt ? (o.amt / 100).toFixed(2) : o.price;
-      var act = o.status === 'pending' || o.status === 'expired';
-      return '<div class="row"' + (o.claim_at && act ? ' style="background:#1d2616"' : '') + '><div class="m"><b>' + esc(o.ref) + ' · ' +
-        esc(o.name || o.uid) + '</b><i>💰 ' + fmt(o.gold) + ' ทอง · <b style="color:#ffcf40;font-size:13px">' + amt + ' ฿</b> · ' + dt(o.created) +
-        ' · <span class="' + s[1] + '">' + s[0] + '</span>' + (o.claim_at ? ' · 📤 แจ้งโอน ' + dt(o.claim_at) : '') +
-        (o.note ? ' · ' + esc(o.note) : '') + '</i></div>' +
-        (act ? '<button class="btn b1 sm" data-paid="' + o.id + '">✔</button><button class="btn red sm" data-oc="' + o.id + '">✕</button>' : '') + '</div>';
+      var s = ST[o.status] || [o.status, ''], act = o.status === 'pending' || o.status === 'expired';
+      return '<div class="row"' + (act && o.claim_at ? ' style="background:#1d2616"' : '') + '><div class="m"><b>' + esc(o.ref) + ' · ' +
+        esc(o.name || o.uid) + '</b><i>💰 ' + fmt(o.gold) + ' ทอง · <b style="color:#ffcf40">' + (o.amt ? o.amt / 100 : o.price) + ' ฿</b> · ' +
+        dt(o.created) + ' · <span class="' + s[1] + '">' + s[0] + '</span>' + (o.claim_at ? ' · 🧾 ส่งสลิป ' + dt(o.claim_at) : '') + '</i></div>' +
+        (act && o.claim_at ? '<button class="btn b1 sm" data-sl="' + o.id + '">🧾 ตรวจ</button>'
+          : act ? '<button class="btn red sm" data-oc="' + o.id + '">✕</button>' : '') + '</div>';
     }).join('') : '<p style="color:#6a5f45;padding:8px">ยังไม่มีคำสั่งซื้อ</p>';
-    document.querySelectorAll('[data-paid]').forEach(function(b){
-      b.onclick = function(){
-        if (!confirm('ยืนยันว่าเงินเข้าบัญชีตรงยอดนี้แล้ว และเพิ่มทองให้ผู้เล่น?')) return;
-        Api.post('/admin/paid', { id:+b.dataset.paid }).then(function(x){ if (!x.ok) return alert(x.err); loadAll(); });
-      };
-    });
+    document.querySelectorAll('[data-sl]').forEach(function(b){ b.onclick = function(){ slipView(+b.dataset.sl); }; });
     document.querySelectorAll('[data-oc]').forEach(function(b){
       b.onclick = function(){
-        if (!confirm('ยกเลิกคำสั่งซื้อนี้?')) return;
+        if (!confirm('ยกเลิกคำสั่งซื้อนี้? (ผู้เล่นยังไม่ได้แนบสลิป)')) return;
         Api.post('/admin/ordercancel', { id:+b.dataset.oc }).then(function(){ loadAll(); });
       };
     });
+  }
+  function slipView(id){
+    var o = OL.filter(function(x){ return x.id === id; })[0];
+    if (!o) return;
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.88);overflow-y:auto;padding:14px';
+    ov.innerHTML = '<div style="max-width:460px;margin:0 auto;background:#14110c;border:1px solid #4a3a22;border-radius:12px;padding:12px">' +
+      '<b style="color:#ffcf40;font-size:15px">🧾 ' + esc(o.ref) + ' · ' + esc(o.name || o.uid) + '</b>' +
+      '<div style="font-size:28px;font-weight:700;color:#ffcf40;text-align:center;margin:8px 0">' + (o.amt ? o.amt / 100 : o.price) + ' ฿</div>' +
+      '<div style="font-size:11.5px;color:#b9ac92;text-align:center">💰 ' + fmt(o.gold) + ' ทอง · สั่งซื้อ ' + dt(o.created) +
+      (o.note ? '<br>หมายเหตุ: ' + esc(o.note) : '') + '</div>' +
+      '<div id="slImg" style="text-align:center;margin:10px 0;color:#8a7a55">กำลังโหลดสลิป…</div>' +
+      '<button class="btn b1" id="slOk">✔ ยืนยัน · เติมทอง</button><button class="btn red" id="slNo">✕ ปฏิเสธ</button>' +
+      '<button class="btn b3" id="slX">ปิด</button></div>';
+    document.body.appendChild(ov);
+    function close(){ ov.remove(); }
+    $('slX').onclick = close;
+    Api.post('/admin/slip', { id:id }).then(function(r){
+      $('slImg').innerHTML = r && r.img ? '<img src="' + r.img + '" style="max-width:100%;border-radius:8px">' : 'ไม่พบรูปสลิป';
+    });
+    $('slOk').onclick = function(){
+      if (!confirm('ยืนยันว่ายอดในสลิปตรง และเงินเข้าบัญชีแล้ว?')) return;
+      this.disabled = true;
+      Api.post('/admin/paid', { id:id }).then(function(x){ if (!x.ok) return alert(x.err); close(); loadAll(); });
+    };
+    $('slNo').onclick = function(){
+      var why = prompt('เหตุผลที่ปฏิเสธ (ผู้เล่นจะเห็นข้อความนี้)', 'ยอดเงินไม่ตรง / ไม่พบรายการโอน');
+      if (why === null) return;
+      Api.post('/admin/ordercancel', { id:id, reason:why }).then(function(x){ if (!x.ok) return alert(x.err); close(); loadAll(); });
+    };
   }
 
   /* ---------- บอท ---------- */
@@ -419,10 +476,12 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
   $('btSpawn').onclick = function(){ botAct({ action:'spawn', n:10 }, function(r){ return '✔ สร้างบอท ' + r.spawned + ' ตัว'; }); };
   $('btTick').onclick  = function(){ botAct({ action:'tick' }, function(){ return '✔ บอทก่อสร้างรอบนี้แล้ว'; }); };
   $('btRaid').onclick = function(){
-    var n = $('btName').value.trim();
+    var n = $('btName').value.trim(), xy = ($('btXY').value || '').split('|');
     if (!n) return note('btmsg', 'ใส่ชื่อผู้เล่น');
-    if (confirm('ให้บอท 3 ตัวที่ใกล้ที่สุดยกทัพ 20 นายไปปล้น ' + n + '?'))
-      botAct({ action:'raid', name:n }, function(r){ return '✔ บอท ' + r.n + ' ตัวออกเดินทางแล้ว'; });
+    var body = { action:'raid', name:n };
+    if (xy.length === 2 && xy[0].trim() !== '' && xy[1].trim() !== ''){ body.x = parseInt(xy[0], 10); body.y = parseInt(xy[1], 10); }
+    if (confirm('ให้บอท 3 ตัวที่ใกล้ที่สุดยกทัพไปปล้น ' + n + (body.x != null ? ' ที่ (' + body.x + '|' + body.y + ')' : ' (เมืองแรก)') + '?'))
+      botAct(body, function(r){ return '✔ บอท ' + r.n + ' ตัวออกเดินทางแล้ว'; });
   };
   $('btClear').onclick = function(){
     if (!confirm('ลบบอทและเมืองบอททั้งหมด?')) return;
