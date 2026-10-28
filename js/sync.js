@@ -292,6 +292,7 @@ var Sync = (function(){
     if (typeof Send2 !== 'undefined') Send2.install();
     if (typeof B53 !== 'undefined') B53.install();
     if (typeof Season !== 'undefined') Season.install();
+    if (typeof Push !== 'undefined') Push.install(); 
   }
 
   /* ---------- ทอง ---------- */

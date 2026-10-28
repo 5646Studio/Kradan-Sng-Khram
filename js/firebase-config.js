@@ -13,3 +13,5 @@ var FIREBASE_CONFIG = {
 
 /* เปิด/ปิดปุ่มล็อกอิน — Facebook ต้องตั้งค่าเพิ่ม (ดูคู่มือ) */
 var NET_FEATURES = { google:true, facebook:false, email:true, guest:true };
+
+var FCM_VAPID = 'BNSkoi-iHl7fLDCir0E6RJnerIUPNGd5DG1lnkPawzSMdDQI6HkEun-ulhMce2tRb-VCHJ6K6zTIwiujdt-35nw';

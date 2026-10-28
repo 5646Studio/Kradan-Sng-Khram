@@ -60,6 +60,7 @@ var Profile = (function(){
       }).join('') + '</div><div class="pf-list">' +
       (online() ? '<button class="pf-li" id="pfCk"><span>📅</span>เช็คอินรายวัน' + (typeof Checkin !== 'undefined' && Checkin.pending() ? ' <b class="ckred">●</b>' : '') + '<em>›</em></button>' : '') +
       '<button class="pf-li" id="pfSea"><span>👑</span>ศึกชิงเมืองหลวงโลก<em>›</em></button>' +
+      (online() ? '<button class="pf-li" id="pfPush"><span>🔔</span>การแจ้งเตือน' + (typeof Push !== 'undefined' && Push.isOn() ? ' <b style="color:#6fd35a">●</b>' : '') + '<em>›</em></button>' : '') +
       '<button class="pf-li" id="pfRn"><span>✎</span>เปลี่ยนชื่อผู้เล่น<em>›</em></button>' +
       '<button class="pf-li" id="pfSet"><span>⚙</span>ตั้งค่าและบัญชี<em>›</em></button>' +
       '<button class="pf-li" id="pfBug"><span>🐞</span>แจ้งปัญหา<em>›</em></button></div></div>' +
@@ -67,6 +68,7 @@ var Profile = (function(){
     UI.modal(h);
     Q.forEach(function(q){ document.getElementById(q[0]).onclick = q[3]; });
     document.querySelectorAll('[data-th]').forEach(function(b){ b.onclick = function(){ setTheme(b.dataset.th); }; });
+    var pfp = document.getElementById('pfPush'); if (pfp) pfp.onclick = function(){ Push.open(); }; 
     document.getElementById('pfRn').onclick = function(){ if (typeof Social !== 'undefined') Social.renamePlayer(); };
     var ckb = document.getElementById('pfCk'); if (ckb) ckb.onclick = function(){ Checkin.open(); };
     document.getElementById('pfSea').onclick = function(){

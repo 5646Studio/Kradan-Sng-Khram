@@ -3,8 +3,9 @@ var Swipe = (function(){
   function attach(el, ask, onDel){
     if (el.__sw) return;
     el.__sw = 1;
-    var w = document.createElement('div'), del = document.createElement('button');
-    w.className = 'swrap'; del.className = 'swdel'; del.textContent = '✕';
+    var w = document.createElement('div'), del = document.createElement('div');
+    w.className = 'swrap'; del.className = 'swdel'; del.setAttribute('role', 'button');
+    del.innerHTML = '<span>🗑</span><i>ลบ</i>';
     el.parentNode.insertBefore(w, el); w.appendChild(del); w.appendChild(el);
     el.classList.add('swin');
     var x0 = 0, y0 = 0, dx = 0, drag = false, open = false, lock = null, at = 0;
@@ -39,7 +40,7 @@ var Swipe = (function(){
     }, true);
     del.onclick = function(){
       if (ask && !confirm(ask)){ open = false; set(0, true); return; }
-      del.disabled = true;
+      if (del.dataset.busy) return; del.dataset.busy = '1';
       onDel(function(){
         w.style.transition = 'opacity .2s'; w.style.opacity = '0';
         setTimeout(function(){ w.remove(); }, 200);
