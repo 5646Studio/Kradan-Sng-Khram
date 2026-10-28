@@ -547,6 +547,10 @@ export default {
     ctx.waitUntil((async () => {
       try { await resolveDue(env, Date.now(), 60); } catch (e){ console.log('resolve', e && e.message); }
       try { await firePlans(env, Date.now()); } catch (e){ console.log('plan', e && e.message); }
+      try { await waveTick(env, Date.now()); } catch (e){ console.log('wave', e && e.message); }
+      try { await warnTick(env, Date.now()); } catch (e){ console.log('warn', e && e.message); }
+      try { await msgTick(env, Date.now()); } catch (e){ console.log('msgpush', e && e.message); }
+      try { await pushTick(env, Date.now()); } catch (e){ console.log('push', e && e.message); }
       if (new Date(ev.scheduledTime).getUTCMinutes() === 30){
       try { await socialCleanup(env, Date.now()); } catch (e){ console.log('clean', e && e.message); }
       }
@@ -616,6 +620,8 @@ async function route(req, env){
 
   const SOC = await social(p, b, env, uid);
   if (SOC) return SOC;
+  const PSH = await pushApi(p, b, env, uid);
+  if (PSH) return PSH;
   const STN = await stationApi(p, b, env, uid);
   if (STN) return STN;
   const RM = await roomApi(p, b, env, uid);
@@ -719,6 +725,7 @@ async function session(env, uid, act){
     for (const m of mv) if (m.uid === uid) away[m.from_vid] = (away[m.from_vid] || 0) + tUp(JSON.parse(m.troops || '{}'));
     const ctx = { P, t, spend:0, goldSet:'', goldBind:[], reason:'', msg:null, ins:[], pset:'', pbind:[], moves:mv,
       VS:rows.map(r => { const d = JSON.parse(r.data); d._away = away[r.id] || 0; if (!d.troops) d.troops = {}; return { row:r, d, dirty:false }; }) };
+   ctx.hasPush = !!(await env.DB.prepare('SELECT 1 x FROM push_tokens WHERE uid=? LIMIT 1').bind(uid).first()); 
     for (const V of ctx.VS){ if (advance(V.d, t, P)) V.dirty = true; fill(V.d, t, P); if (heroTick(V, ctx)) V.dirty = true; if (partyTick(V, ctx)) V.dirty = true; }
 
     let err = null;
@@ -770,6 +777,7 @@ async function commit(env, ctx){
   const cp = cpNow(P, ctx.VS, t);
   st.push(env.DB.prepare('UPDATE players SET cp=?, cp_at=?, seen=?' + ctx.pset + ' WHERE uid=?' + guard)
     .bind(cp, t, t, ...ctx.pbind, P.uid, ...gb));
+  if (ctx.hasPush) for (const V of dirty) st.push(...pushPlan(env, P, V));
   const r = await env.DB.batch(st);
   for (const i of vIdx) if (!r[i].meta.changes) return false;
   if (gIdx >= 0 && !r[gIdx].meta.changes){ if (!dirty.length) throw ue('ทองไม่พอ'); return false; }
@@ -918,6 +926,7 @@ async function deleteAccount(env, uid, b){
   st.push(DB.prepare('UPDATE moves SET to_uid=? WHERE to_uid=?').bind(RUIN_UID, uid));
   st.push(DB.prepare('DELETE FROM reports WHERE uid=?').bind(uid));
   st.push(DB.prepare('DELETE FROM plans WHERE uid=?').bind(uid));
+  st.push(DB.prepare('DELETE FROM push_tokens WHERE uid=?').bind(uid)); st.push(DB.prepare('DELETE FROM pushq WHERE uid=?').bind(uid));
   st.push(DB.prepare('DELETE FROM offers WHERE uid=?').bind(uid)); st.push(DB.prepare('DELETE FROM guild_req WHERE uid=?').bind(uid));
   st.push(DB.prepare('DELETE FROM oasis WHERE uid=?').bind(uid));
   st.push(DB.prepare('DELETE FROM stations WHERE owner_uid=?').bind(uid));
@@ -1065,6 +1074,23 @@ async function admin(p, b, q, env, by){
   if (p === '/admin/newseason'){
     if (b.confirm !== 'RESET') throw ue('ต้องยืนยันด้วย RESET');
     return json(Object.assign({ ok:true }, await newSeason(env)), 200, env);
+  }
+    if (p === '/admin/wave'){
+    if (b.action === 'now') return json(Object.assign({ ok:true }, await botWave(env, b)), 200, env);
+    let L = await waveList(env);
+    if (b.action === 'add'){
+      const at = +b.at || 0;
+      if (at < t + 60000) throw ue('ตั้งเวลาล่วงหน้าอย่างน้อย 1 นาที');
+      if (L.length >= 20) throw ue('ตั้งได้สูงสุด 20 รอบ');
+      L.push({ id:t, at, per:b.per | 0, extra:b.extra | 0, target:b.target === 'all' ? 'all' : 'first', force:!!b.force, say:!!b.say });
+      L.sort((a, c) => a.at - c.at);
+      await setMeta(env, 'waves', JSON.stringify(L));
+    } else if (b.action === 'del'){
+      L = L.filter(w => w.id !== +b.id);
+      await setMeta(env, 'waves', JSON.stringify(L));
+    }
+    const last = await getMeta(env, 'wave_last');
+    return json({ ok:true, list:L, last:last ? JSON.parse(last) : null }, 200, env);
   }
   return json({ ok:false, err:'ไม่พบคำสั่งแอดมิน' }, 404, env);
 }
@@ -2182,6 +2208,8 @@ async function doArrive(env, m){
     if (!h || h.v !== 4) return;
     h.army = 0; h.dead = true; h.hp = 0; h.healAt = 0; gainExp(h, H.exp || 0);
   });
+  if (ok && aP && aP.is_bot === 0) await push(env, [m.uid], titleA(rep), 'แตะเพื่อดูรายงาน', 'report', { quiet:true });
+  if (ok && defUid) await push(env, [defUid], titleD(rep), 'แตะเพื่อดูรายงาน', 'attack');
   if (ok && botTaunt) await botMsg(env, botTaunt.bot, botTaunt.to, botTaunt.kind, Date.now());
   return ok;
 }
@@ -3280,7 +3308,7 @@ async function newSeason(env){
   const BOTS = '(SELECT uid FROM players WHERE is_bot=1)';
   ['DELETE FROM msgs WHERE from_uid IN ' + BOTS + ' OR to_uid IN ' + BOTS, "DELETE FROM msgs WHERE conv LIKE 'r:%'",
    'DELETE FROM blocks WHERE target IN ' + BOTS, 'DELETE FROM villages', 'DELETE FROM moves', 'DELETE FROM reports',
-   'DELETE FROM offers', 'DELETE FROM stations', 'DELETE FROM plans', 'DELETE FROM oasis', 'DELETE FROM npc',
+   'DELETE FROM offers', 'DELETE FROM pushq', 'DELETE FROM stations', 'DELETE FROM plans', 'DELETE FROM oasis', 'DELETE FROM npc',
    'DELETE FROM guild_req', 'DELETE FROM guild_rel', 'DELETE FROM guilds', 'DELETE FROM players WHERE is_bot=1',
    'UPDATE players SET guild_id=NULL, guild_role=0, cp=0, quest=0, sched_until=0',
    "DELETE FROM meta WHERE k IN ('forts_on','cap_on','winner','holder','hold_since','holder_name')"
@@ -3291,4 +3319,238 @@ async function newSeason(env){
     '\nฤดูกาลที่ ' + (n + 1) + ' เริ่มแล้ว! เข้าเกมเพื่อเลือกเผ่าและดินแดนใหม่ · ทองและเหรียญตราของคุณยังอยู่ครบ', t));
   await DB.batch(st);
   return { n:n + 1, players:np };
+}
+
+/* =====================================================================
+   B8 : แจ้งเตือนผ่าน Firebase Cloud Messaging · บอทบุกทั้งเซิร์ฟเวอร์
+   ===================================================================== */
+const PUSH_CATS = ['attack','report','msg','build','train','hero','gold','ann'];
+let FCM_TOK = null, FCM_EXP = 0;
+function b64e(u){ let s = ''; for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+async function fcmToken(env){
+  if (FCM_TOK && Date.now() < FCM_EXP - 60000) return FCM_TOK;
+  const n = Math.floor(Date.now() / 1000), enc = o => b64e(TE.encode(JSON.stringify(o)));
+  const head = enc({ alg:'RS256', typ:'JWT' });
+  const body = enc({ iss:env.FCM_CLIENT_EMAIL, scope:'https://www.googleapis.com/auth/firebase.messaging',
+    aud:'https://oauth2.googleapis.com/token', iat:n, exp:n + 3600 });
+  const pem = String(env.FCM_PRIVATE_KEY).replace(/\\n/g, '\n').replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+  const der = Uint8Array.from(atob(pem), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey('pkcs8', der, { name:'RSASSA-PKCS1-v1_5', hash:'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, TE.encode(head + '.' + body)));
+  const r = await fetch('https://oauth2.googleapis.com/token', { method:'POST',
+    headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
+    body:'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=' + head + '.' + body + '.' + b64e(sig) });
+  const j = await r.json();
+  if (!j.access_token) throw new Error('fcm auth ' + JSON.stringify(j).slice(0, 200));
+  FCM_TOK = j.access_token; FCM_EXP = Date.now() + (j.expires_in || 3600) * 1000;
+  return FCM_TOK;
+}
+/* uids = รายชื่อ uid หรือ '*' = ทุกคน · o.quiet = ไม่ส่งถ้ากำลังเล่นเกมอยู่ */
+async function push(env, uids, title, body, cat, o){
+  o = o || {};
+  if (!env.FCM_CLIENT_EMAIL || !env.FCM_PRIVATE_KEY || !env.FIREBASE_PROJECT_ID) return 0;
+  const DB = env.DB, t = Date.now(), Q = 'SELECT t.token, t.uid, p.push_prefs AS pf, p.seen FROM push_tokens t JOIN players p ON p.uid=t.uid';
+  let rows = [];
+  if (uids === '*') rows = (await DB.prepare(Q).all()).results || [];
+  else {
+    const u = [...new Set(uids)].filter(Boolean);
+    for (let i = 0; i < u.length; i += 90){
+      const c = u.slice(i, i + 90);
+      rows = rows.concat((await DB.prepare(Q + ' WHERE t.uid IN (' + c.map(() => '?').join(',') + ')').bind(...c).all()).results || []);
+    }
+  }
+  rows = rows.filter(r => {
+    let pf = {};
+    try { pf = JSON.parse(r.pf || '{}'); } catch (e){}
+    if (cat !== 'test' && pf[cat] === 0) return false;
+    return !(o.quiet && r.seen > t - 150000);
+  });
+  if (!rows.length) return 0;
+  let tok;
+  try { tok = await fcmToken(env); } catch (e){ console.log('fcm', e && e.message); return 0; }
+  const url = 'https://fcm.googleapis.com/v1/projects/' + env.FIREBASE_PROJECT_ID + '/messages:send', dead = [];
+  let n = 0;
+  for (let i = 0; i < rows.length; i += 20){
+    await Promise.all(rows.slice(i, i + 20).map(async r => {
+      const res = await fetch(url, { method:'POST', headers:{ Authorization:'Bearer ' + tok, 'Content-Type':'application/json' },
+        body:JSON.stringify({ message:{ token:r.token,
+          data:{ title:String(title).slice(0, 100), body:String(body || '').slice(0, 240), tag:cat, url:'game.html' },
+          webpush:{ headers:{ Urgency:'high', TTL:'86400' } } } }) }).catch(() => null);
+      if (!res) return;
+      if (res.ok){ n++; return; }
+      const tx = await res.text().catch(() => '');
+      if (res.status === 404 || /UNREGISTERED/.test(tx)) dead.push(r.token);
+      else console.log('fcm send', res.status, tx.slice(0, 200));
+    }));
+  }
+  for (const d of dead) await DB.prepare('DELETE FROM push_tokens WHERE token=?').bind(d).run();
+  return n;
+}
+async function pushApi(p, b, env, uid){
+  if (p.indexOf('/push/') !== 0) return null;
+  const DB = env.DB, t = Date.now(), ok = o => json(Object.assign({ ok:true }, o || {}), 200, env);
+  const dev = async () => ((await DB.prepare('SELECT COUNT(*) n FROM push_tokens WHERE uid=?').bind(uid).first()) || {}).n || 0;
+  const ready = !!(env.FCM_CLIENT_EMAIL && env.FCM_PRIVATE_KEY);
+  if (p === '/push/register'){
+    const tk = String(b.token || '');
+    if (tk.length < 20 || tk.length > 400) throw ue('โทเคนไม่ถูกต้อง');
+    await DB.prepare('INSERT INTO push_tokens(token,uid,at) VALUES(?,?,?) ON CONFLICT(token) DO UPDATE SET uid=excluded.uid, at=excluded.at').bind(tk, uid, t).run();
+    await DB.prepare('DELETE FROM push_tokens WHERE uid=? AND token NOT IN (SELECT token FROM push_tokens WHERE uid=? ORDER BY at DESC LIMIT 5)').bind(uid, uid).run();
+    return ok({ ready });
+  }
+  if (p === '/push/unregister'){
+    await DB.prepare('DELETE FROM push_tokens WHERE token=? AND uid=?').bind(String(b.token || ''), uid).run();
+    return ok({});
+  }
+  if (p === '/push/prefs'){
+    if (b.prefs){
+      const o = {};
+      for (const k of PUSH_CATS) o[k] = b.prefs[k] ? 1 : 0;
+      await DB.prepare('UPDATE players SET push_prefs=? WHERE uid=?').bind(JSON.stringify(o), uid).run();
+    }
+    const r = await DB.prepare('SELECT push_prefs FROM players WHERE uid=?').bind(uid).first();
+    return ok({ prefs:JSON.parse((r && r.push_prefs) || '{}'), devices:await dev(), ready });
+  }
+  if (p === '/push/test'){
+    if (!ready) throw ue('เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า FCM_CLIENT_EMAIL / FCM_PRIVATE_KEY');
+    const n = await push(env, [uid], '🔔 ทดสอบการแจ้งเตือน', 'ถ้าเห็นข้อความนี้ แปลว่าแจ้งเตือนใช้งานได้แล้ว', 'test');
+    return ok({ n });
+  }
+  return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
+}
+
+/* ---------- ตั้งคิวแจ้งเตือนตามเวลาที่งานจะเสร็จ (เรียกตอนบันทึกเมือง) ---------- */
+function qName(d, q){
+  if (q.kind === 'field') return 'หลุม' + (RTH[(d.fields[q.slot] || {}).res] || '');
+  if (q.kind === 'wall') return BD.wall.n;
+  return (BD[q.k] || {}).n || 'อาคาร';
+}
+function pushPlan(env, P, V){
+  const d = V.d, vn = V.row.name, L = [];
+  const st = [env.DB.prepare('DELETE FROM pushq WHERE vid=?').bind(V.row.id)];
+  if (d.fort) return st;
+  for (const q of d.queue) if (q.active && q.finish) L.push([q.finish, 'build', '🔨 ก่อสร้างเสร็จ', qName(d, q) + ' Lv.' + q.level + ' · ' + vn]);
+  for (const bk in (d.train || {})){
+    const q = d.train[bk], j = q[q.length - 1];
+    if (j) L.push([j.next + j.each * (j.left - 1), 'train', '🏋 ฝึกทหารเสร็จ', ((BD[bk] || {}).n || bk) + ' · ' + vn]);
+  }
+  const h = d.hero;
+  if (h && h.dung) L.push([h.dung.back, 'hero', '🗿 วีรบุรุษกลับจากดันเจี้ยนแล้ว', vn]);
+  if (h && h.dead && h.healAt) L.push([h.healAt, 'hero', '⛑ วีรบุรุษรักษาหายแล้ว', vn]);
+  if (d.party) L.push([d.party.end, 'build', '🎉 งานเฉลิมฉลองจบแล้ว', vn]);
+  for (const x of L) st.push(env.DB.prepare('INSERT INTO pushq(uid,vid,at,cat,title,body) VALUES(?,?,?,?,?,?)')
+    .bind(P.uid, V.row.id, x[0], x[1], x[2], x[3]));
+  return st;
+}
+async function pushTick(env, t){
+  const DB = env.DB;
+  const rows = (await DB.prepare('SELECT * FROM pushq WHERE at<=? ORDER BY at LIMIT 60').bind(t).all()).results || [];
+  if (!rows.length) return;
+  await DB.prepare('DELETE FROM pushq WHERE id IN (' + rows.map(() => '?').join(',') + ')').bind(...rows.map(r => r.id)).run();
+  const by = {};
+  for (const r of rows) (by[r.uid] ||= []).push(r);
+  let n = 0;
+  for (const uid in by){
+    const L = by[uid];
+    for (const cat of [...new Set(L.map(x => x.cat))]){
+      const xs = L.filter(x => x.cat === cat);
+      await push(env, [uid], xs[0].title + (xs.length > 1 ? ' (' + xs.length + ')' : ''),
+        xs.map(x => x.body).join(' · ').slice(0, 200), cat, { quiet:true });
+    }
+    /* ประมวลผลเมืองให้ทันที เพื่อให้คิวถัดไปเริ่มและตั้งแจ้งเตือนรอบใหม่ */
+    if (n++ < 8) try { await session(env, uid, null); } catch (e){}
+  }
+}
+/* ---------- ข้อความใหม่ → แจ้งเตือน ---------- */
+async function msgTick(env, t){
+  const DB = env.DB, last = +(await getMeta(env, 'push_msg')) || 0;
+  if (!last){
+    const mx = ((await DB.prepare('SELECT MAX(id) n FROM msgs').first()) || {}).n || 1;
+    await setMeta(env, 'push_msg', mx);
+    return;
+  }
+  const rows = (await DB.prepare('SELECT m.id, m.from_uid, m.to_uid, m.text, p.name FROM msgs m LEFT JOIN players p ON p.uid=m.from_uid WHERE m.id>? AND m.to_uid IS NOT NULL AND m.read=0 ORDER BY m.id LIMIT 400')
+    .bind(last).all()).results || [];
+  if (!rows.length) return;
+  await setMeta(env, 'push_msg', rows[rows.length - 1].id);
+  const by = {};
+  for (const m of rows){
+    const cat = m.from_uid !== SYS_UID ? 'msg' : /^[✅❌]/.test(m.text) ? 'gold' : 'ann';
+    (by[m.to_uid + '|' + cat] ||= []).push(Object.assign(m, { cat }));
+  }
+  for (const k in by){
+    const L = by[k], m = L[L.length - 1];
+    const title = m.cat === 'msg' ? '✉ ' + (m.name || 'ข้อความใหม่') + (L.length > 1 ? ' (' + L.length + ')' : '')
+      : m.cat === 'gold' ? '💰 ผลการเติมทอง' : '📢 ประกาศจากทีมงาน';
+    await push(env, [m.to_uid], title, String(m.text).replace(/\n/g, ' ').slice(0, 150), m.cat, { quiet:m.cat === 'msg' });
+  }
+}
+/* ---------- เตือนทัพศัตรูกำลังมา (ตามระยะมองเห็นของหอคอยเฝ้าระวัง) ---------- */
+async function warnTick(env, t){
+  const DB = env.DB;
+  const rows = (await DB.prepare("SELECT m.id, m.to_vid, m.to_uid, m.mission, m.arrive, m.fx, m.fy FROM moves m JOIN players p ON p.uid=m.to_uid WHERE m.state='go' AND m.warned=0 AND m.mission IN ('attack','raid','scout') AND p.is_bot=0 AND m.uid<>m.to_uid AND m.arrive>? AND m.arrive<? LIMIT 30")
+    .bind(t, t + 110 * 60000).all()).results || [];
+  for (const m of rows){
+    const v = await getV(env, m.to_vid);
+    if (!v) continue;
+    const wl = lvl(JSON.parse(v.data), 'watchtower');
+    if (!wl || m.arrive - t > (5 + 5 * wl) * 60000) continue;
+    const u = await DB.prepare('UPDATE moves SET warned=1 WHERE id=? AND warned=0').bind(m.id).run();
+    if (!u.meta.changes) continue;
+    await push(env, [m.to_uid], (m.mission === 'scout' ? '👁️ ศัตรูกำลังสอดแนม ' : '⚠️ ทัพศัตรูกำลังบุก ') + v.name,
+      'จาก (' + m.fx + '|' + m.fy + ') · ถึงในอีกประมาณ ' + Math.max(1, Math.round((m.arrive - t) / 60000)) + ' นาที', 'attack');
+  }
+}
+
+/* ---------- บอทบุกทั้งเซิร์ฟเวอร์ ---------- */
+async function waveList(env){ try { return JSON.parse((await getMeta(env, 'waves')) || '[]'); } catch (e){ return []; } }
+async function waveTick(env, t){
+  const L = await waveList(env), due = L.filter(w => w.at <= t);
+  if (!due.length) return;
+  await setMeta(env, 'waves', JSON.stringify(L.filter(w => w.at > t)));
+  for (const w of due){ try { await botWave(env, w); } catch (e){ console.log('wave', e && e.message); } }
+}
+async function botWave(env, o){
+  const DB = env.DB, t = Date.now();
+  const per = Math.max(1, Math.min(3, (o.per | 0) || 2));
+  const extra = Math.max(0, Math.min(500, o.extra == null ? 20 : o.extra | 0));
+  const bots = (await DB.prepare('SELECT v.*, p.tribe AS ptr FROM villages v JOIN players p ON p.uid=v.uid WHERE p.is_bot=1').all()).results || [];
+  if (!bots.length) throw ue('ยังไม่มีบอทในเซิร์ฟเวอร์');
+  const pl = (await DB.prepare('SELECT uid, protect_until FROM players WHERE is_bot=0 AND banned=0').all()).results || [];
+  const used = new Map(), mv = [];
+  let np = 0;
+  for (const P of pl){
+    if (!o.force && P.protect_until > t) continue;
+    let vs = (await DB.prepare("SELECT id, x, y FROM villages WHERE uid=? AND IFNULL(json_extract(data,'$.fort'),0)=0 ORDER BY id").bind(P.uid).all()).results || [];
+    if (o.target !== 'all') vs = vs.slice(0, 1);
+    if (!vs.length) continue;
+    np++;
+    for (const tv of vs){
+      const near = bots.filter(r => !used.has(r.id))
+        .sort((a, c) => Math.hypot(a.x - tv.x, a.y - tv.y) - Math.hypot(c.x - tv.x, c.y - tv.y)).slice(0, per);
+      for (const r of near){
+        const d = JSON.parse(r.data);
+        if (!d.troops) d.troops = {};
+        const tr = {};
+        for (const k in d.troops){
+          const u = UNITS[k];
+          if (u && u.atk > u.di && u.type !== 'siege' && d.troops[k] > 0){ tr[k] = d.troops[k]; delete d.troops[k]; }
+        }
+        if (extra){ const id = 'u' + (r.ptr | 0) + '_inf_a'; tr[id] = (tr[id] || 0) + extra; }
+        if (!tcount(tr)) continue;
+        used.set(r.id, { r, d });
+        const sec = Math.max(60, Math.round(Math.hypot(tv.x - r.x, tv.y - r.y) / minSpd(tr) * 3600 / SPEED));
+        mv.push(DB.prepare('INSERT INTO moves(' + MVC + ') SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT ver FROM villages WHERE id=?)=?')
+          .bind(r.uid, r.id, r.x, r.y, tv.x, tv.y, tv.id, P.uid, 'raid', JSON.stringify(tr), '{}', t, t + sec * 1000, 'go', 0, 0, null, r.id, r.ver + 1));
+      }
+    }
+  }
+  const up = [...used.values()].map(x => vUpd(env, x.r, x.d, t));
+  for (let i = 0; i < up.length; i += 50) await DB.batch(up.slice(i, i + 50));
+  for (let i = 0; i < mv.length; i += 50) await DB.batch(mv.slice(i, i + 50));
+  if (o.say && mv.length) await worldSay(env, '⚔️ กองทัพบอทยกทัพบุกทั่วแผ่นดิน! เตรียมป้องกันเมืองของท่าน', t);
+  const res = { players:np, moves:mv.length, at:t };
+  await setMeta(env, 'wave_last', JSON.stringify(res));
+  return res;
 }
