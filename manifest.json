@@ -1,0 +1,12 @@
+{
+  "name": "สุวรรณภูมิ : สงครามเจ้านคร",
+  "short_name": "สุวรรณภูมิ",
+  "start_url": "game.html",
+  "display": "standalone",
+  "background_color": "#0d0b08",
+  "theme_color": "#1a1510",
+  "icons": [
+    { "src": "assets/ui/app_192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/ui/app_512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

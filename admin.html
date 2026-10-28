@@ -113,6 +113,19 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
       </div>
     </div>
 
+      <div class="card"><b>⚔️ บอทบุกทั้งเซิร์ฟเวอร์</b>
+      <p style="font-size:10.5px;color:#7a6c4e;line-height:1.6;margin:4px 0">บอทที่อยู่ใกล้แต่ละเมืองยกทัพไปปล้นผู้เล่นจริงทุกคนพร้อมกัน · ⚠ กระทบผู้เล่นจริง</p>
+      <select id="wvPer"><option value="1">บอท 1 ตัวต่อเมือง</option><option value="2" selected>บอท 2 ตัวต่อเมือง</option><option value="3">บอท 3 ตัวต่อเมือง</option></select>
+      <input id="wvExtra" type="number" value="20" placeholder="ทหารเสริมต่อบอท (นาย)">
+      <select id="wvTgt"><option value="first">เฉพาะเมืองแรกของผู้เล่น</option><option value="all">ทุกเมืองของผู้เล่น</option></select>
+      <label style="display:block;font-size:12px;margin:6px 0"><input type="checkbox" id="wvForce"> รวมผู้เล่นที่ยังอยู่ในช่วงคุ้มครอง</label>
+      <label style="display:block;font-size:12px;margin:6px 0"><input type="checkbox" id="wvSay" checked> ประกาศในห้องโลกตอนบุก</label>
+      <button class="btn red" id="wvNow">⚔️ บุกทันที</button>
+      <input type="datetime-local" id="wvAt" style="color-scheme:dark">
+      <button class="btn b2" id="wvAdd">⏰ ตั้งเวลาบุก</button>
+      <div id="wvLast" style="font-size:11px;color:#b9ac92;margin-top:6px"></div>
+      <div id="wvList"></div><div id="wvMsg"></div></div>
+      
       <class="card"><b>👑 ฤดูกาล</b>
       <p id="seinfo" style="font-size:11.5px;color:#b9ac92;margin-top:6px;line-height:1.7">กำลังโหลด…</p>
       <input id="seday" type="number" placeholder="ตั้งให้วันนี้เป็นวันที่ เช่น 1 หรือ 20">
@@ -396,7 +409,43 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
       if (r.ok){ $('nsConf').value = ''; loadAll(); Api.get('/season', null, false).then(seShow); }
     });
   };
-  
+
+  function wvBody(){
+    return { per:+$('wvPer').value, extra:parseInt($('wvExtra').value, 10) || 0, target:$('wvTgt').value,
+      force:$('wvForce').checked, say:$('wvSay').checked };
+  }
+  function wvPaint(r){
+    if (!r || !r.ok) return;
+    if (r.last) $('wvLast').innerHTML = 'รอบล่าสุด ' + dt(r.last.at) + ' · ผู้เล่น ' + r.last.players + ' คน · ' + r.last.moves + ' ขบวน';
+    var L = r.list || [];
+    $('wvList').innerHTML = L.length ? L.map(function(w){
+      return '<div class="row"><div class="m"><b>⏰ ' + dt(w.at) + '</b><i>บอท ' + w.per + ' ตัว/เมือง · +' + w.extra + ' นาย · ' +
+        (w.target === 'all' ? 'ทุกเมือง' : 'เมืองแรก') + (w.force ? ' · รวมผู้ที่คุ้มครอง' : '') + '</i></div>' +
+        '<button class="btn red sm" data-wv="' + w.id + '">✕</button></div>';
+    }).join('') : '<p style="color:#6a5f45;font-size:11px;margin-top:6px">ยังไม่มีรอบที่ตั้งเวลาไว้</p>';
+    document.querySelectorAll('[data-wv]').forEach(function(b){
+      b.onclick = function(){ Api.post('/admin/wave', { action:'del', id:+b.dataset.wv }).then(wvPaint); };
+    });
+  }
+  Api.post('/admin/wave', { action:'list' }).then(wvPaint);
+  $('wvNow').onclick = function(){
+    if (!confirm('ส่งบอทบุกผู้เล่นทุกคนตอนนี้เลย?')) return;
+    var b = this;
+    b.disabled = true;
+    Api.post('/admin/wave', Object.assign({ action:'now' }, wvBody())).then(function(r){
+      b.disabled = false;
+      note('wvMsg', r.ok ? '✔ บุกผู้เล่น ' + r.players + ' คน · ' + r.moves + ' ขบวน' : r.err, r.ok);
+      Api.post('/admin/wave', { action:'list' }).then(wvPaint);
+    });
+  };
+  $('wvAdd').onclick = function(){
+    var v = $('wvAt').value;
+    if (!v) return note('wvMsg', 'เลือกวันและเวลาก่อน');
+    Api.post('/admin/wave', Object.assign({ action:'add', at:new Date(v).getTime() }, wvBody())).then(function(r){
+      note('wvMsg', r.ok ? '✔ ตั้งเวลาแล้ว' : r.err, r.ok);
+      wvPaint(r);
+    });
+  };
   function paintLedger(r){
     var L = (r && r.list) || [];
     $('llist').innerHTML = L.length ? L.map(function(g){
