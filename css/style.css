@@ -934,9 +934,7 @@ body.day .payamt{color:#9a5a00!important}
 /* ปัดซ้ายเพื่อลบ */
 .swrap{position:relative;overflow:hidden;border-radius:8px;margin-bottom:5px}
 .swrap>.swin{position:relative;z-index:1;transition:transform .2s ease;margin-bottom:0!important}
-#modalbox .swdel{position:absolute;top:0;right:0;bottom:0;width:62px!important;margin:0!important;padding:0!important;
-  border-radius:0 8px 8px 0;background:#c0392b;color:#fff;font-size:18px!important;opacity:0;transition:opacity .15s}
-.swrap.on .swdel{opacity:1}
+
 /* สลิป */
 .slipbtn{display:block;text-align:center;padding:12px;margin:8px 0;border:2px dashed #6b552f;border-radius:10px;
   color:#ffcf40;font-size:13px;cursor:pointer}
@@ -963,3 +961,11 @@ body.day .payamt{color:#9a5a00!important}
 .hofs-g{font-size:10.5px;color:#a89468;margin-top:4px}
 body.day .bdg,body.day .hofs{background:#fffaf0!important;border-color:#dcc9a0!important}
 body.day .bdg i{color:#3a2c18!important}
+
+.swrap .swdel{position:absolute;top:0;right:0;bottom:0;width:64px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:1px;background:#c0392b;color:#fff;border-radius:0 8px 8px 0;
+  opacity:0;visibility:hidden;transition:opacity .15s;z-index:0;cursor:pointer}
+.swrap .swdel span{font-size:18px;line-height:1}
+.swrap .swdel i{font-style:normal;font-size:9.5px}
+.swrap.on .swdel{opacity:1;visibility:visible}
+.swrap>.swin{z-index:1}
