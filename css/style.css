@@ -1009,3 +1009,20 @@ body.day #tut .tut-card b{color:#8a5a00}
 .gd-big{font-size:46px;text-align:center}
 .gd-ul{padding-left:18px;margin:0 0 8px;font-size:12.5px;line-height:1.75}
 body.day #modalbox .gd-c{background:#fffaf0!important;color:#3a2c18!important;border-color:#dcc9a0!important}
+
+/* ===== v14Q ===== */
+#bugbar{display:none!important}
+.pf-q{position:relative}
+.pf-dot{position:absolute;top:5px;right:9px;width:8px;height:8px;border-radius:50%;background:#e74c3c}
+.pf-inv{background:linear-gradient(135deg,#1f2a14,#14110c);border:1px solid #4d6b26;border-radius:10px;padding:8px;margin-bottom:8px}
+.pfi-h{display:flex;justify-content:space-between;align-items:center;font-size:12px}
+.pfi-h b{color:#8fbf5f}.pfi-h span{color:#ffcf40;font-size:11px}
+.pfi-l{display:flex;gap:4px;margin:6px 0 4px}
+.pfi-l input{flex:1;min-width:0;padding:7px;background:#100d09;border:1px solid #3a2e1c;border-radius:7px;color:#e8dfc8;font-size:10.5px}
+#modalbox .pfi-l button{width:40px!important;margin:0!important;padding:0!important;background:#2a2218;border-radius:7px;font-size:15px!important}
+.pfi-m{display:block;font-size:10.5px;color:#a89468;cursor:pointer}
+.stacc{background:#100d09;border:1px solid #2f2618;border-radius:9px;padding:8px;font-size:11.5px;line-height:1.7;margin-bottom:6px}
+.stacc a{color:#4db8ff;cursor:pointer;margin-left:6px}
+.stacc i{font-style:normal;font-size:10px;color:#8a7a55}
+body.day .pf-inv{background:#eef5e0!important;border-color:#a9c27a!important}
+body.day .pfi-l input,body.day .stacc{background:#fffaf0!important;color:#3a2c18!important;border-color:#dcc9a0!important}
