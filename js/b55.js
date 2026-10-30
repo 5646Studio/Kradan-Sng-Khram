@@ -41,7 +41,8 @@ var Checkin = (function(){
     timer = setTimeout(function(){
       if (!pending()) return;
       var m = document.getElementById('modal');
-      if (m && m.classList.contains('hidden') && Game.villages && Game.villages.length) open();
+      if (m && m.classList.contains('hidden') && Game.villages && Game.villages.length &&
+      !(typeof Tut !== 'undefined' && Tut.active())) open();
       else if (++tries < 30) later();
     }, tries ? 4000 : 2500);
   }

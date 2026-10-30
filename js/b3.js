@@ -28,7 +28,7 @@ var B3 = (function(){
         '<div class="qd">ภารกิจชุดใหม่จะมาในอัปเดตถัดไป</div></div>';
     else {
       h += '<div class="qbar"><i style="width:' + Math.round(Q.i / Q.total * 100) + '%"></i></div>' +
-        '<div class="qcard' + (Q.ready ? ' ok' : '') + '"><div class="qnum">ภารกิจที่ ' + (Q.i + 1) + ' / ' + Q.total +
+        '<div class="qcard' + (Q.ready ? ' ok' : '') + '"><div class="qnum">' + (Q.i >= 16 ? 'ชุดที่ 2 · ภารกิจที่ ' + (Q.i - 15) + ' / ' + (Q.total - 16) : 'ชุดที่ 1 · ภารกิจที่ ' + (Q.i + 1) + ' / 16') +
         '</div><div class="qt">' + esc(Q.t) + '</div><div class="qd">' + esc(Q.d) + '</div>' +
         '<div class="qrw">🎁 ' + rw(Q.r) + '</div></div>' +
         (Q.ready ? '<button class="btn-ok" id="qClaim">🎁 รับรางวัล</button>'
