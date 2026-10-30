@@ -112,7 +112,22 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
           ระบบจะเติมบอทให้ครบ 60 ตัวและสั่งให้ก่อสร้างอัตโนมัติทุก 5 นาที (Cron)</p>
       </div>
     </div>
-
+     <div class="card"><b>🩺 สถานะระบบ</b>
+      <div id="hsBox" style="font-size:11.5px;color:#b9ac92;line-height:1.8;margin-top:6px">กำลังโหลด…</div>
+      <button class="btn b3" id="hsRe">🔄 ตรวจใหม่</button>
+      <input id="mtMsg" placeholder="ข้อความปิดปรับปรุง (ไม่บังคับ)">
+      <button class="btn red" id="mtOn">🔧 ปิดปรับปรุง</button><button class="btn b1" id="mtOff">✔ เปิดให้เล่นตามปกติ</button>
+      <div id="mtNote"></div></div>
+    <div class="card"><b>🕵 บัญชีที่อาจเป็นคนเดียวกัน (7 วันล่าสุด)</b><div id="acBox" style="margin-top:6px"></div>
+      <button class="btn b3" id="acRe">🔄 ตรวจ</button></div>
+    <div class="card"><b>🤝 รางวัลเชิญเพื่อนที่รอตรวจ</b>
+      <p style="font-size:10.5px;color:#7a6c4e">ผู้เชิญกับเพื่อนใช้อุปกรณ์เดียวกัน</p><div id="ivBox"></div></div>
+    <div class="card"><b>💾 สำรองข้อมูล</b>
+      <select id="bkT"><option>players</option><option>villages</option><option>guilds</option><option>orders</option>
+        <option>ledger</option><option>badges</option><option>seasons</option><option>meta</option></select>
+      <button class="btn b2" id="bkGo">⬇ ดาวน์โหลด JSON</button><div id="bkMsg"></div></div>
+    <div class="card"><b>🧾 บันทึกการกระทำของแอดมิน</b><div id="auBox" style="margin-top:6px"></div>
+      <button class="btn b3" id="auRe">🔄 โหลด</button></div>
       <div class="card"><b>⚔️ บอทบุกทั้งเซิร์ฟเวอร์</b>
       <p style="font-size:10.5px;color:#7a6c4e;line-height:1.6;margin:4px 0">บอทที่อยู่ใกล้แต่ละเมืองยกทัพไปปล้นผู้เล่นจริงทุกคนพร้อมกัน · ⚠ กระทบผู้เล่นจริง</p>
       <select id="wvPer"><option value="1">บอท 1 ตัวต่อเมือง</option><option value="2" selected>บอท 2 ตัวต่อเมือง</option><option value="3">บอท 3 ตัวต่อเมือง</option></select>
@@ -446,6 +461,87 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
       wvPaint(r);
     });
   };
+
+    function mbs(n){ return (n / 1048576).toFixed(1) + ' MB'; }
+  function hs(){
+    Api.post('/admin/health', {}).then(function(r){
+      if (!r.ok){ $('hsBox').innerHTML = esc(r.err); return; }
+      var ago = r.cron ? Math.round((Date.now() - r.cron) / 1000) : -1;
+      $('hsBox').innerHTML = (r.maint ? '<b style="color:#ff6b6b">🔧 กำลังปิดปรับปรุง</b><br>' : '') +
+        '💾 ฐานข้อมูล <b>' + mbs(r.size) + '</b> / 500 MB (' + (r.size / 5242880).toFixed(1) + '%)' +
+        '<br>⏱ Cron ล่าสุด ' + (ago < 0 ? 'ยังไม่มีข้อมูล' : ago + ' วินาทีที่แล้ว' + (ago > 180 ? ' <b style="color:#ff6b6b">⚠ อาจหยุดทำงาน</b>' : ' ✔')) +
+        '<br>👥 ผู้เล่น ' + fmt(r.players) + ' · เข้าเล่นใน 24 ชม. ' + fmt(r.active) + ' · 🤖 บอท ' + fmt(r.bots) +
+        '<br>🏘 เมือง ' + fmt(r.villages) + ' · ⚔ ทัพ ' + fmt(r.moves) + ' · 📜 รายงาน ' + fmt(r.reports) + ' · ✉ ข้อความ ' + fmt(r.msgs) +
+        '<br><b>⚠ ข้อผิดพลาดล่าสุด:</b>' + (r.errors.length ? r.errors.map(function(e){
+          return '<br>' + dt(e.at) + ' ' + esc(e.path) + ' — ' + esc(String(e.msg).slice(0, 120)); }).join('') : ' ไม่มี ✔');
+    });
+  }
+  function ac(){
+    Api.post('/admin/accounts', {}).then(function(r){
+      if (!r.ok) return;
+      function g(L, lb){ return L.map(function(x){
+        return '<div class="row"><div class="m"><b>' + lb + ' · ' + x.n + ' บัญชี</b><i>' + esc(x.names) + ' · ล่าสุด ' + dt(x.at) + '</i></div></div>';
+      }).join(''); }
+      $('acBox').innerHTML = (g(r.dev, '📱 อุปกรณ์เดียวกัน') + g(r.ip, '🌐 IP เดียวกัน (อาจเป็นคนละคน)')) ||
+        '<p style="color:#6a5f45;font-size:11px">ไม่พบ</p>';
+    });
+  }
+  function iv(r0){
+    function paint(r){
+      var L = (r && r.list) || [];
+      $('ivBox').innerHTML = L.length ? L.map(function(x){
+        return '<div class="row"><div class="m"><b>' + esc(x.name) + '</b><i>เชิญโดย ' + esc(x.inv || '?') + '</i></div>' +
+          '<button class="btn b1 sm" data-ivok="' + esc(x.uid) + '">✔</button><button class="btn red sm" data-ivno="' + esc(x.uid) + '">✕</button></div>';
+      }).join('') : '<p style="color:#6a5f45;font-size:11px">ไม่มีรายการ</p>';
+      document.querySelectorAll('[data-ivok],[data-ivno]').forEach(function(b){
+        b.onclick = function(){
+          var okk = !!b.dataset.ivok;
+          if (!confirm(okk ? 'ให้รางวัลเชิญเพื่อนรายการนี้?' : 'ไม่ให้รางวัลรายการนี้?')) return;
+          Api.post('/admin/invite', { action:okk ? 'ok' : 'no', uid:b.dataset.ivok || b.dataset.ivno }).then(paint);
+        };
+      });
+    }
+    if (r0) paint(r0); else Api.post('/admin/invite', { action:'list' }).then(paint);
+  }
+  function au(){
+    Api.post('/admin/audit', {}).then(function(r){
+      var L = (r && r.list) || [];
+      $('auBox').innerHTML = L.length ? L.map(function(x){
+        return '<div class="row"><div class="m"><b>' + esc(x.path) + '</b><i>' + dt(x.at) + ' · ' + esc(x.name || '?') + ' · ' +
+          esc(String(x.body || '').slice(0, 140)) + '</i></div></div>';
+      }).join('') : '<p style="color:#6a5f45;font-size:11px">ยังไม่มีบันทึก</p>';
+    });
+  }
+  function maint(onv){
+    if (onv && !confirm('ปิดเกมชั่วคราว? ผู้เล่นทุกคนจะใช้งานไม่ได้จนกว่าจะเปิดใหม่')) return;
+    Api.post('/admin/maint', { on:onv, msg:$('mtMsg').value.trim() }).then(function(r){
+      note('mtNote', r.ok ? (onv ? '🔧 ปิดปรับปรุงแล้ว (มีผลภายใน 30 วินาที)' : '✔ เปิดให้เล่นแล้ว') : r.err, r.ok);
+      hs();
+    });
+  }
+  $('hsRe').onclick = hs; $('acRe').onclick = ac; $('auRe').onclick = au;
+  $('mtOn').onclick = function(){ maint(true); };
+  $('mtOff').onclick = function(){ maint(false); };
+  $('bkGo').onclick = function(){
+    var tb = $('bkT').value, all = [], b = this;
+    b.disabled = true;
+    (function step(after){
+      Api.post('/admin/backup', { table:tb, after:after }).then(function(r){
+        if (!r.ok){ b.disabled = false; return note('bkMsg', r.err); }
+        all = all.concat(r.rows);
+        note('bkMsg', 'กำลังดึงข้อมูล… ' + all.length + ' แถว', true);
+        if (r.rows.length === r.lim) return step(r.rows[r.rows.length - 1]._r);
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([JSON.stringify({ table:tb, at:Date.now(), rows:all })], { type:'application/json' }));
+        a.download = 'suwan_' + tb + '_' + new Date().toISOString().slice(0, 10) + '.json';
+        document.body.appendChild(a); a.click(); a.remove();
+        b.disabled = false;
+        note('bkMsg', '✔ ดาวน์โหลดแล้ว ' + all.length + ' แถว', true);
+      });
+    })(0);
+  };
+  hs(); ac(); iv(); au();
+  
   function paintLedger(r){
     var L = (r && r.list) || [];
     $('llist').innerHTML = L.length ? L.map(function(g){
