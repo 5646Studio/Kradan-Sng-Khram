@@ -659,6 +659,7 @@ async function route(req, env){
   if (p === '/train') ACT[p] = ctx => trainEx(ctx, b);
   if (p === '/party') ACT[p] = ctx => partyStart(ctx, b);
   if (p === '/checkin') ACT[p] = ctx => checkin(ctx, b);
+  if (p === '/tutorial/done') ACT[p] = ctx => tutDone(ctx, b);
   if (p.indexOf('/market/') === 0) ACT[p] = ctx => marketAct(ctx, env, b, p.slice(8));
   if (!(p in ACT)) return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
   const out = await session(env, uid, ACT[p]);
@@ -796,7 +797,7 @@ function stateOf(ctx, err){
     player:{ uid:P.uid, name:P.name, gold:P.gold, cp:cpNow(P, VS, t), cpRate:cpPerDay(VS), tribe:P.tribe, zone:P.zone,
     builders:bCount(P, t), builderUntil:P.builder_until, protectUntil:P.protect_until, created:P.created,
     renameN:P.rename_n | 0, renameAt:P.rename_at || 0, oldName:P.old_name || null,
-    schedUntil:P.sched_until || 0, cpNext:CPN[nReal(VS, V => V.d) + 1] || 0, guild:P.guild_id || 0, grole:P.guild_role | 0, ck:{ today:thDay(t), last:P.ck_day | 0, n:P.ck_n | 0 } },
+    schedUntil:P.sched_until || 0, cpNext:CPN[nReal(VS, V => V.d) + 1] || 0, guild:P.guild_id || 0, grole:P.guild_role | 0, ck:{ today:thDay(t), last:P.ck_day | 0, n:P.ck_n | 0 }, tut:P.tut | 0 },
     msgUnread:ctx.msgUnread || 0,
     rooms:ctx.rooms || null,
     quest:questOut(P, ctx),
@@ -3554,3 +3555,45 @@ async function botWave(env, o){
   await setMeta(env, 'wave_last', JSON.stringify(res));
   return res;
 }
+
+/* =====================================================================
+   B9 : รางวัลจบบทแนะนำ · ภารกิจชุดที่ 2
+   ===================================================================== */
+const TUT_RES = 500, TUT_GOLD = 10;
+function tutDone(ctx, b){
+  if (ctx.P.tut) throw ue('รับรางวัลบทแนะนำไปแล้ว');
+  const V = ctx.VS.find(x => x.row.id === (b.vid | 0) && !x.d.fort) || ctx.VS.find(x => !x.d.fort);
+  if (!V) throw ue('ไม่พบเมือง');
+  const c = caps(V.d);
+  for (const r of RES) V.d.res[r] = Math.min(r === 'wheat' ? c.gran : c.store, V.d.res[r] + TUT_RES);
+  ctx.pset += ', tut=1, gold=gold+?'; ctx.pbind.push(TUT_GOLD);
+  ctx.P.tut = 1; ctx.P.gold += TUT_GOLD;
+  ctx.ins.push({ t:'ledger', guard:V, cols:'uid,delta,reason,note,at', vals:[ctx.P.uid, TUT_GOLD, 'tutorial', 'จบบทแนะนำ', ctx.t] });
+  V.dirty = true;
+  return { res:TUT_RES, gold:TUT_GOLD };
+}
+
+QUESTS.push(
+  { t:'ทุ่งนาอุดม', d:'อัปเกรดหลุมทรัพยากรทั้ง 20 หลุมให้ถึง Lv.2', r:{ res:600 }, c:x => x.F(null, 2) >= 20 },
+  { t:'เปิดตลาด', d:'สร้างตลาด เพื่อค้าขายกับผู้เล่นอื่น', r:{ res:600 }, c:x => x.L('market') >= 1 },
+  { t:'ทูตสันถวไมตรี', d:'สร้างสถานทูต', r:{ res:600 }, c:x => x.L('embassy') >= 1 },
+  { t:'จวนวีรบุรุษ', d:'สร้างจวนวีรบุรุษ เพื่อปลดล็อกดันเจี้ยน', r:{ res:700 }, c:x => x.L('hero') >= 1 },
+  { t:'ผจญภัยครั้งแรก', d:'ส่งวีรบุรุษสำรวจดันเจี้ยนสำเร็จ 1 ครั้ง', r:{ res:800 },
+    c:async x => (await x.n("SELECT COUNT(*) n FROM reports WHERE uid=? AND kind='hero' AND title LIKE '🕳%'", x.uid)) > 0 },
+  { t:'วีรบุรุษเติบโต', d:'วีรบุรุษของเมืองแรกถึง Lv.3', r:{ res:800, gold:5 },
+    c:x => !!(x.V && x.V.d.hero && x.V.d.hero.lv >= 3) },
+  { t:'พ่อค้าวาณิช', d:'ส่งหรือรับสินค้าผ่านตลาด 1 ครั้ง', r:{ res:800 },
+    c:async x => (await x.n("SELECT COUNT(*) n FROM reports WHERE uid=? AND title LIKE '🐫%'", x.uid)) > 0 },
+  { t:'ร่วมกิลด์', d:'เข้าร่วมหรือตั้งกิลด์ที่สถานทูต', r:{ res:800, gold:10 },
+    c:async x => (await x.n('SELECT COUNT(*) n FROM players WHERE uid=? AND guild_id IS NOT NULL', x.uid)) > 0 },
+  { t:'โรงตีเหล็ก', d:'สร้างโรงตีเหล็ก เพื่อเพิ่มพลังโจมตีทหาร', r:{ res:900 }, c:x => x.L('smithy') >= 1 },
+  { t:'หอคอยเฝ้าระวัง', d:'สร้างหอคอยเฝ้าระวัง เพื่อรู้ล่วงหน้าเมื่อศัตรูบุก', r:{ res:900 }, c:x => x.L('watchtower') >= 1 },
+  { t:'กองทัพเกรียงไกร', d:'มีทหารรวมอย่างน้อย 50 นาย', r:{ res:1000 }, c:x => x.troops >= 50 },
+  { t:'ทุ่งทองคำ', d:'อัปเกรดหลุมทรัพยากรถึง Lv.4 อย่างน้อย 10 หลุม', r:{ res:1200 }, c:x => x.F(null, 4) >= 10 },
+  { t:'คฤหาสน์', d:'อัปเกรดคฤหาสน์เป็น Lv.5 เพื่อฝึกผู้ตั้งถิ่นฐาน', r:{ res:1200, gold:10 }, c:x => x.L('residence') >= 5 },
+  { t:'นครรุ่งเรือง', d:'มีประชากรรวม 600 คน', r:{ res:1500 }, c:x => x.pop >= 600 },
+  { t:'เมืองที่สอง', d:'ตั้งเมืองที่ 2 ด้วยผู้ตั้งถิ่นฐาน', r:{ res:2000, gold:20 },
+    c:async x => (await x.n('SELECT COUNT(*) n FROM villages WHERE uid=?', x.uid)) >= 2 },
+  { t:'เจ้าโอเอซิส', d:'ยึดโอเอซิส 1 แห่ง (ส่งวีรบุรุษ + ⚔️ โจมตี)', r:{ res:2000, gold:20 },
+    c:async x => (await x.n('SELECT COUNT(*) n FROM oasis WHERE uid=?', x.uid)) > 0 }
+);
