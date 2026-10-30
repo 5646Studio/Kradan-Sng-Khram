@@ -293,6 +293,8 @@ var Sync = (function(){
     if (typeof B53 !== 'undefined') B53.install();
     if (typeof Season !== 'undefined') Season.install();
     if (typeof Push !== 'undefined') Push.install(); 
+    if (typeof Invite !== 'undefined') Invite.install();
+
   }
 
   /* ---------- ทอง ---------- */

@@ -1,7 +1,8 @@
 /* ============ B9 v14P — บทแนะนำ · คู่มือวิธีเล่น · เมนูล่างแบบรูป · ติดตั้งแอป ============ */
 
 /* ---------- เมนูล่างแบบรูป ---------- */
-var NAV_LABEL = true;   // false = แสดงแค่รูป ไม่มีตัวหนังสือ
+var NAV_LABEL = (function(){ try { return localStorage.getItem('sw_navlb') !== '0' && (typeof Store === 'undefined' || Store.get('sw_navlb') !== '0'); } catch(e){ return true; } })();
+   // false = แสดงแค่รูป ไม่มีตัวหนังสือ
 var NavArt = (function(){
   var M = [['ทรัพยากร','nav_fields'],['แผนที่','nav_world'],['รายงาน','nav_reports'],['เมือง','nav_village']];
   var src = {}, tried = {}, n = 0;
@@ -146,7 +147,9 @@ var Guide = (function(){
   function open(){
     UI.modal('<h3 data-bi="1">📖 วิธีเล่น</h3><div class="gd-grid">' + CH.map(function(c, i){
       return '<button class="gd-c" data-gd="' + i + '"><span class="gd-i">' + (pic(c.p[0]) || c.ic) + '</span>' + c.t + '</button>';
-    }).join('') + '</div>' + CB);
+    }).join('') + '</div><button class="btn-use2" id="gdTut">🎓 เริ่มบทแนะนำ</button>' + CB);
+    var gt = document.getElementById('gdTut');
+    if (gt) gt.onclick = function(){ UI.close(); Tut.start(true); };
     document.querySelectorAll('[data-gd]').forEach(function(b){ b.onclick = function(){ chap(+b.dataset.gd); }; });
   }
   function chap(i){
@@ -302,29 +305,4 @@ var Tut = (function(){
     Social.onState = function(r){ so.apply(Social, arguments); onState(r); };
   }
   return { start:start, active:function(){ return on; } };
-})();
-
-/* ---------- เพิ่มเมนูในโปรไฟล์ ---------- */
-(function(){
-  var mb = document.getElementById('modalbox'), q = false;
-  if (!mb || typeof MutationObserver === 'undefined') return;
-  function mk(L, id, ic, tx, fn){
-    var b = document.createElement('button');
-    b.id = id; b.className = 'pf-li';
-    b.innerHTML = '<span>' + ic + '</span>' + tx + '<em>›</em>';
-    b.onclick = fn;
-    L.insertBefore(b, L.firstChild);
-  }
-  function inj(){
-    var L = mb.querySelector('.pf-list');
-    if (!L || mb.querySelector('#pfTut')) return;
-    if (!AppInstall.installed()) mk(L, 'pfApp', '📲', 'ติดตั้งเป็นแอป', AppInstall.go);
-    mk(L, 'pfGuide', '📖', 'วิธีเล่น', function(){ Guide.open(); });
-    mk(L, 'pfTut', '🎓', 'บทแนะนำ', function(){ UI.close(); Tut.start(true); });
-  }
-  new MutationObserver(function(){
-    if (q) return;
-    q = true;
-    requestAnimationFrame(function(){ q = false; try { inj(); } catch(e){} });
-  }).observe(mb, { childList:true, subtree:true });
 })();
