@@ -98,6 +98,7 @@ var Sync = (function(){
     o.srvHero = sv.hero || null;
     o.srvExp = sv.exp || null;
     o.srvParty = sv.party || null;
+    o.srvDemo = sv.demo || null; 
     o.isFort = !!sv.fort; o.isCap = !!sv.cap;
     o.loyalty = sv.loy == null ? 100 : sv.loy; o.loyaltyAt = now();
     return o;
