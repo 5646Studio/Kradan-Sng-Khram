@@ -341,6 +341,7 @@ function ue(m){ const e = new Error(m); e.user = true; return e; }
 
 function enqueue(d, P, VS, t, kind, slot, key){
   if (d.fort) throw ue('ป้อมและเมืองหลวงโลกก่อสร้างไม่ได้');
+  if (d.demo && kind !== 'field' && kind !== 'wall' && slot === d.demo.slot) throw ue('ช่องนี้กำลังรื้อถอน');
   slot = slot | 0;
   if (d.queue.some(q => q.kind === kind && q.slot === slot)) throw ue('ช่องนี้กำลังก่อสร้างอยู่แล้ว');
   const nb = bCount(P, t);
@@ -663,6 +664,7 @@ async function route(req, env){
   if (p === '/party') ACT[p] = ctx => partyStart(ctx, b);
   if (p === '/checkin') ACT[p] = ctx => checkin(ctx, b);
   if (p === '/tutorial/done') ACT[p] = ctx => tutDone(ctx, b);
+  if (p.indexOf('/bld/') === 0) ACT[p] = ctx => bldAct(ctx, b, p.slice(5));
   if (p.indexOf('/market/') === 0) ACT[p] = ctx => marketAct(ctx, env, b, p.slice(8));
   if (!(p in ACT)) return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
   const out = await session(env, uid, ACT[p]);
@@ -730,8 +732,8 @@ async function session(env, uid, act){
     const ctx = { P, t, spend:0, goldSet:'', goldBind:[], reason:'', msg:null, ins:[], pset:'', pbind:[], moves:mv,
       VS:rows.map(r => { const d = JSON.parse(r.data); d._away = away[r.id] || 0; if (!d.troops) d.troops = {}; return { row:r, d, dirty:false }; }) };
    ctx.hasPush = !!(await env.DB.prepare('SELECT 1 x FROM push_tokens WHERE uid=? LIMIT 1').bind(uid).first()); 
-    for (const V of ctx.VS){ if (advance(V.d, t, P)) V.dirty = true; fill(V.d, t, P); if (heroTick(V, ctx)) V.dirty = true; if (partyTick(V, ctx)) V.dirty = true; }
-
+    for (const V of ctx.VS){ if (advance(V.d, t, P)) V.dirty = true; fill(V.d, t, P); if (heroTick(V, ctx)) V.dirty = true;
+                             if (partyTick(V, ctx)) V.dirty = true; if (demoTick(V, ctx)) V.dirty = true; }
     let err = null;
     try { if (act) ctx.msg = (await act(ctx)) || null; }
     catch (e){ if (!e.user) throw e; err = e.message; }
@@ -809,7 +811,7 @@ function stateOf(ctx, err){
       const d = V.d;
       return { id:V.row.id, x:V.row.x, y:V.row.y, name:V.row.name, first:!!d.first, bio:d.bio, fields:d.fields,
         city:d.city, wallLv:d.wallLv || 0, res:d.res, resAt:d.resAt, queue:d.queue, pop:population(d), caps:caps(d),
-        fort:d.fort | 0, cap:d.cap | 0, party:d.party || null, loy:Math.round(loyNow(d, t)), exp:{ slots:expSlots(d), used:d.expUsed | 0, chief:chiefCap(d) }, oa:d.oa || [], hero:heroOut(d, t), troops:d.troops || {}, train:d.train || {}, upkeep:tUp(d.troops) + (d._away || 0),
+        fort:d.fort | 0, cap:d.cap | 0, demo:demoOut(d), party:d.party || null, loy:Math.round(loyNow(d, t)), exp:{ slots:expSlots(d), used:d.expUsed | 0, chief:chiefCap(d) }, oa:d.oa || [], hero:heroOut(d, t), troops:d.troops || {}, train:d.train || {}, upkeep:tUp(d.troops) + (d._away || 0),
         rate:{ wheat:rate(d,'wheat'), wood:rate(d,'wood'), iron:rate(d,'iron'), clay:rate(d,'clay') } };
     }),
     moves:ctx.moves.filter(m => m.uid === P.uid).map(mvOut),
@@ -1140,6 +1142,22 @@ async function admin(p, b, q, env, by){
     const r = await DB.prepare('SELECT rowid AS _r, * FROM ' + tb + ' WHERE rowid>? ORDER BY rowid LIMIT ' + lim).bind(b.after | 0).all();
     return json({ ok:true, rows:r.results || [], lim }, 200, env);
   }
+    if (p === '/admin/balance') return json(Object.assign({ ok:true }, await balanceStats(env)), 200, env);
+  if (p === '/admin/tune'){
+    if (b.action === 'set'){
+      const o = {};
+      for (const k in TUNE_LIM){
+        const v = b.v ? b.v[k] : undefined;
+        if (v === undefined || v === '' || v === null) continue;
+        const x = +v;
+        if (!isFinite(x) || x < TUNE_LIM[k][0] || x > TUNE_LIM[k][1]) throw ue(k + ' ต้องอยู่ระหว่าง ' + TUNE_LIM[k][0] + ' - ' + TUNE_LIM[k][1]);
+        o[k] = x;
+      }
+      await setMeta(env, 'tune', JSON.stringify(o));
+    } else if (b.action === 'reset') await setMeta(env, 'tune', '{}');
+    TUNE_C.at = 0; await tuneLoad(env, t);
+    return json({ ok:true, cur:tuneCur(), def:TUNE_DEF, lim:TUNE_LIM }, 200, env);
+  }
   return json({ ok:false, err:'ไม่พบคำสั่งแอดมิน' }, 404, env);
 }
 
@@ -1421,9 +1439,9 @@ await cleanOld(env, t);
 /* =====================================================================
    B3 : บอทคิดเอง (ออกรบ · ความแค้น · กิลด์ · ขยายเมือง · ตอบแชต) · ภารกิจ
    ===================================================================== */
-const BOT_HIT_PLAYERS = true;   // false = บอทไม่บุกผู้เล่นจริง
-const BOT_ATT_MAX = 15;          // บอทออกรบได้สูงสุดกี่ขบวนต่อรอบ (ทุก 5 นาที)
-const BOT_RANGE = 22;           // ระยะที่บอทมองหาเป้าหมาย
+let BOT_HIT_PLAYERS = true;   // false = บอทไม่บุกผู้เล่นจริง
+let BOT_ATT_MAX = 15;          // บอทออกรบได้สูงสุดกี่ขบวนต่อรอบ (ทุก 5 นาที)
+let BOT_RANGE = 22;           // ระยะที่บอทมองหาเป้าหมาย
 const BOT_GUILDS = 8;           // จำนวนกิลด์บอทสูงสุด
 const GUILD_MAX = 12;
 const CPN = [0, 0, 300, 750, 1350, 2100, 3000, 4100, 5300, 6600, 8000, 9500, 11000];
@@ -2640,7 +2658,7 @@ async function roomApi(p, b, env, uid){
 /* =====================================================================
    B5-3 : CP พื้นฐาน · งานเฉลิมฉลอง · ยาวีรบุรุษ · ตลาด · กิลด์ผู้เล่นจริง
    ===================================================================== */
-const CP_BASE = 20, MERCH_CAP = 500, MERCH_SPD = 16, NPC_GOLD = 3, GUILD_COST = 50, OFFER_MAX = 10;
+let CP_BASE = 20, MERCH_CAP = 500, MERCH_SPD = 16, NPC_GOLD = 3, GUILD_COST = 50, OFFER_MAX = 10;
 const PARTY = {
   small:{ n:'งานเฉลิมฉลองเล็ก', lv:1,  h:24, cp:200, cost:{ wheat:1500, wood:1600, iron:1400, clay:1600 } },
   big:  { n:'งานเฉลิมฉลองใหญ่', lv:10, h:48, cp:800, cost:{ wheat:7000, wood:7500, iron:6500, clay:7500 } }
@@ -3158,7 +3176,7 @@ function checkin(ctx, b){
    B6 : เติมทองด้วย PromptPay QR (ทีมงานยืนยัน) · บอทใช้ตลาด · บอทดุขึ้น · ทดสอบบอทบุก
    ===================================================================== */
 const ORDER_TTL = 30 * 60000;
-const BOT_PREY = 1.5, BOT_PREY_WAR = 3, BOT_PLAYER_W = 2;
+let BOT_PREY = 1.5, BOT_PREY_WAR = 3, BOT_PLAYER_W = 2;
 
 /* ---------- PromptPay QR (มาตรฐาน EMVCo) ---------- */
 function ppField(id, v){ return id + String(v.length).padStart(2, '0') + v; }
@@ -3490,6 +3508,7 @@ function pushPlan(env, P, V){
   if (h && h.dung) L.push([h.dung.back, 'hero', '🗿 วีรบุรุษกลับจากดันเจี้ยนแล้ว', vn]);
   if (h && h.dead && h.healAt) L.push([h.healAt, 'hero', '⛑ วีรบุรุษรักษาหายแล้ว', vn]);
   if (d.party) L.push([d.party.end, 'build', '🎉 งานเฉลิมฉลองจบแล้ว', vn]);
+  if (d.demo){ const o = demoOut(d); L.push([o.end, 'build', '🔨 รื้อถอนเสร็จ', ((BD[o.k] || {}).n || 'อาคาร') + ' · ' + vn]); }
   for (const x of L) st.push(env.DB.prepare('INSERT INTO pushq(uid,vid,at,cat,title,body) VALUES(?,?,?,?,?,?)')
     .bind(P.uid, V.row.id, x[0], x[1], x[2], x[3]));
   return st;
@@ -3652,7 +3671,7 @@ QUESTS.push(
 /* =====================================================================
    เชิญเพื่อน · B10 : ความปลอดภัย · ความเสถียร
    ===================================================================== */
-const INV_GOLD = 80, INV_FRIEND_GOLD = 20, INV_MAIN = 10, INV_MAX = 10, INV_BIND_H = 48;
+let INV_GOLD = 80, INV_FRIEND_GOLD = 20, INV_MAIN = 10, INV_MAX = 10, INV_BIND_H = 48;
 const INV_CH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 async function invProg(env, uid){
@@ -3781,6 +3800,7 @@ async function errLog(env, path, e){
 export default {
   async fetch(req, env, ctx){
     const t = Date.now(), p = new URL(req.url).pathname;
+    await tuneLoad(env, t);
     if (req.method === 'OPTIONS') return APP.fetch(req, env, ctx);
     const isAdm = p.indexOf('/admin/') === 0, ip = req.headers.get('CF-Connecting-IP') || '';
     const uid = jwtUid(req.headers.get('Authorization'));
@@ -3812,7 +3832,120 @@ export default {
   },
   async scheduled(ev, env, ctx){
     ctx.waitUntil(setMeta(env, 'cron_at', Date.now()).catch(() => {}));
+    await tuneLoad(env, Date.now());
     return APP.scheduled(ev, env, ctx);
   }
 };
 
+/* =====================================================================
+   B11 : รื้อถอน · ย้ายอาคาร · ปรับค่าเกม · สถิติสมดุล
+   ===================================================================== */
+function demoSec(lv){ return Math.max(30, Math.round(120 * Math.pow(lv, 1.25) / SPEED)); }
+function emptySlot(){
+  const e = newVillage(0, 0, false, 0).city.find(x => !x || !x.k);
+  return e === undefined ? { k:null, level:0 } : JSON.parse(JSON.stringify(e));
+}
+function slotBusy(d, s){ return (d.queue || []).some(q => q.kind !== 'field' && q.kind !== 'wall' && q.slot === s); }
+function demoOut(d){
+  const m = d.demo;
+  if (!m) return null;
+  const c = d.city[m.slot], lv = c ? c.level | 0 : 0;
+  let end = m.next;
+  for (let l = lv - 1; l >= 1; l--) end += demoSec(l) * 1000;
+  return { slot:m.slot, k:m.k, lv, next:m.next, end };
+}
+function demoTick(V, ctx){
+  const d = V.d;
+  let ch = false;
+  while (d.demo && ctx.t >= d.demo.next){
+    const m = d.demo, c = d.city[m.slot];
+    ch = true;
+    if (!c || c.k !== m.k){ d.demo = null; break; }
+    c.level = (c.level | 0) - 1;
+    if (c.level > 0){ m.next += demoSec(c.level) * 1000; continue; }
+    d.city[m.slot] = emptySlot(); d.demo = null;
+    ctx.ins.push({ t:'reports', guard:V, cols:'uid,at,kind,title,data,read',
+      vals:[ctx.P.uid, m.next, 'city', '🔨 รื้อถอน' + ((BD[m.k] || {}).n || 'อาคาร') + ' ที่ ' + V.row.name + ' เสร็จแล้ว',
+        JSON.stringify({ note:'ช่อง ' + (m.slot + 1) + ' ว่างแล้ว สร้างอาคารใหม่ได้' }), 0] });
+  }
+  return ch;
+}
+function bldAct(ctx, b, op){
+  const V = findV(ctx, b.vid), d = V.d, t = ctx.t;
+  if (d.fort) throw ue('ป้อมและเมืองหลวงโลกแก้ไขอาคารไม่ได้');
+  if (demoTick(V, ctx)) V.dirty = true;
+  const s = b.slot | 0, c = d.city[s];
+  if (op === 'demolish'){
+    if (!c || !c.k || !(c.level > 0)) throw ue('ช่องนี้ไม่มีอาคาร');
+    if (c.k === 'main') throw ue('รื้ออาคารหลักไม่ได้');
+    if (d.demo) throw ue('รื้อถอนได้ทีละ 1 อาคารต่อเมือง');
+    if (slotBusy(d, s)) throw ue('อาคารนี้อยู่ในคิวก่อสร้าง ยกเลิกคิวก่อน');
+    d.demo = { slot:s, k:c.k, next:t + demoSec(c.level) * 1000 };
+  } else if (op === 'stop'){
+    if (!d.demo) throw ue('ไม่ได้รื้อถอนอยู่');
+    d.demo = null;
+  } else if (op === 'rush'){
+    const o = demoOut(d);
+    if (!o) throw ue('ไม่ได้รื้อถอนอยู่');
+    spend(ctx, rushCost(Math.max(1, (o.end - t) / 1000)), 'demolish');
+    d.city[o.slot].level = 1; d.demo.next = t;
+    demoTick(V, ctx);
+  } else if (op === 'move'){
+    const to = b.to | 0;
+    if (!c || !c.k || !(c.level > 0)) throw ue('ช่องนี้ไม่มีอาคาร');
+    if (to === s || to < 0 || to >= d.city.length) throw ue('ช่องปลายทางไม่ถูกต้อง');
+    const e = d.city[to];
+    if (e && e.k) throw ue('ช่องปลายทางไม่ว่าง');
+    if (slotBusy(d, s) || slotBusy(d, to)) throw ue('มีคิวก่อสร้างที่ช่องนี้อยู่');
+    if (d.demo && (d.demo.slot === s || d.demo.slot === to)) throw ue('อาคารนี้กำลังรื้อถอน');
+    d.city[to] = c; d.city[s] = e;
+  } else throw ue('ไม่รู้จักคำสั่ง');
+  V.dirty = true;
+}
+
+/* ---------- ปรับค่าเกมจากแผงผู้พัฒนา ---------- */
+const TUNE_LIM = { botAtt:[0, 60], botHit:[0, 1], botRange:[5, 60], botPrey:[0.3, 10], botPreyWar:[0.3, 20],
+  botPlayerW:[0, 10], cpBase:[0, 300], invGold:[0, 500], invFriend:[0, 300] };
+function tuneCur(){
+  return { botAtt:BOT_ATT_MAX, botHit:BOT_HIT_PLAYERS ? 1 : 0, botRange:BOT_RANGE, botPrey:BOT_PREY, botPreyWar:BOT_PREY_WAR,
+    botPlayerW:BOT_PLAYER_W, cpBase:CP_BASE, invGold:INV_GOLD, invFriend:INV_FRIEND_GOLD };
+}
+const TUNE_DEF = tuneCur(), TUNE_C = { at:0 };
+function tuneSet(o){
+  const v = Object.assign({}, TUNE_DEF, o);
+  BOT_ATT_MAX = v.botAtt; BOT_HIT_PLAYERS = !!v.botHit; BOT_RANGE = v.botRange; BOT_PREY = v.botPrey;
+  BOT_PREY_WAR = v.botPreyWar; BOT_PLAYER_W = v.botPlayerW; CP_BASE = v.cpBase; INV_GOLD = v.invGold; INV_FRIEND_GOLD = v.invFriend;
+}
+async function tuneLoad(env, t){
+  if (t - TUNE_C.at < 60000) return;
+  TUNE_C.at = t;
+  try { tuneSet(JSON.parse((await getMeta(env, 'tune')) || '{}')); } catch (e){}
+}
+
+/* ---------- สถิติสมดุล ---------- */
+async function balanceStats(env){
+  const DB = env.DB, t = Date.now(), D = 86400000, S = await seasonState(env), wk = t - 7 * D;
+  const pl = (await DB.prepare('SELECT p.created, p.seen, p.quest, p.gold, COUNT(v.id) AS vc, COALESCE(SUM(v.pop),0) AS pop FROM players p JOIN villages v ON v.uid=p.uid WHERE p.is_bot=0 AND p.banned=0 GROUP BY p.uid').all()).results || [];
+  const buckets = [[1, 2], [3, 4], [5, 7], [8, 14], [15, 30], [31, 9999]].map(x => ({ a:x[0], b:x[1], n:0, pop:0, vc:0 }));
+  let act = 0, r0 = 0, r1 = 0, gold = 0;
+  const quest = {};
+  for (const p of pl){
+    const dd = Math.floor((t - Math.max(p.created || 0, S.start)) / D * SPEED) + 1;
+    const k = buckets.find(x => dd >= x.a && dd <= x.b);
+    if (k){ k.n++; k.pop += p.pop; k.vc += p.vc; }
+    if (p.seen > t - D) act++;
+    if (t - (p.created || t) > 2 * D){ r0++; if (p.seen - p.created > D) r1++; }
+    gold += p.gold | 0;
+    const qi = Math.min(32, p.quest | 0);
+    quest[qi] = (quest[qi] || 0) + 1;
+  }
+  const bt = (await DB.prepare('SELECT COUNT(*) n, AVG(s) a FROM (SELECT SUM(v.pop) s FROM villages v JOIN players p ON p.uid=v.uid WHERE p.is_bot=1 GROUP BY v.uid)').first()) || {};
+  const ledger = (await DB.prepare('SELECT reason, SUM(CASE WHEN delta>0 THEN delta ELSE 0 END) AS inn, SUM(CASE WHEN delta<0 THEN -delta ELSE 0 END) AS outt, COUNT(*) AS n FROM ledger WHERE at>? GROUP BY reason ORDER BY n DESC').bind(wk).all()).results || [];
+  const tl = (await DB.prepare("SELECT title FROM reports WHERE kind='war' AND at>? LIMIT 4000").bind(wk).all()).results || [];
+  const war = {};
+  for (const r of tl){ const k = String(r.title).split(' ').slice(0, 2).join(' ').slice(0, 24); war[k] = (war[k] || 0) + 1; }
+  const hero = (await DB.prepare("SELECT AVG(json_extract(v.data,'$.hero.lv')) a FROM villages v JOIN players p ON p.uid=v.uid WHERE p.is_bot=0").first()) || {};
+  return { day:S.day, players:pl.length, active:act, ret:r0 ? r1 / r0 : null, ret0:r0, buckets, gold,
+    bots:{ n:bt.n || 0, pop:Math.round(bt.a || 0) }, ledger, hero:+(+(hero.a || 0)).toFixed(1), quest,
+    war:Object.entries(war).sort((a, b) => b[1] - a[1]).slice(0, 12) };
+}
