@@ -1026,3 +1026,10 @@ body.day #modalbox .gd-c{background:#fffaf0!important;color:#3a2c18!important;bo
 .stacc i{font-style:normal;font-size:10px;color:#8a7a55}
 body.day .pf-inv{background:#eef5e0!important;border-color:#a9c27a!important}
 body.day .pfi-l input,body.day .stacc{background:#fffaf0!important;color:#3a2c18!important;border-color:#dcc9a0!important}
+
+/* ===== v14R ===== */
+.mvgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:6px 0}
+#modalbox .mvgrid button{width:auto!important;margin:0!important;padding:10px 2px!important;background:#1c1710;
+  border:1px dashed #6b552f;border-radius:9px;color:#ffcf40;font-size:12px!important}
+body.day #modalbox .mvgrid button{background:#fffaf0!important;color:#8a5a00!important}
+
