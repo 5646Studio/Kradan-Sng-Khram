@@ -87,7 +87,7 @@ var BldTool = (function(){
     if (!mb || !online() || mb.querySelector('#dmBtn') || mb.querySelector('#hroot')) return;
     var h3 = mb.querySelector('h3');
     if (!h3) return;
-    var tx = h3.textContent || '';
+    var tx = I18N.src(h3) || '';
     if (/เลือก|🛠|↔|—/.test(tx)) return;
     var B = match(tx), v = V();
     if (!B || !v || !slotsOf(v, B.key).length) return;

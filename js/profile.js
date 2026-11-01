@@ -82,7 +82,7 @@ var Profile = (function(){
     if (!mb) return;
     mb.querySelectorAll('button').forEach(function(b){
       if (b.classList.contains('btn-cancel')) return;
-      var t = b.textContent || '';
+      var t = (typeof I18N !== 'undefined' ? I18N.src(b) : b.textContent) || '';
       if (SET_HIDE.some(function(x){ return t.indexOf(x) >= 0; })) b.remove();
     });
     var h3 = mb.querySelector('h3');
@@ -93,7 +93,13 @@ var Profile = (function(){
     var opt = (o && typeof Push !== 'undefined' ? li('stPush', '🔔', 'การแจ้งเตือน', Push.isOn() ? ' <b style="color:#6fd35a">●</b>' : '') : '') +
       (typeof AppInstall !== 'undefined' && !AppInstall.installed() ? li('stApp', '📲', 'ติดตั้งเป็นแอป') : '');
     var box = document.createElement('div');
-    box.innerHTML = '<h4>🎨 ธีม</h4><div class="pf-theme">' +
+        var LG = typeof I18N !== 'undefined' ? I18N.lang() : 'th';
+    box.innerHTML = '<h4 data-noi18n>🌐 ภาษา / Language</h4><div class="pf-theme" style="grid-template-columns:1fr 1fr" data-noi18n>' +
+      [['th', '🇹🇭 ไทย'], ['en', '🇬🇧 English']].map(function(x){
+        return '<button class="pf-th' + (LG === x[0] ? ' on' : '') + '" data-lg="' + x[0] + '">' + x[1] + '</button>';
+      }).join('') + '</div>' + (LG === 'en' ? '<div class="grow2" data-noi18n><button class="btn-use2 mini2" id="stMiss">📋 Copy untranslated (' +
+        I18N.missList().length + ')</button><button class="btn-del mini2" id="stMissX">🗑 Clear</button></div>' : '') +
+      '<h4>🎨 ธีม</h4><div class="pf-theme">' +
       [['day', '☀️ กลางวัน'], ['night', '🌙 กลางคืน'], ['auto', '🔄 อัตโนมัติ']].map(function(t){
         return '<button class="pf-th' + (th === t[0] ? ' on' : '') + '" data-th="' + t[0] + '">' + t[1] + '</button>';
       }).join('') + '</div>' +
@@ -113,6 +119,12 @@ var Profile = (function(){
       ft.textContent = 'สุวรรณภูมิ · เวอร์ชัน ' + ((typeof Update !== 'undefined' && Update.version()) || '-');
       cb.parentNode.insertBefore(ft, cb.nextSibling);
     }
+      box.querySelectorAll('[data-lg]').forEach(function(b){
+      b.onclick = function(){ if (I18N.lang() !== b.dataset.lg) I18N.set(b.dataset.lg); };
+    });
+    on('stMiss', function(){ I18N.copyMiss(); });
+    on('stMissX', function(){ I18N.clearMiss(); settings(); });
+
     box.querySelectorAll('[data-th]').forEach(function(b){ b.onclick = function(){ setTheme(b.dataset.th); }; });
     $('stNav').onchange = function(){
       Store.set('sw_navlb', this.checked ? '1' : '0');

@@ -121,7 +121,7 @@ var BImg = (function(){
       if (c.getAttribute('data-bi')) return;
       c.setAttribute('data-bi', '1');
       var hb = c.querySelector('.bc-h b') || c.querySelector('.bc-h');
-      var B = hb && match(hb.textContent);
+      var B = hb && match(I18N.src(hb));
       if (!B) return;
       var s = src(B.key, 1);
       if (!s) return;
@@ -135,7 +135,7 @@ var BImg = (function(){
     var h3 = mb.querySelector('h3');
     if (!h3 || h3.getAttribute('data-bi')) return;
     h3.setAttribute('data-bi', '1');
-    var B2 = match(h3.textContent), lv = 0;
+    var B2 = match(I18N.src(h3)), lv = 0;
     try { if (B2 && typeof V === 'function' && V()) lv = cityLevel(V(), B2.key); } catch(e){}
     if (!B2 || lv < 1) return;
     var s2 = src(B2.key, lv);

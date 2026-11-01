@@ -38,7 +38,7 @@ var NavArt = (function(){
       if (!im){
         b.setAttribute('data-navlb', m[0]);
         for (var c = b.firstChild; c; c = c.nextSibling){
-          if (c.nodeType === 3 && c.nodeValue.indexOf(m[0]) >= 0){
+          if (c.nodeType === 3 && c.nodeValue.trim()){
             var sp = document.createElement('span');
             sp.className = 'navtx'; sp.textContent = c.nodeValue.trim();
             b.replaceChild(sp, c);
@@ -179,7 +179,7 @@ var Tut = (function(){
   function nav(w){
     var r = null;
     document.querySelectorAll('#navbar button').forEach(function(b){
-      if (!r && (b.getAttribute('data-navlb') || b.textContent).indexOf(w) >= 0) r = b;
+      if (!r && (b.getAttribute('data-navlb') || I18N.src(b)).indexOf(w) >= 0) r = b;
     });
     return r;
   }

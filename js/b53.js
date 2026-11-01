@@ -80,7 +80,7 @@ var B53 = (function(){
     var nm = (BUILDINGS[bIndex('townhall')] || {}).name || 'ศาลาประชาคม';
     new MutationObserver(function(){
       var h3 = mb.querySelector('h3');
-      if (!h3 || $('pBtn') || h3.textContent.indexOf(nm) < 0) return;
+      if (!h3 || $('pBtn') || I18N.src(h3).indexOf(nm) < 0) return;
       var cb = mb.querySelector('.btn-cancel');
       if (!cb) return;
       var b = document.createElement('button');
