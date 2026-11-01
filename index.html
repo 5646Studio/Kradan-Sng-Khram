@@ -4,6 +4,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="assets/ui/app_192.png">
 <meta name="theme-color" content="#1a1510">
+<script src="js/lang_en.js?v=14S"></script>
+<script src="js/i18n.js?v=14S"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 
@@ -69,6 +71,7 @@ input::placeholder{color:#5f553e}
 .hide{display:none!important}
 .hs{background:#100d09;border:1px solid #251e14;border-radius:8px;padding:8px;margin-bottom:6px;font-size:11.5px;line-height:1.7}
 .hs b{color:#ffcf40}.hs i{font-style:normal;color:#8a7a55}
+.langsw{font-size:12px;margin-top:8px;color:#6a5f45}.langsw a{color:#ffcf40;cursor:pointer;padding:0 4px}
 
 </style>
 </head>
@@ -79,6 +82,7 @@ input::placeholder{color:#5f553e}
     <p>สงครามเจ้านคร · เกมวางแผนสร้างอาณาจักร</p>
     <div class="srv">เซิร์ฟเวอร์ <b id="srvname">ทวารวดี</b> · <span id="mode">กำลังตรวจสอบ…</span></div>
     <div class="sday" id="sday"></div>
+    <div class="langsw" data-noi18n><a onclick="I18N.set('th')">🇹🇭 ไทย</a> · <a onclick="I18N.set('en')">🇬🇧 English</a></div>
   </div>
 
   <div class="card" id="scrLoad"><p class="center">⏳ กำลังเชื่อมต่อ…</p></div>
@@ -167,7 +171,7 @@ input::placeholder{color:#5f553e}
 <script src="js/firebase-config.js?v=14O"></script>
 <script src="js/net.js?v=14O"></script>
 <script src="js/api.js?v=14O"></script>
-<script src="js/update.js?v=14R"></script>
+<script src="js/update.js?v=14S"></script>
 <script>
 (function(){
   function $(i){ return document.getElementById(i); }
