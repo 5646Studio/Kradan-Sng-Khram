@@ -1,14 +1,55 @@
-/* ============ I18N v14S — แปลภาษาอัตโนมัติจากพจนานุกรม js/lang_en.js ============
+/* ============ I18N v14T — แปลภาษาอัตโนมัติ (แก้ค้าง · กันค้าง · ?lang=th) ============
    ต้องโหลดก่อนสคริปต์อื่นทั้งหมด */
 var I18N = (function(){
-  var KEY = 'sw_lang', MK = 'sw_i18n_miss', TH = /[\u0E00-\u0E7F]/;
+  var KEY = 'sw_lang', MK = 'sw_i18n_miss', BK = 'sw_lang_try', TH = /[\u0E00-\u0E7F]/;
   var SKIP = '.cb,.cn,.cvm i,.gt,[data-noi18n],textarea,script,style';
   var AT = ['placeholder', 'title', 'alt', 'aria-label'];
-  var lang = 'th';
-  try { lang = localStorage.getItem(KEY) === 'en' ? 'en' : 'th'; } catch(e){}
+  var lang = 'th', isGame = /game\.html/.test(location.pathname), fellBack = false;
+  try {
+    var q = new URLSearchParams(location.search).get('lang');
+    if (q === 'th' || q === 'en'){ localStorage.setItem(KEY, q); localStorage.removeItem(BK); }
+    lang = localStorage.getItem(KEY) === 'en' ? 'en' : 'th';
+    if (lang === 'en' && isGame){
+      var n = +(localStorage.getItem(BK) || 0);
+      if (n >= 2){ localStorage.setItem(KEY, 'th'); localStorage.removeItem(BK); lang = 'th'; fellBack = true; }
+      else localStorage.setItem(BK, String(n + 1));
+    }
+  } catch(e){}
   var on = lang === 'en', D = null, K = null, cache = {}, cn = 0, miss = {}, saveT = 0;
-  var ORIG = new WeakMap(), OUT = new WeakMap();
+  var ORIG = new WeakMap(), OUT = new WeakMap(), ATTR = new WeakMap();
   try { miss = JSON.parse(localStorage.getItem(MK) || '{}'); } catch(e){}
+
+  if (fellBack) setTimeout(function(){
+    alert('โหมดภาษาอังกฤษโหลดไม่สำเร็จ 2 ครั้ง จึงกลับเป็นภาษาไทยให้ก่อน\nกรุณาแจ้งผู้พัฒนาพร้อมภาพหน้าจอกล่องสีแดง (ถ้ามี)');
+  }, 4000);
+
+  /* โหลดเกมสำเร็จ → ล้างตัวนับกันค้าง */
+  if (on && isGame){
+    var ok = setInterval(function(){
+      try {
+        if (typeof Game !== 'undefined' && Game.villages && Game.villages.length){
+          localStorage.removeItem(BK); clearInterval(ok);
+        }
+      } catch(e){}
+    }, 2000);
+  }
+
+  /* กล่องแสดงข้อผิดพลาด (โหมดอังกฤษ หรือ ?debug=1) */
+  if (on || /[?&]debug=1/.test(location.search)){
+    var errs = [];
+    window.addEventListener('error', function(e){
+      errs.push((e.message || 'error') + ' @' + String(e.filename || '').split('/').pop() + ':' + (e.lineno || ''));
+      var b = document.getElementById('i18nErr');
+      if (!b && document.body){
+        b = document.createElement('div'); b.id = 'i18nErr'; b.setAttribute('data-noi18n', '');
+        b.style.cssText = 'position:fixed;left:6px;right:6px;bottom:6px;z-index:999999;background:#7a1010;color:#fff;' +
+          'font:11px monospace;padding:6px 8px;border-radius:8px;max-height:30vh;overflow:auto';
+        b.onclick = function(){ b.remove(); };
+        document.body.appendChild(b);
+      }
+      if (b) b.textContent = '⚠ ' + errs.slice(-4).join('\n⚠ ') + '\n(แตะเพื่อปิด)';
+    });
+  }
 
   function load(){
     if (K) return;
@@ -39,7 +80,7 @@ var I18N = (function(){
     if (TH.test(o)) note(o);
     var r = lead + o + tail;
     if (++cn > 4000){ cache = {}; cn = 0; }
-    cache[s] = r;
+    cache[s] = r; cache[r] = r;
     return r;
   }
   function text(n){
@@ -55,7 +96,15 @@ var I18N = (function(){
   }
   function attrs(e){
     if (!e.getAttribute || (e.closest && e.closest('.cb,[data-noi18n]'))) return;
-    AT.forEach(function(a){ var v = e.getAttribute(a); if (v && TH.test(v)) e.setAttribute(a, tr(v)); });
+    var last = ATTR.get(e);
+    if (!last){ last = {}; ATTR.set(e, last); }
+    AT.forEach(function(a){
+      var v = e.getAttribute(a);
+      if (!v || !TH.test(v) || v === last[a]) return;
+      var t = tr(v);
+      last[a] = t;
+      if (t !== v) e.setAttribute(a, t);
+    });
     if (e.tagName === 'INPUT' && /^(button|submit)$/.test(e.type) && TH.test(e.value)) e.value = tr(e.value);
   }
   function walk(n){
@@ -68,7 +117,6 @@ var I18N = (function(){
     L.forEach(text);
     n.querySelectorAll('[placeholder],[title],[alt],[aria-label],input[type=button],input[type=submit]').forEach(attrs);
   }
-  /* ข้อความต้นฉบับภาษาไทยของ element (ใช้จับคู่ชื่ออาคารในโหมดภาษาอังกฤษ) */
   function src(el){
     if (!el) return '';
     if (!on) return el.textContent || '';
@@ -79,14 +127,15 @@ var I18N = (function(){
   }
   function start(){
     document.documentElement.lang = 'en';
-    document.title = tr(document.title);
-    walk(document.body);
+    try { document.title = tr(document.title); walk(document.body); } catch(e){}
     new MutationObserver(function(ms){
-      ms.forEach(function(m){
-        if (m.type === 'childList') m.addedNodes.forEach(walk);
-        else if (m.type === 'characterData') text(m.target);
-        else attrs(m.target);
-      });
+      try {
+        ms.forEach(function(m){
+          if (m.type === 'childList') m.addedNodes.forEach(walk);
+          else if (m.type === 'characterData') text(m.target);
+          else attrs(m.target);
+        });
+      } catch(e){}
     }).observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:AT });
   }
   if (on){
@@ -110,7 +159,10 @@ var I18N = (function(){
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
   }
 
-  function set(l){ try { localStorage.setItem(KEY, l === 'en' ? 'en' : 'th'); } catch(e){} location.reload(); }
+  function set(l){
+    try { localStorage.setItem(KEY, l === 'en' ? 'en' : 'th'); localStorage.removeItem(BK); } catch(e){}
+    location.replace(location.pathname);
+  }
   function missList(){ return Object.keys(miss); }
   function copyMiss(){
     var t = missList().join('\n');

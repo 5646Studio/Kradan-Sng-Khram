@@ -12,12 +12,12 @@ var BldTool = (function(){
     return L;
   }
   function match(t){ var a = blist(); for (var i = 0; i < a.length; i++) if (t.indexOf(a[i].name) >= 0) return a[i]; return null; }
-  function ck(c){ return c && c.b && typeof BUILDINGS !== 'undefined' && BUILDINGS[c.b] ? BUILDINGS[c.b].key : null; }
+  function ck(c){ return c && c.b != null && c.b !== '' && typeof BUILDINGS !== 'undefined' && BUILDINGS[c.b] ? BUILDINGS[c.b].key : null; }
   function bname(k){ var a = blist(); for (var i = 0; i < a.length; i++) if (a[i].key === k) return a[i].name; return k; }
   function dsec(lv){ return Math.max(30, Math.round(120 * Math.pow(lv, 1.25) / CFG.SPEED)); }
   function total(lv){ var s = 0; for (var l = lv; l >= 1; l--) s += dsec(l); return s; }
   function slotsOf(v, k){ var r = []; (v.city || []).forEach(function(c, i){ if (c && ck(c) === k && c.level > 0) r.push(i); }); return r; }
-  function empties(v){ var r = []; (v.city || []).forEach(function(c, i){ if (!c || !c.b) r.push(i); }); return r; }
+  function empties(v){ var r = []; (v.city || []).forEach(function(c, i){ if (!ck(c)) r.push(i); }); return r; }
   function cmd(p, body, cb){ body.vid = V().id; Sync.cmd('/bld/' + p, body, function(r){ if (r && r.ok && cb) cb(r); }); }
 
   function open(k, lv){
@@ -33,7 +33,7 @@ var BldTool = (function(){
 
   function manage(s){
     var v = V(), c = v.city[s], dm = v.srvDemo, E = empties(v), t0 = now();
-    if (!c || !c.b){ UI.close(); return; }
+    if (!ck(c)){ UI.close(); return; }
     var h = '<h3>🛠 ' + esc(bname(ck(c))) + ' Lv.' + c.level + '</h3><div class="rbar"><span>ช่อง ' + (s + 1) + '</span><b>' + esc(v.name) + '</b></div>';
     if (dm && dm.slot === s){
       h += '<div class="dgrun">🔨 กำลังรื้อถอน · Lv.' + c.level + ' → ' + (c.level - 1) + ' ในอีก ' + UI.dur((dm.next - t0) / 1000) +
