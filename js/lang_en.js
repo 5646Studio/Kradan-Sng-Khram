@@ -97,5 +97,142 @@ var LANG_EN = {
   'ปิดปรับปรุงชั่วคราว':'Temporarily under maintenance', 'มีอัปเดตใหม่':'New update available', 'โหลดใหม่':'Reload',
   'ต้องโหลดใหม่ก่อนเล่นต่อ ข้อมูลของคุณเก็บไว้บนเซิร์ฟเวอร์แล้ว':'Please reload to continue. Your progress is saved on the server.',
   'ยังไม่ได้เลือกทหาร':'No troops selected', 'กองทัพออกเดินทางแล้ว':'Army has set out',
-  'ข้ามบทแนะนำ':'Skip tutorial', 'ข้ามขั้นนี้':'Skip step', 'เริ่มเล่น':'Start playing'
+  'ข้ามบทแนะนำ':'Skip tutorial', 'ข้ามขั้นนี้':'Skip step', 'เริ่มเล่น':'Start playing',
+    
+    /* ===== v14U: หน้าเข้าเกม (index.html) ===== */
+  'เกมวางแผนสร้างอาณาจักร':'Kingdom strategy game', 'อาณาจักร':'Kingdom', 'ออนไลน์':'Online',
+  'กำลังเชื่อมต่อ':'Connecting', 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้':'Cannot connect to server', 'เชื่อมต่อ':'Connect',
+  'กรุณากลับมาใหม่ภายหลัง':'Please come back later', 'กลับหน้าหลัก':'Back to home', 'หน้าหลัก':'Home',
+  'เข้าด้วย':'Sign in with', 'หรือใช้อีเมล':'or use email', 'อีเมล':'Email', 'รหัสผ่าน 6 ตัวขึ้นไป':'Password (6+ characters)',
+  'รหัสผ่าน':'Password', 'ตัวขึ้นไป':'+ characters', 'ตัวอักษร':'characters', 'สมัครใหม่':'Sign up',
+  'เล่นแบบผู้เยี่ยมชม':'Play as guest', 'ผู้เยี่ยมชม':'Guest', 'คุณเล่นแบบ':'You are playing as',
+  'ถ้าเปิดลิงก์จาก':'If you opened this link from', 'ให้กด':'tap', 'เปิดใน':'Open in',
+  'ตั้งชื่อเจ้านคร':'Name your City Lord',
+  'ชื่อนี้แสดงบนแผนที่และตารางอันดับ ใช้ซ้ำกับคนอื่นไม่ได้':'This name appears on the map and rankings and must be unique',
+  'ไปเลือกเผ่าและดินแดน':'Choose tribe & territory', 'เข้าเล่น':'Play',
+  'ถ้าออกจากระบบหรือล้างข้อมูลเบราว์เซอร์ จะเข้าบัญชีนี้ไม่ได้อีก ผูกกับ':'If you sign out or clear browser data you will lose this account. Link it to',
+  'เพื่อเก็บไว้ถาวร':'to keep it permanently', 'ผูกกับบัญชี':'Link account:', 'ผูกกับ':'Link to',
+  'โหมดออฟไลน์':'Offline mode', 'ยังไม่ได้ตั้งค่าเซิร์ฟเวอร์ออนไลน์':'Online server not configured',
+  'เล่นและเก็บข้อมูลในเครื่องนี้เท่านั้น':'play and save on this device only', 'เริ่มเกมใหม่':'New game',
+  'หอเกียรติยศ':'Hall of Fame', 'ทำเนียบ':'Hall of Fame',
+  'สร้างเมือง ฝึกกองทัพ รวมกิลด์ แล้วชิง':'Build villages, train armies, join a guild, then seize the',
+  'ภายใน 45 วัน':'within 45 days', 'ภายใน':'within', 'ทรัพยากร 4 ชนิด':'4 resources', 'หลุมต่อเมือง':'fields per village',
+  'ช่องอาคาร':'building slots', 'เร่งงานด้วย':'Speed up with', 'เด่นคนละทรัพยากร':'each rich in a different resource',
+  'อีสาน':'Northeast', 'พายัพ':'Northwest', 'หรดี':'Southwest', 'อาคเนย์':'Southeast', 'ดินแดน':'Territory',
+  'ทุกคนอยู่บนแผนที่เดียวกัน ร่วมกับเจ้าเมืองอื่น ๆ ที่สร้างเมืองแข่งกันตลอดเวลา':'Everyone shares one map with other lords, all building and competing at the same time',
+  'ทยอยเปิดในเฟสถัดไป':'are rolling out in upcoming phases', 'ระบบ':'System', 'ชนิด':'types', 'ปชก':'Pop.',
+
+  /* ===== ชื่อเมืองตั้งต้น ===== */
+  'เมืองแรก':'First Village', 'เมืองยึดได้':'Captured Village',
+
+  /* ===== คำที่ถูกคำสั้นตัดขาด ===== */
+  'ก่อสร้าง':'construction', 'รายการก่อสร้าง':'Build queue', 'กำลังก่อสร้าง':'Under construction',
+  'ระหว่าง':'while', 'เนื่องจาก':'due to', 'ข้อเสนอแนะ':'Suggestion', 'แนะนำ':'Suggest',
+
+  /* ===== เช็คอิน · เชิญเพื่อน · เหรียญ ===== */
+  'รีเซ็ตเที่ยงคืน':'Resets at midnight', 'เวลาไทย':'Thai time', 'ไทย':'Thai',
+  'ขาดเต็มวันใดวันหนึ่งจะเริ่มใหม่':'missing any full day restarts the streak', 'เริ่มรอบใหม่':'starts a new cycle',
+  'รับแล้ว':'Claimed', 'ได้ในอีก':'available in', 'พร้อมขยายเมือง':'Ready to expand', 'พร้อมขยาย':'Ready to expand',
+  'ลิงก์เชิญ':'Invite link', 'ลิงก์ให้เพื่อนที่':'link to friends who', 'เคยเล่น':'played before',
+  'เมื่อเพื่อนมี':'When your friend has', 'คุณได้':'you get', 'เพื่อนได้':'friend gets', 'รับรางวัลได้':'Reward ready',
+  'เพื่อนต้องสมัครผ่านลิงก์และ':'Friends must sign up via the link and', 'เกมภายใน':'game within',
+  'ถ้าใช้อุปกรณ์เดียวกัน ทีมงานจะตรวจสอบก่อนให้รางวัล':'If the same device is used, the team will review before rewarding',
+  'เพื่อนของคุณ':'Your friends', 'เพื่อนสมัครผ่านลิงก์ของคุณ':'friends signed up via your link',
+  'เหรียญตรา':'Medals', 'แล้วจะได้รับเหรียญ':'to earn a medal', 'ดูเงื่อนไขและความคืบหน้า':'View requirements and progress',
+  'ได้รับ':'Received', 'ข้อความ':'Messages', 'ประกาศจากทีมงาน':'Team announcements',
+
+  /* ===== โปรไฟล์ · เปลี่ยนชื่อ · แจ้งปัญหา · แจ้งเตือน ===== */
+  'เปลี่ยนชื่อ':'Rename', 'ชื่อปัจจุบัน':'Current name', 'ครั้งแรกฟรี':'first time free', 'แรกฟรี':'first free',
+  'เปลี่ยนได้ทุก':'can change every', 'ใช้ชื่อซ้ำกับผู้เล่นอื่น':'Same name as another player', 'ฟรี':'Free',
+  'ใช้แจ้งทีมงานเมื่อมีปัญหาเรื่อง':'Give this to the team when reporting problems with', 'หรือการ':'or',
+  'เล่าว่าเกิดอะไรขึ้น และตอนนั้นกำลังทำอะไรอยู่ ทีมงานจะได้แก้ได้ตรงจุด':'Describe what happened and what you were doing, so the team can fix it',
+  'เกมค้าง':'Game froze', 'แสดงผลผิด':'Display error', 'ปุ่มทับกัน':'Overlapping buttons',
+  'ความสมดุลของเกม':'Game balance', 'อื่น ๆ':'Other', 'เช่น กด':'e.g. tapped',
+  'แล้วหน้าจอค้าง ต้องรีเฟรชถึงจะเล่น':'and the screen froze until I refreshed',
+  'แนบ':'Attach', 'ข้อผิดพลาดล่าสุด':'latest errors', 'ในเครื่องนี้':'on this device',
+  'อุปกรณ์ที่ลงทะเบียน':'Registered devices', 'เลือกเรื่องที่':'Choose what', 'ให้แจ้ง':'to notify',
+  'กำลังมา':'incoming', 'เตือนล่วงหน้าได้เฉพาะ':'Early warning only for', 'ผลการรบ':'Battle results',
+  'งานเฉลิมฉลองเสร็จ':'Celebration finished', 'จัดงานเฉลิมฉลอง':'Hold celebration', 'และแจ้งเตือน':'and notifications',
+
+  /* ===== ฤดูกาล ===== */
+  'แห่งจะปรากฏในอีก':'will appear in', 'แห่งปรากฏ':'have appeared', 'ยึดด้วย':'Capture with',
+  'กำลังหนุนไปประจำการ':'reinforcements to garrison', 'แห่งขึ้นไปจึงจะยึดได้':'or more to capture',
+  'ติดกันชนะ':'in a row to win', 'ครอง':'Hold', 'เกมยัง':'the game continues',
+  'จนกว่าจะมีผู้ครองครบ แต่':'until someone holds long enough, but', 'ที่ต้องครองจะลดลง':'required to hold decreases',
+  'ตอนนี้ต้องครอง':'Currently must hold', 'ต่ำสุด':'minimum', 'ฤดูกาลแรกกำลังดำเนินอยู่':'The first season is in progress',
+
+  /* ===== วีรบุรุษ ===== */
+  'โบนัสจากอุปกรณ์':'Equipment bonus', 'ได้อุปกรณ์จากการสำรวจ':'Get equipment from adventures', 'อุปกรณ์':'Equipment',
+  'ลดความเสี่ยงใน':'Reduces risk in', 'ความเสี่ยง':'Risk', 'ผลิตทุกชนิด':'all production', 'ผลิตเพิ่มให้':'Production bonus for',
+  'ไปสำรวจ':'Go on adventure', 'ออกสำรวจ':'Adventure', 'กำลังสำรวจ':'On adventure', 'สำรวจ':'Adventure',
+  'ออกเดินทางแล้ว':'has set out', 'กลับในอีก':'returns in', 'กลับใน':'returns in',
+  'ชั้นที่ลึกขึ้นต้องอัป':'Deeper levels require', 'ต้องอัป':'Requires', 'ถึงชั้น':'up to level', 'จวน':'Mansion',
+  'เมื่อบาดเจ็บ':'when injured', 'ที่บาดเจ็บ':'injured', 'ใช้อัปคุณลักษณะ':'Used to upgrade attributes',
+  'สถานะ':'Status', 'พลัง':'Power', 'ชั่วโมง':'hour', 'ฟื้น':'Recover',
+  'ทรงหน้า':'Face shape', 'สีผิว':'Skin tone', 'ทรงผม':'Hairstyle', 'ผมยาวสยาย':'Long flowing hair', 'สีผม':'Hair color',
+  'คิ้ว':'Eyebrows', 'ดวงตา':'Eyes', 'หนวด':'Mustache', 'เครา':'Beard', 'แผลเป็น':'Scar', 'รอยสัก':'Tattoo',
+  'โพกผ้า':'Headwrap', 'เปลี่ยนหน้าตา':'Change appearance', 'เปลี่ยนแค่ชื่อฟรี':'Rename only (free)', 'แบบ':'Style',
+
+  /* ===== คำอธิบายอาคาร / หน่วย ===== */
+  'ศูนย์กลางการปกครอง ยิ่งสูงยิ่ง':'Seat of government. The higher the level, the', 'เกือบทุกหลัง':'almost every building',
+  'ศูนย์รวมศรัทธา เพิ่ม':'Center of faith. Greatly increases', 'ของประชาชนอย่างมาก ทำให้':'of the people, making',
+  'ได้ยากขึ้น':'harder', 'ภักดีฟื้น':'Loyalty recovers', 'ปืนใหญ่สำหรับทำลาย':'Cannons for destroying',
+  'ต้องชนะศึกก่อนถึงจะยิงได้':'must win the battle before firing', 'เลือกเป้าปืนใหญ่ได้':'Choose cannon targets',
+  'วินัยการเดินทัพ':'Marching discipline', 'เดินทัพเร็วขึ้น':'march faster', 'เดินทัพเร็ว':'Fast march',
+  'นี้เดินทางเร็วขึ้น':'here travel faster', 'เร็วขึ้น':'faster', 'ที่ออกจาก':'leaving',
+  'จุดรวมพลของ':'Rally point of', 'พร้อมกันได้หลายขบวน และตั้งแผนการรบล่วงหน้าได้มากขึ้น':'several at once, and plan more battles ahead',
+  'แผนการรบ':'Battle plans', 'แผนรบ':'Battle plan', 'ที่พำนักของ':'Residence of the',
+  'สำคัญที่สุดเพราะเลี้ยงทั้ง':'most important because it feeds both',
+  'แลกเปลี่ยนกับผู้เล่นอื่น ยิ่ง':'Trade with other players. The higher the',
+  'ใช้แล้วหมดถาวร ต้องอัปขึ้นช่วง':'Used up permanently. Upgrade to the next tier', 'เป็นเงื่อนไขของ':'required for',
+  'เร็วกว่าแต่กิน':'faster but eats', 'กระดูกสันหลังของ':'backbone of', 'ทั้งรุกและรับ':'both attack and defense',
+  'ซ่อนได้':'Can hide', 'ซ่อน':'Hide', 'ยิ่งเยอะยิ่งปลอดภัย':'the more the safer', 'ซ้อนกับ':'stacks with',
+  'ปกติ รวมได้ถึง':'normal, up to', 'ได้แห่งเดียวทั้งเกม':'only one in the whole game', 'สำหรับยึด':'for capturing',
+  'โกดังมหึมาของราชสำนัก เพิ่ม':'Great Royal Storehouse. Increases', 'ของราชสำนัก เพิ่ม':'(Royal). Increases',
+  'ของราชสำนัก':'(Royal)', 'ม้าอีกคิวพร้อมกับ':'another cavalry queue alongside the',
+  'ราบอีกคิวพร้อมกับค่ายปกติ ต้นทุน':'another infantry queue alongside the normal barracks. Cost',
+  'ปกติ ต้นทุน':'normal. Cost', 'ม้าเพิ่ม':'extra cavalry', 'ราบเพิ่ม':'extra infantry', 'ม้าเบา':'Light cavalry',
+  'ม้า':'cavalry', 'ราบ':'infantry', 'ดาบ':'Sword', 'หอก':'Spear', 'องครักษ์':'Guard', 'ซุงกระทุ้ง':'Battering ram',
+  'คิวเต็ม':'Queue full', 'คิว':'queue', 'อย่างน้อย':'at least', 'รวมกัน':'combined', 'พร้อมกัน':'at once', 'ขบวน':'convoys',
+  'และมองเห็นขบวน':'and see convoys', 'เตือนล่วงหน้า':'Early warning', 'ล้อมรอบ':'surrounding', 'คูณพลัง':'multiplies power',
+  'สูงที่สุดในเกม จำเป็นมากถ้าอยากขยาย':'highest in the game. Essential if you want to expand',
+
+  /* ===== ร้าน · เติมทอง ===== */
+  'จ่ายด้วย':'Pay with', 'พร้อมเพย์':'PromptPay', 'แล้วแนบสลิป':'then attach the slip',
+  'เข้าหลังทีมงานตรวจสลิป ปกติภายใน':'credited after the team checks the slip, usually within',
+  'ประวัติการซื้อ':'Purchase history', 'และซื้อสิทธิพิเศษ':'and buy perks', 'คลังหลวง':'Royal Treasury',
+  'ถุง':'Pouch', 'หีบ':'Chest', 'ไห':'Jar', 'เล็ก':'Small', 'โบนัส':'Bonus', 'ซื้อ':'Buy', 'เติม':'Top up',
+
+  /* ===== รื้อถอน / ย้ายอาคาร (b11) ===== */
+  'ภูมิประเทศ':'Terrain', 'รอได้อีก':'can queue', 'รอช่าง':'Waiting for builder', 'กำลังรื้อ':'Demolishing',
+  'รื้อเสร็จ':'Demolished', 'ย้ายไป':'Move to', 'ปลายทาง':'Destination', 'เท่าเดิม':'unchanged',
+  'ที่ได้จาก':'gained from', 'นี้ลดลงตาม':'here decreases accordingly', 'ดูสถานะได้ที่ปุ่ม':'Check status with the button',
+  'ในหน้า':'on the page', 'กลับเป็น':'back to', 'หายไป':'disappears', 'จนหมด':'completely', 'จนถึง':'until',
+  'ทีละ':'one at a time', 'ในอีก':'in', 'หยุด':'Stop', 'คืน':'Refund', 'เลือก':'Select',
+
+  /* ===== ตลาด · กำลังหนุน · กิลด์ ===== */
+  'ขนได้':'Can carry', 'ใส่จำนวนที่จะ':'Enter amount to', 'จากผู้เล่นอื่น':'from other players', 'ของคุณ':'your',
+  'ขั้นต่ำ':'Minimum', 'อัตราแลกต้อง':'Exchange rate must', 'จะถูกจองไว้จนกว่ามี':'will be reserved until someone',
+  'รับหรือกด':'accepts, or tap', 'แบ่งยอดรวมใหม่ได้ตาม':'Redistribute the total by', 'ยอดรวม':'Total',
+  'ค่าเดิม':'Original', 'แบ่งครบแล้ว':'Fully distributed', 'แลก':'Trade', 'จ่าย':'Pay', 'เกิน':'exceed',
+  'สินค้าถึง':'Goods arrived at', 'ได้รับสินค้าจาก':'Received goods from', 'กำลังหนุนถึง':'Reinforcements arrived at',
+  'กำลังหนุนมา':'Incoming reinforcements', 'กำลังหนุนใน':'Reinforcements in', 'ไปเสริมยังกิน':'sent as support still eat',
+  'แต่ละกองออกรบจากฐานได้':'each squad can sortie from its base', 'ออกรบจากฐานได้':'can sortie from base',
+  'ครบแล้วเดินกลับ':'then march back', 'ที่อยู่ที่อื่น':'stationed elsewhere', 'ต้นทาง':'Origin',
+  'โอนหัวหน้า':'Transfer leadership', 'ลดเป็น':'Demote to', 'ปลด':'Dismiss', 'สหาย':'Comrade',
+  'สมาพันธ์':'Confederation', 'อโยธยา':'Ayutthaya',
+  'คุยกับเพื่อนใน':'Chat with friends in', 'คุยกับ':'Chat with', 'แตะชื่อเพื่อ':'Tap a name to',
+  'ของข้าพเจ้า':'Mine', 'งานที่ช่างกำลังทำ':'Builder tasks in progress', 'งานที่ดำเนินอยู่':'Active tasks',
+  'จ้างช่าง':'Hire builder', 'ช่าง':'Builder', 'ด้านบนเพื่อเริ่ม':'above to start', 'กำลังเดินทาง':'En route',
+  'เลเวลอัปเป็น':'leveled up to', 'เสร็จแล้ว':'completed', 'เล่นมาแล้ว':'played', 'ใช้ไปแล้ว':'used', 'ใช้แล้ว':'used',
+
+  /* ===== คำเดี่ยวที่ปลอดภัย ===== */
+  'ทุกชนิด':'all types', 'เงื่อนไข':'Requirements', 'เพิ่มพลัง':'Boost', 'ผลตอนนี้':'Current effect',
+  'ทั้งรุก':'attack', 'มีอยู่':'available', 'จำนวน':'Amount', 'พื้นฐาน':'Base', 'เสริม':'Bonus', 'คงเหลือ':'Remaining',
+  'เริ่มต้น':'Default', 'และการรบ':'and battles', 'ขยาย':'Expand', 'เริ่ม':'Start', 'เดินทาง':'Travel', 'หน่วย':'units',
+  'ทดสอบ':'Test', 'อ่าน':'Read', 'ชนะ':'Victory', 'ยึด':'Capture', 'ต้าน':'resist', 'แย่ง':'steal', 'เฉพาะ':'only',
+  'เพิ่ม':'Increase', 'ลดค่า':'Reduce', 'ดู':'View', 'แตะ':'Tap', 'เสร็จ':'done', 'ฝ่าย':'Side', 'เหลือ':'left',
+  'เครื่อง':'device(s)', 'รายการ':'items', 'ใช้งาน':'usage', 'ใช้':'Use', 'เล่น':'Play', 'รวม':'Total',
+  'ก่อน':'first', 'หรือ':'or', 'และ':'and', 'เพื่อ':'to', 'จาก':'from', 'กับ':'with', 'ของ':'of', 'เสีย':'lost',
+  'ทุก':'every', 'คุณ':'you', 'แรก':'first', 'เอง':'automatically', 'ใคร':'who', 'โดย':'by', 'เกม':'game'
 };

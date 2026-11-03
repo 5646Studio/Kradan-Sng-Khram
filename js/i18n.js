@@ -57,12 +57,32 @@ var I18N = (function(){
     K = Object.keys(D).filter(function(k){ return k && D[k]; }).sort(function(a, b){ return b.length - a.length; });
   }
   function note(s){
-    (s.match(/[\u0E00-\u0E7F][\u0E00-\u0E7F\s]*/g) || []).forEach(function(x){
-      x = x.trim();
-      if (x.length > 1 && !miss[x] && Object.keys(miss).length < 600) miss[x] = 1;
-    });
+    s = String(s).replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (s.length > 1 && !miss[s] && Object.keys(miss).length < 600) miss[s] = 1;
     clearTimeout(saveT);
     saveT = setTimeout(function(){ try { localStorage.setItem(MK, JSON.stringify(miss)); } catch(e){} }, 2000);
+  }
+
+    /* v14U — ยศ/คำนำหน้า + ชื่อ → อักษรโรมัน (บอท · NPC · เมือง · กิลด์) */
+  var RANK = { 'พ่อขุน':'Pho Khun', 'พระยา':'Phraya', 'จมื่น':'Chamuen', 'หมื่น':'Muen', 'ขุน':'Khun', 'ท้าว':'Thao',
+    'แสน':'Saen', 'หลวง':'Luang', 'เจ้า':'Chao', 'นาย':'Nai', 'นคร':'Nakhon' };
+  var ROOT = { 'ศรีราชา':'Si Racha', 'ไกรสร':'Kraison', 'เพชรา':'Phetchara', 'อินทรา':'Inthra', 'สุริยา':'Suriya',
+    'ทองคำ':'Thongkham', 'กาฬสิงห์':'Kan Sing', 'วิเศษ':'Wiset', 'รามราช':'Ramrat', 'ภักดี':'Phakdi', 'ชัยยศ':'Chaiyot',
+    'บุญมา':'Bunma', 'อุดม':'Udom', 'แก้วกล้า':'Kaeo Kla', 'สิงหนาท':'Singhanat', 'มังกร':'Mangkon',
+    'ช้างเผือก':'Chang Phueak', 'เมฆา':'Mekha', 'ธารา':'Thara', 'พิชัย':'Phichai', 'อโนชา':'Anocha', 'เทพา':'Thepha',
+    'วายุ':'Wayu', 'พสุธา':'Phasutha', 'นาคราช':'Nakharat', 'สายฟ้า':'Saifa', 'ภูผา':'Phupha', 'จันทรา':'Chanthra',
+    'ดาวเรือง':'Dao Ruang', 'มหาวงศ์':'Mahawong',
+    /* ชื่อผู้เล่นทดสอบ — เพิ่มได้ */
+    'อังคาร':'Angkhan', 'พุธโท':'Phuttho', 'พุธ':'Phut', 'จัน':'Chan', 'คำ':'Kham' };
+  var GA = { 'สมาพันธ์':'Confederation', 'กองทัพ':'Army', 'พันธมิตร':'Alliance', 'แนวร่วม':'Coalition', 'สหาย':'Comrades', 'ภาคี':'League' };
+  var GB = { 'นาคา':'Naga', 'ไกรสร':'Lion', 'อินทรี':'Eagle', 'พยัคฆ์':'Tiger', 'ช้างเผือก':'White Elephant', 'สุวรรณ':'Golden',
+    'อโยธยา':'Ayutthaya', 'ล้านช้าง':'Lan Xang', 'ทวารวดี':'Dvaravati', 'หริภุญชัย':'Haripunchai', 'ศรีวิชัย':'Srivijaya', 'เชียงแสน':'Chiang Saen' };
+  function alt(o){ return Object.keys(o).sort(function(a, b){ return b.length - a.length; }).join('|'); }
+  var NAME_RE = new RegExp('(' + alt(RANK) + ')(' + alt(ROOT) + ')', 'g');
+  var GUILD_RE = new RegExp('(' + alt(GA) + ')(' + alt(GB) + ')', 'g');
+  function names(s){
+    return s.replace(GUILD_RE, function(m, a, b){ return ' ' + GB[b] + ' ' + GA[a] + ' '; })
+            .replace(NAME_RE, function(m, r, n){ return ' ' + RANK[r] + ' ' + ROOT[n] + ' '; });
   }
   function tr(s){
     if (!on || s == null) return s;
@@ -72,12 +92,14 @@ var I18N = (function(){
     load();
     var core = s.trim(), i0 = s.indexOf(core), lead = s.slice(0, i0), tail = s.slice(i0 + core.length), o;
     if (D[core]) o = D[core];
+    else if (ROOT[core]) o = ROOT[core];
     else {
-      o = core;
+      o = names(core);
+
       for (var i = 0; i < K.length; i++) if (o.indexOf(K[i]) >= 0) o = o.split(K[i]).join(' ' + D[K[i]] + ' ');
       o = o.replace(/[ \u00A0]{2,}/g, ' ').replace(/ ([·,.:;!?)\]%…])/g, '$1').replace(/([(\[#]) /g, '$1').trim();
     }
-    if (TH.test(o)) note(o);
+    if (TH.test(o)) note(core);
     var r = lead + o + tail;
     if (++cn > 4000){ cache = {}; cn = 0; }
     cache[s] = r; cache[r] = r;
