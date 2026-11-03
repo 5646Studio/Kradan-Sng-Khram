@@ -22,7 +22,7 @@ const PACKAGES = [
   { id:'g100',  name:'ถุงทองเล็ก',  gold:100,  bonus:0,   price:35,  cur:'THB' },
   { id:'g320',  name:'หีบทอง',      gold:300,  bonus:20,  price:99,  cur:'THB' },
   { id:'g750',  name:'ไหทอง',       gold:650,  bonus:100, price:199, cur:'THB' },
-  { id:'g1700', name:'คลังทองหลวง', gold:1350, bonus:350, price:1, cur:'THB' }
+  { id:'g1700', name:'คลังทองหลวง', gold:1350, bonus:350, price:399, cur:'THB' }
 ];
 
 /* ---------- หน่วยรบ : [k, ประเภท, อาคาร, Lv อาคาร, เงื่อนไขเพิ่ม, โจมตี, ป้องกันราบ, ป้องกันม้า,
