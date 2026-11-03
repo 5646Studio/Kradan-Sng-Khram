@@ -998,6 +998,38 @@ async function admin(p, b, q, env, by){
     ]);
     return json({ ok:true, name:pl.name, gold:amt }, 200, env);
   }
+    if (p === '/admin/gift'){
+    const amt = b.gold | 0;
+    if (amt < 1 || amt > 10000) throw ue('จำนวนทองต้องอยู่ระหว่าง 1 - 10,000');
+    const title = String(b.title || '').trim().slice(0, 60);
+    const tx = String(b.text || '').trim().slice(0, 800);
+    if (title.length < 2) throw ue('ใส่หัวข้ออย่างน้อย 2 ตัวอักษร');
+    let W = 'is_bot=0 AND banned=0', A = [], names = [];
+    if (!b.all){
+      names = [...new Set((Array.isArray(b.names) ? b.names : []).map(s => String(s).trim()).filter(Boolean))];
+      if (!names.length) throw ue('ใส่ชื่อผู้เล่นอย่างน้อย 1 คน');
+      if (names.length > 90) throw ue('เลือกได้ครั้งละไม่เกิน 90 คน');
+      W += ' AND name IN (' + names.map(() => '?').join(',') + ')';
+      A = names;
+    }
+    const msg = '🎁 ' + title + (tx ? '\n\n' + tx : '') + '\n\n💰 ได้รับ ' + amt.toLocaleString('en-US') + ' ทอง เข้าบัญชีแล้ว';
+    if (b.dry){
+      if (b.all) return json({ ok:true, n:await one('SELECT COUNT(*) n FROM players WHERE ' + W), miss:[], msg }, 200, env);
+      const r = await DB.prepare('SELECT name FROM players WHERE ' + W).bind(...A).all();
+      const got = new Set((r.results || []).map(x => x.name));
+      return json({ ok:true, n:got.size, miss:names.filter(n => !got.has(n)), msg }, 200, env);
+    }
+    const note = ('🎁 ' + title).slice(0, 100) + ' (by ' + by.slice(0, 6) + ')';
+    const r = await DB.batch([
+      DB.prepare('INSERT INTO ledger(uid,delta,reason,note,at) SELECT uid,?,?,?,? FROM players WHERE ' + W)
+        .bind(amt, 'grant', note, t, ...A),
+      DB.prepare('UPDATE players SET gold=gold+? WHERE ' + W).bind(amt, ...A),
+      DB.prepare("INSERT INTO msgs(conv,from_uid,to_uid,text,at,read,reported) SELECT CASE WHEN uid < ? THEN uid || '|' || ? ELSE ? || '|' || uid END, ?, uid, ?, ?, 0, 0 FROM players WHERE " + W)
+        .bind(SYS_UID, SYS_UID, SYS_UID, SYS_UID, msg, t, ...A)
+    ]);
+    const n = r[1].meta.changes;
+    return json({ ok:true, n, gold:amt, total:n * amt }, 200, env);
+  }
   if (p === '/admin/ban'){
     await DB.prepare('UPDATE players SET banned=? WHERE uid=? AND is_bot=0').bind(b.ban ? 1 : 0, String(b.uid)).run();
     return json({ ok:true }, 200, env);
