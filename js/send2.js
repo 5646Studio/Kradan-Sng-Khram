@@ -182,11 +182,9 @@ var Send2 = (function(){
     Renderer.sendHere = function(x, y){
       Renderer.hideInfo();
       var ow = ownAt(x, y);
-      if (ow){
-        var i = Game.villages.indexOf(ow);
-        if (i !== Game.active){ Game.active = i; UI.refreshAll(); Sync.toast('🏘 สลับไปเมือง ' + ow.name); }
-        open({});
-      } else open({ tx:x, ty:y });
+      /* v14W — ไม่สลับเมือง: ต้นทาง = เมืองที่เปิดอยู่ · ปลายทาง = เมืองที่กดบนแผนที่ */
+      if (ow && ow === V()) return open({});     /* กดเมืองที่เปิดอยู่เอง → เปิดหน้าส่งตามปกติ */
+      open({ tx:x, ty:y });                      /* เมืองตัวเองอื่น ๆ → defMis() เลือก 🛡 เสริมทัพ ให้อัตโนมัติ */
     };
     if (typeof B5 !== 'undefined') B5.openRaid = function(s){ if (s) open({ src:'s' + s.id }); };
   }

@@ -73,6 +73,10 @@ var Profile = (function(){
     on('pfSet', settings);
     if (o && typeof Invite !== 'undefined') Invite.card($('pfInv'));
   }
+  /* v14V — สิ่งที่ผู้พัฒนาเห็นคนเดียว (ใส่ Player ID แบบเต็ม คั่นด้วย , ได้หลายบัญชี) */
+  var DEV_UIDS = ['eBOQQnuj4UdFjMgt9MieYgSjK0s1'];
+  function isDev(){ try { return DEV_UIDS.indexOf(Net.uid()) >= 0; } catch(e){ return false; } }
+  window.isDev = isDev;
 
   /* ---------- ตั้งค่า (ตั้งค่าเกมเท่านั้น) ---------- */
   function settings(){
@@ -97,7 +101,7 @@ var Profile = (function(){
     box.innerHTML = '<h4 data-noi18n>🌐 ภาษา / Language</h4><div class="pf-theme" style="grid-template-columns:1fr 1fr" data-noi18n>' +
       [['th', '🇹🇭 ไทย'], ['en', '🇬🇧 English']].map(function(x){
         return '<button class="pf-th' + (LG === x[0] ? ' on' : '') + '" data-lg="' + x[0] + '">' + x[1] + '</button>';
-      }).join('') + '</div>' + (LG === 'en' ? '<div class="grow2" data-noi18n><button class="btn-use2 mini2" id="stMiss">📋 Copy untranslated (' +
+      }).join('') + '</div>' + (LG === 'en' && isDev() ? '<div class="grow2" data-noi18n><button class="btn-use2 mini2" id="stMiss">📋 Copy untranslated (' +
         I18N.missList().length + ')</button><button class="btn-del mini2" id="stMissX">🗑 Clear</button></div>' : '') +
       '<h4>🎨 ธีม</h4><div class="pf-theme">' +
       [['day', '☀️ กลางวัน'], ['night', '🌙 กลางคืน'], ['auto', '🔄 อัตโนมัติ']].map(function(t){
@@ -122,8 +126,11 @@ var Profile = (function(){
       box.querySelectorAll('[data-lg]').forEach(function(b){
       b.onclick = function(){ if (I18N.lang() !== b.dataset.lg) I18N.set(b.dataset.lg); };
     });
-    on('stMiss', function(){ I18N.copyMiss(); });
-    on('stMissX', function(){ I18N.clearMiss(); settings(); });
+    if (isDev()){
+      on('stMiss', function(){ I18N.copyMiss(); });
+      on('stMissX', function(){ I18N.clearMiss(); settings(); });
+    }
+
 
     box.querySelectorAll('[data-th]').forEach(function(b){ b.onclick = function(){ setTheme(b.dataset.th); }; });
     $('stNav').onchange = function(){

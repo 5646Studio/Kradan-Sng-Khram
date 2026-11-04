@@ -234,5 +234,16 @@ var LANG_EN = {
   'เพิ่ม':'Increase', 'ลดค่า':'Reduce', 'ดู':'View', 'แตะ':'Tap', 'เสร็จ':'done', 'ฝ่าย':'Side', 'เหลือ':'left',
   'เครื่อง':'device(s)', 'รายการ':'items', 'ใช้งาน':'usage', 'ใช้':'Use', 'เล่น':'Play', 'รวม':'Total',
   'ก่อน':'first', 'หรือ':'or', 'และ':'and', 'เพื่อ':'to', 'จาก':'from', 'กับ':'with', 'ของ':'of', 'เสีย':'lost',
-  'ทุก':'every', 'คุณ':'you', 'แรก':'first', 'เอง':'automatically', 'ใคร':'who', 'โดย':'by', 'เกม':'game'
+  'ทุก':'every', 'คุณ':'you', 'แรก':'first', 'เอง':'automatically', 'ใคร':'who', 'โดย':'by', 'เกม':'game',
+    /* ===== v14V ===== */
+  'ถ้าออกจากระบบหรือล้างข้อมูลเบราว์เซอร์ จะเข้าบัญชีนี้ไม่ได้อีก ผูกกับ Google เพื่อเก็บไว้ถาวร':'If you sign out or clear browser data you will lose this account. Link it to Google to keep it permanently',
+  'เปิดมาแล้ว':'open for', 'กำลังเข้าสู่ระบบ':'Signing in',
+  'แก้ศัพท์ภาษาอังกฤษ':'Fixed English wording', 'แก้ในส่วนของ admin':'Admin panel fixes',
+  'เข้าหน้าเมือง':'Enter village view', 'หน้าเมือง':'Village view', 'หน้าทรัพยากร':'Resource view',
+  'วีรบุรุษออกไปแล้ว':'Hero is away', 'ป้อมปราการเปิดแล้ว':'Fortresses are now open',
+  'ยังไม่มีเหรียญตรา':'No medals yet', 'จบฤดูกาลแล้วจะได้รับเหรียญ':'Medals are awarded when the season ends',
+  'เปลี่ยนชื่อเมืองนี้':'Rename this village',
+  'รื้อถอนอาคาร':'Demolition', 'รื้อถอน':'Demolish', 'เสร็จทั้งหมดใน':'all done in',
+  'สลับไปเมือง':'Switched to', 'กำแพงเมือง':'City wall', 'รอคิว':'Queued'
+
 };

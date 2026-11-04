@@ -130,6 +130,15 @@ var HUD = (function(){
     return h + '</div>';
   }
 
+    function demoName(k){
+    var B = window.BUILDINGS;
+    if (B){
+      if (Array.isArray(B)){ for (var i = 0; i < B.length; i++) if (B[i].key === k) return B[i].name; }
+      else if (B[k] && B[k].name) return B[k].name;
+    }
+    return k;
+  }
+
   function render(){
     var el = document.getElementById('taskpanel');
     if (!el || !Game.villages.length) return;
@@ -153,6 +162,20 @@ var HUD = (function(){
     h += sec('🔨 รายการก่อสร้าง', 'ช่าง ' +
       v.queue.filter(function(q){ return q.active; }).length + '/' +
       builderCount(), build);
+
+        /* v14W — งานรื้อถอน (b11) ทุกเมือง */
+    var demo = [];
+    Game.villages.forEach(function(dv, di){
+      var d = dv.srvDemo;
+      if (!d || !d.end || d.end <= t) return;
+      var c = dv.city && dv.city[d.slot], lv = c ? (c.level | 0) : 0;
+      demo.push({ c:'build', ic:'🔨',
+        t: 'รื้อถอน ' + demoName(d.k) + (lv ? ' Lv.' + lv + ' → ' + (lv - 1) : ''),
+        sub: (dv === v ? 'หน้าเมือง' : '🏘 ' + dv.name) + ' · เสร็จทั้งหมดใน ' + UI.dur(Math.max(0, (d.end - t) / 1000)),
+        tm: UI.dur(Math.max(0, (d.next - t) / 1000)),
+        act: 'demo', bk: di + ':' + d.slot });
+    });
+    h += sec('🔨 รื้อถอนอาคาร', '', demo);
 
     var train = [];
     for (var bk in (v.train || {})){
@@ -251,6 +274,14 @@ var HUD = (function(){
         else if (a === 'sched')   Schedule.open();
         else if (a === 'dung')    Dungeon.open();
         else if (a === 'hero')    Hero.open();
+        else if (a === 'demo'){
+          var p = (n.dataset.bk || '').split(':'), vi = +p[0], sl = +p[1];
+          if (vi !== Game.active && Game.villages[vi]){
+            Game.active = vi; UI.refreshAll(); Sync.toast('🏘 สลับไปเมือง ' + Game.villages[vi].name);
+          }
+          if (window.BldTool && BldTool.manage) BldTool.manage(sl);
+        }
+
       };
     });
   }

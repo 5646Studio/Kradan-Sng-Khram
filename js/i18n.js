@@ -80,9 +80,27 @@ var I18N = (function(){
   function alt(o){ return Object.keys(o).sort(function(a, b){ return b.length - a.length; }).join('|'); }
   var NAME_RE = new RegExp('(' + alt(RANK) + ')(' + alt(ROOT) + ')', 'g');
   var GUILD_RE = new RegExp('(' + alt(GA) + ')(' + alt(GB) + ')', 'g');
+    /* v14V — รูปแบบประโยคที่มีตัวเลข/ชื่อแทรก (ทำก่อนแปลงชื่อและแทนคำ) */
+  var RX = [
+    [/สำรวจ (.+?) สำเร็จ — ได้ /g, 'Adventure in $1 succeeded — found '],
+    [/ป้องกันสำเร็จ — (.+?) บุก /g, 'Defended — $1 attacked '],
+    [/รื้อถอน(\S+) ที่ (.+?) เสร็จแล้ว/g, 'Demolished $1 at $2'],
+    [/วีรบุรุษบาดเจ็บสาหัสใน /g, 'Hero badly injured in '],
+    [/สินค้าถึง (.+?) แล้ว/g, 'Goods arrived at $1'],
+    [/ได้รับสินค้าจาก /g, 'Received goods from '],
+    [/กำลังหนุนถึง (.+?) แล้ว/g, 'Reinforcements reached $1'],
+    [/ออกรบจากฐานได้ (\d+) ครั้ง/g, 'can sortie from base $1 times'],
+    [/ฤดูกาลที่ (\d+)/g, 'Season $1'],
+    [/เมืองที่ (\d+)/g, 'Village $1'],
+    [/รับ 💰 ?(\d+) ทอง\/คน/g, 'Get 💰 $1 gold per friend'],
+    [/สำเร็จแล้ว (\d+)\/(\d+) คน/g, 'Completed $1/$2 friends'],
+    [/\(ตอนนี้ ([\w.\-]+)\)/g, '(current: $1)']
+  ];
   function names(s){
+    RX.forEach(function(r){ s = s.replace(r[0], r[1]); });
     return s.replace(GUILD_RE, function(m, a, b){ return ' ' + GB[b] + ' ' + GA[a] + ' '; })
-            .replace(NAME_RE, function(m, r, n){ return ' ' + RANK[r] + ' ' + ROOT[n] + ' '; });
+            .replace(NAME_RE, function(m, r, n){ return ' ' + RANK[r] + ' ' + ROOT[n] + ' '; })
+            .replace(/ {2,}/g, ' ').trim();
   }
   function tr(s){
     if (!on || s == null) return s;
