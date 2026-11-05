@@ -752,11 +752,12 @@ if (capH >= x0 && -capH <= x1 && capH >= y0 && -capH <= y1) {
       if (v.x < x0 || v.x > x1 || v.y < y0 || v.y > y1) return;
       drawVillage(screenOf(v.x, v.y, ts), ts, 'own', label ? v.name : '', isCapital(v));
     });
-
+     
     if (selected){
-      var ps = screenOf(selected.x, selected.y, ts);
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
-      ctx.strokeRect(ps.x - ts/2, ps.y - ts/2, ts, ts);
+  var ps = screenOf(selected.x, selected.y, ts);
+  var sn = (selected.x === 0 && selected.y === 0 && Assets.get('wc_capital')) ? CAP_N : 1;
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
+  ctx.strokeRect(ps.x - ts*sn/2, ps.y - ts*sn/2, ts*sn, ts*sn);
     }
     drawMovements(ts);
     drawMinimap();
