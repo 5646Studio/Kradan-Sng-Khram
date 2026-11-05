@@ -482,8 +482,8 @@ var Renderer = (function(){
   var cv, ctx, mini, mctx, miniBuf = null;
   var W = 0, H = 0, dpr = 1;
   var cam = { x:0, y:0 }, zi = CFG.ZOOM_DEFAULT;
+  var CAP_N = 3; /* ขนาดรูปเมืองหลวงเป็นช่อง (ใช้เลขคี่: 3, 5) */
   var selected = null, drag = null, needDraw = true, lastAnim = 0, editing = false;
-
   var OA_IC = { wheat:['🌾'], wood:['🪵'], iron:['⛏️'], clay:['🧱'],
                 double:['🌾','🪵'] };
   var OA_NM = { wheat:'ข้าว', wood:'ไม้', iron:'เหล็ก', clay:'โคลน',
@@ -719,18 +719,19 @@ var Renderer = (function(){
     }
 
       /* v14X — เมืองหลวงโลก 3×3 ช่อง (ภาพ wc_capital · ไม่มีภาพ = วาดแบบเดิม) */
-    if (1 >= x0 && -1 <= x1 && 1 >= y0 && -1 <= y1) {
+    var capH = Math.ceil(CAP_N / 2);
+if (capH >= x0 && -capH <= x1 && capH >= y0 && -capH <= y1) {
       var pc = screenOf(0, 0, ts);
       var own2 = Game.capital.owner === 'me';
       var wim = Assets.get('wc_capital');
       if (wim){
-        ctx.drawImage(wim, pc.x - ts*1.5, pc.y - ts*1.5, ts*3, ts*3);
+        ctx.drawImage(wim, pc.x - ts*CAP_N/2, pc.y - ts*CAP_N/2, ts*CAP_N, ts*CAP_N);
         if (detail){
           ctx.fillStyle = own2 ? '#ffcf40' : '#ff9a9a';
           ctx.font = 'bold ' + Math.round(ts*0.2) + 'px sans-serif';
           ctx.textAlign = 'center';
           ctx.shadowColor = '#000'; ctx.shadowBlur = 5;
-          ctx.fillText((own2 ? '✓ ' : '👑 ') + 'เมืองหลวง', pc.x, pc.y + ts*1.62);
+          ctx.fillText((own2 ? '✓ ' : '👑 ') + 'เมืองหลวง', pc.x,pc.y + ts*(CAP_N/2 + 0.12) );
           ctx.shadowBlur = 0;
         }
       } else {
@@ -888,7 +889,8 @@ var Renderer = (function(){
       if (!moved && startPt){
         var r = cv.getBoundingClientRect();
         var t = tileAt(startPt.x - r.left, startPt.y - r.top);
-        if (World.inBounds(t.x, t.y)){ selected = t; showTileInfo(t); }
+if (Assets.get('wc_capital') && Math.abs(t.x) <= (CAP_N-1)/2 && Math.abs(t.y) <= (CAP_N-1)/2) t = { x:0, y:0 };
+if (World.inBounds(t.x, t.y)){ selected = t; showTileInfo(t); } 
       }
       drag = null; needDraw = true;
     });
