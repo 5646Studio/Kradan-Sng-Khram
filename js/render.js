@@ -673,6 +673,21 @@ var Renderer = (function(){
       if (f.x < x0 || f.x > x1 || f.y < y0 || f.y > y1) return;
       var p2 = screenOf(f.x, f.y, ts);
       var mine = Game.forts[f.id] === 'me';
+      var fim = (mine && Assets.get('ft_fort_mine')) || Assets.get('ft_fort');
+      if (fim){
+        ctx.beginPath(); ctx.arc(p2.x, p2.y + ts*0.3, ts*0.42, 0, 6.284);
+        ctx.fillStyle = mine ? 'rgba(255,207,64,.35)' : 'rgba(200,60,60,.30)'; ctx.fill();
+        ctx.drawImage(fim, p2.x - ts*0.6, p2.y - ts*0.6, ts*1.2, ts*1.2);
+        if (detail){
+          ctx.fillStyle = mine ? '#ffcf40' : '#ff9a9a';
+          ctx.font = 'bold ' + Math.round(ts*0.14) + 'px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.shadowColor = '#000'; ctx.shadowBlur = 4;
+          ctx.fillText((mine ? '✓' : '') + f.name.replace('ป้อม',''), p2.x, p2.y + ts*0.62);
+          ctx.shadowBlur = 0;
+        }
+        return;
+      } 
       ctx.fillStyle = mine ? 'rgba(255,207,64,.92)' : 'rgba(150,60,60,.92)';
       ctx.beginPath();
       ctx.moveTo(p2.x - ts*0.26, p2.y + ts*0.22);
@@ -703,19 +718,33 @@ var Renderer = (function(){
       ctx.setLineDash([]);
     }
 
-    if (0 >= x0 && 0 <= x1 && 0 >= y0 && 0 <= y1){
+      /* v14X — เมืองหลวงโลก 3×3 ช่อง (ภาพ wc_capital · ไม่มีภาพ = วาดแบบเดิม) */
+    if (1 >= x0 && -1 <= x1 && 1 >= y0 && -1 <= y1) {
       var pc = screenOf(0, 0, ts);
       var own2 = Game.capital.owner === 'me';
-      var g3 = ctx.createRadialGradient(pc.x, pc.y, ts*0.1, pc.x, pc.y, ts*0.55);
-      g3.addColorStop(0, own2 ? 'rgba(255,215,90,.95)' : 'rgba(210,60,60,.95)');
-      g3.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g3;
-      ctx.beginPath(); ctx.arc(pc.x, pc.y, ts*0.55, 0, 6.284); ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold ' + Math.round(ts*0.4) + 'px sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('👑', pc.x, pc.y);
-      ctx.textBaseline = 'alphabetic';
+      var wim = Assets.get('wc_capital');
+      if (wim){
+        ctx.drawImage(wim, pc.x - ts*1.5, pc.y - ts*1.5, ts*3, ts*3);
+        if (detail){
+          ctx.fillStyle = own2 ? '#ffcf40' : '#ff9a9a';
+          ctx.font = 'bold ' + Math.round(ts*0.2) + 'px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.shadowColor = '#000'; ctx.shadowBlur = 5;
+          ctx.fillText((own2 ? '✓ ' : '👑 ') + 'เมืองหลวง', pc.x, pc.y + ts*1.62);
+          ctx.shadowBlur = 0;
+        }
+      } else {
+        var g3 = ctx.createRadialGradient(pc.x, pc.y, ts*0.1, pc.x, pc.y, ts*0.55);
+        g3.addColorStop(0, own2 ? 'rgba(255,215,90,.95)' : 'rgba(210,60,60,.95)');
+        g3.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g3;
+        ctx.beginPath(); ctx.arc(pc.x, pc.y, ts*0.55, 0, 6.284); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold ' + Math.round(ts*0.4) + 'px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('👑', pc.x, pc.y);
+        ctx.textBaseline = 'alphabetic';
+      }
     }
 
     Game.villages.forEach(function(v){

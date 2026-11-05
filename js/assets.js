@@ -2,7 +2,7 @@
 var Assets = (function(){
   var img = {}, missing = {}, terr = {}, ready = false, pend = null;
   var DIR = { bd:'buildings/', fd:'fields/', sc:'scenes/', tr:'map/', ov:'map/',
-              oa:'map/', vl:'map/', ui:'ui/' };
+              oa:'map/', vl:'map/', ui:'ui/', wc:'map/', ft:'map/' };
   var EXT = ['png', 'webp'];
 
   function manifest(){
@@ -19,7 +19,7 @@ var Assets = (function(){
     ['vl_own','vl_capital','vl_ally','vl_enemy','vl_neutral','vl_npc',
      'oa_wheat','oa_wood','oa_iron','oa_clay','oa_double',
      'ov_tree_small','ov_tree_cluster','ov_rock_small','ov_peak',
-     'ov_clay_pit','ov_wheat_patch','ov_reed'].forEach(function(k){ L.push(k); });
+     'ov_clay_pit','ov_wheat_patch','ov_reed','wc_capital','ft_fort','ft_fort_mine'].forEach(function(k){ L.push(k); });
     return L;
   }
   function url(key, ext){

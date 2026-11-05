@@ -12,7 +12,7 @@ var BldTool = (function(){
     return L;
   }
   function match(t){ var a = blist(); for (var i = 0; i < a.length; i++) if (t.indexOf(a[i].name) >= 0) return a[i]; return null; }
-  function ck(c){ return c && c.b != null && c.b !== '' && typeof BUILDINGS !== 'undefined' && BUILDINGS[c.b] ? BUILDINGS[c.b].key : null; }
+  function ck(c){ return c && c.b && typeof BUILDINGS !== 'undefined' && BUILDINGS[c.b] ? BUILDINGS[c.b].key : null; }
   function bname(k){ var a = blist(); for (var i = 0; i < a.length; i++) if (a[i].key === k) return a[i].name; return k; }
   function dsec(lv){ return Math.max(30, Math.round(120 * Math.pow(lv, 1.25) / CFG.SPEED)); }
   function total(lv){ var s = 0; for (var l = lv; l >= 1; l--) s += dsec(l); return s; }
@@ -65,21 +65,58 @@ var BldTool = (function(){
     };
   }
 
-  function pickMove(s){
-    var v = V(), E = empties(v), c = v.city[s];
-    UI.modal('<h3>↔ ย้าย' + esc(bname(ck(c))) + ' Lv.' + c.level + '</h3><div class="infobox">ตอนนี้อยู่ช่อง ' + (s + 1) +
-      ' · เลือกช่องว่างปลายทาง</div><div class="mvgrid">' + E.map(function(i){
-        return '<button data-mv="' + i + '">ช่อง ' + (i + 1) + '</button>'; }).join('') +
-      '</div><button class="btn-use2" id="mvBk">◀ ย้อนกลับ</button>' + CB);
-    $('mvBk').onclick = function(){ manage(s); };
-    document.querySelectorAll('[data-mv]').forEach(function(b){
-      b.onclick = function(){
-        var to = +b.dataset.mv;
-        b.disabled = true;
-        cmd('move', { slot:s, to:to }, function(){ UI.close(); Sync.toast('↔ ย้ายไปช่อง ' + (to + 1) + ' แล้ว'); });
-      };
-    });
+    /* v14X — เลือกช่องปลายทางในหน้าเมือง */
+  var MV = null, mvT = null;
+  (function(){
+    var st = document.createElement('style');
+    st.textContent =
+      'body.mvmode .slot.empty{outline:3px dashed #ffcf40;outline-offset:2px;border-radius:50%;animation:mvp .9s infinite alternate}' +
+      '@keyframes mvp{from{box-shadow:0 0 0 0 rgba(255,207,64,.7)}to{box-shadow:0 0 16px 6px rgba(255,207,64,.45)}}' +
+      'body.mvmode .slot:not(.empty){opacity:.45}' +
+      'body.mvmode .slot.mvsrc{opacity:1;outline:3px solid #7fd17f;outline-offset:2px}' +
+      '#mvBar{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;z-index:9999;max-width:92vw;background:#2a2216;' +
+      'border:1px solid #ffcf40;border-radius:12px;padding:8px 12px;display:flex;gap:10px;align-items:center;font-size:13px;' +
+      'color:#f3e6c8;box-shadow:0 4px 18px rgba(0,0,0,.6)}' +
+      '#mvBar button{background:#6a2020;color:#fff;border:0;border-radius:8px;padding:6px 12px;font-size:13px}';
+    document.head.appendChild(st);
+  })();
+  function mvEnd(){
+    MV = null; clearInterval(mvT);
+    document.body.classList.remove('mvmode');
+    var b = $('mvBar'); if (b) b.remove();
   }
+  function mvMark(){
+    if (!MV) return;
+    if (V().id !== MV.vid) return mvEnd();            /* สลับเมือง → ยกเลิก */
+    var n = document.querySelector('.slot[data-c="' + MV.s + '"]');
+    if (n && !n.classList.contains('mvsrc')) n.classList.add('mvsrc');
+  }
+  function pickMove(s){
+    var v = V(), c = v.city[s];
+    if (!empties(v).length) return Sync.toast('ไม่มีช่องว่างในเมืองนี้');
+    UI.close();
+    MV = { s:s, vid:v.id, nm:bname(ck(c)) + ' Lv.' + c.level };
+    document.body.classList.add('mvmode');
+    var bar = document.createElement('div'); bar.id = 'mvBar';
+    bar.innerHTML = '<span>↔ แตะช่องว่าง (กรอบสีทอง) เพื่อย้าย <b>' + esc(MV.nm) + '</b></span><button id="mvX">ยกเลิก</button>';
+    document.body.appendChild(bar);
+    $('mvX').onclick = function(e){ e.stopPropagation(); mvEnd(); };
+    mvMark();
+    mvT = setInterval(mvMark, 400);                   /* หน้าเมืองวาดใหม่เรื่อย ๆ → ทำเครื่องหมายซ้ำ */
+  }
+  /* ดักการแตะช่องก่อนที่หน้าเมืองจะเปิดหน้าต่างอาคาร */
+  document.addEventListener('click', function(e){
+    if (!MV) return;
+    var n = e.target.closest && e.target.closest('.slot[data-c]');
+    if (!n) return;
+    e.stopPropagation(); e.preventDefault();
+    var to = +n.dataset.c, s = MV.s;
+    if (to === s) return mvEnd();
+    if (empties(V()).indexOf(to) < 0) return Sync.toast('เลือกได้เฉพาะช่องว่าง (กรอบสีทอง)');
+    if (!confirm('ย้าย ' + MV.nm + '\nจากช่อง ' + (s + 1) + ' → ช่อง ' + (to + 1) + ' ?')) return;
+    mvEnd();
+    cmd('move', { slot:s, to:to }, function(){ Sync.toast('↔ ย้ายไปช่อง ' + (to + 1) + ' แล้ว'); });
+  }, true);
 
   /* ใส่ปุ่ม 🛠 ในหน้าอาคาร */
   function inj(){

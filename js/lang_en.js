@@ -244,6 +244,8 @@ var LANG_EN = {
   'ยังไม่มีเหรียญตรา':'No medals yet', 'จบฤดูกาลแล้วจะได้รับเหรียญ':'Medals are awarded when the season ends',
   'เปลี่ยนชื่อเมืองนี้':'Rename this village',
   'รื้อถอนอาคาร':'Demolition', 'รื้อถอน':'Demolish', 'เสร็จทั้งหมดใน':'all done in',
-  'สลับไปเมือง':'Switched to', 'กำแพงเมือง':'City wall', 'รอคิว':'Queued'
+  'สลับไปเมือง':'Switched to', 'กำแพงเมือง':'City wall', 'รอคิว':'Queued',  'ไม่มีช่องว่างในเมืองนี้':'No empty slot in this village', 'ยกเลิก':'Cancel',
+  'เลือกได้เฉพาะช่องว่าง (กรอบสีทอง)':'Only empty slots (gold outline) can be chosen',
+  'เมืองหลวง':'Capital'
 
 };
