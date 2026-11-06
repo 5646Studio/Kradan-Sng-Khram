@@ -2086,7 +2086,6 @@ async function sendArmy(ctx, env, b){
 
   if (Object.keys(tr).some(k => UNITS[k].type === 'settle') && mis !== 'settle')
   throw ue('ผู้ตั้งถิ่นฐานใช้ได้กับภารกิจ 🏘️ ตั้งเมืองใหม่เท่านั้น');
-  if (mis === 'support' && Object.keys(tr).some(k => UNITS[k].type === 'chief')) throw ue('ขุนพลไปเสริมทัพไม่ได้');
   if (mis === 'settle'){ settleCheck(ctx, tr, hj, tx, ty, tv); }
   else if (mis === 'support'){
 
@@ -2454,6 +2453,7 @@ async function stationApi(p, b, env, uid){
     let n = 0, onlyScout = true;
     for (const k in (b.troops || {})){
       const c = Math.floor(b.troops[k]);
+      if (UNITS[k] && UNITS[k].type === 'chief') throw ue('ขุนพลออกรบจากฐานไม่ได้ ต้องถอนกลับเมืองก่อน');
       if (!(c > 0)) continue;
       if ((tr[k] || 0) < c) throw ue('ทหารในฐานไม่พอ');
       send[k] = c; n += c;
@@ -2547,9 +2547,12 @@ function trainEx(ctx, b){
     if (!expSlots(d)) throw ue('ต้องมีคฤหาสน์หรือพระราชวัง Lv.5');
     if (have + n > cap) throw ue('ฝึกผู้ตั้งถิ่นฐานได้อีก ' + Math.max(0, cap - have) + ' นาย (ช่องขยายเมืองเหลือ ' + free + ')');
   }
-  if (u && u.type === 'chief'){
-    const cap = chiefCap(d), have = unitHave(ctx, V, u.id);
-    if (have + n > cap) throw ue('มีขุนพลได้สูงสุด ' + cap + ' นาย (พระราชวัง Lv.5/10/15/20 → 1/2/3/4)');
+    if (u && u.type === 'chief'){
+    const cap = chiefCap(d);
+    let have = unitHave(ctx, V, u.id);
+    const sr = await env.DB.prepare('SELECT troops FROM stations WHERE owner_vid=?').bind(V.row.id).all();
+    for (const s of (sr.results || [])) have += (JSON.parse(s.troops || '{}')[u.id] || 0);
+    if (have + n > cap) throw ue('มีขุนพลได้สูงสุด ' + cap + ' นาย (พระราชวัง Lv.5/10/15/20 → 1/2/3/4) · นับรวมขุนพลที่ประจำการต่างเมืองด้วย');
   }
   trainUnits(d, ctx.P.tribe, ctx.t, String(b.u || ''), b.n);
   V.dirty = true;
