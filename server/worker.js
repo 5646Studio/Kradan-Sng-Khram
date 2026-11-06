@@ -660,7 +660,7 @@ async function route(req, env){
   };
   
   if (p.indexOf('/hero/') === 0) ACT[p] = ctx => heroAct(ctx, b, p.slice(6));
-  if (p === '/train') ACT[p] = ctx => trainEx(ctx, b);
+  if (p === '/train') ACT[p] = ctx => trainEx(ctx, env, b);
   if (p === '/party') ACT[p] = ctx => partyStart(ctx, b);
   if (p === '/checkin') ACT[p] = ctx => checkin(ctx, b);
   if (p === '/tutorial/done') ACT[p] = ctx => tutDone(ctx, b);
@@ -2540,7 +2540,8 @@ function unitHave(ctx, V, id){
   for (const m of ctx.moves) if (m.from_vid === V.row.id && m.uid === ctx.P.uid) n += (JSON.parse(m.troops || '{}')[id] || 0);
   return n;
 }
-function trainEx(ctx, b){
+
+async function trainEx(ctx, env, b){
   const V = findV(ctx, b.vid), d = V.d, u = UNITS[String(b.u || '')], n = Math.floor(b.n) || 0;
   if (u && u.type === 'settle'){
     const free = Math.max(0, expSlots(d) - (d.expUsed | 0)), cap = free * SETTLE_N, have = unitHave(ctx, V, u.id);
