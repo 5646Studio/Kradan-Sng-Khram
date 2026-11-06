@@ -309,7 +309,7 @@ var Hero2 = (function(){
   function lookTab(h){
     if (!draft){ draft = JSON.parse(JSON.stringify(h.look)); dname = h.name; }
     var o = '<div class="hlook"><div class="pv">' + HeroArt.svg(draft, {}) + '</div><div class="ct">' +
-      '<input id="lkName" class="selbox" maxlength="16" value="' + esc(dname) + '" placeholder="ชื่อวีรบุรุษ">' +
+      '<div class="hnm">'+'<input id="lkName" class="selbox" maxlength="16" value="' + esc(dname) + '" placeholder="ชื่อวีรบุรุษ">'+ '<span class="hnm-ic">✏️</span></div>' +
       '<div class="btabs"><button class="btab' + (draft.g === 0 ? ' on' : '') + '" data-g="0">♂ ชาย</button>' +
       '<button class="btab' + (draft.g === 1 ? ' on' : '') + '" data-g="1">♀ หญิง</button></div>' +
       PARTS.map(function(p){

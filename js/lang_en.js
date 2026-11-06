@@ -246,6 +246,8 @@ var LANG_EN = {
   'รื้อถอนอาคาร':'Demolition', 'รื้อถอน':'Demolish', 'เสร็จทั้งหมดใน':'all done in',
   'สลับไปเมือง':'Switched to', 'กำแพงเมือง':'City wall', 'รอคิว':'Queued',  'ไม่มีช่องว่างในเมืองนี้':'No empty slot in this village', 'ยกเลิก':'Cancel',
   'เลือกได้เฉพาะช่องว่าง (กรอบสีทอง)':'Only empty slots (gold outline) can be chosen',
-  'เมืองหลวง':'Capital'
+  'เมืองหลวง':'Capital',  'โอเอซิสของฉัน':'My oases', 'ยังไม่มีโอเอซิส':'No oases yet', 'ยึดได้ด้วยวีรบุรุษ + โจมตี':'capture with hero + attack',
+  'ขุนพลออกรบจากฐานไม่ได้ ต้องถอนกลับเมืองก่อน':'Chiefs cannot sortie from a base. Recall them home first',
+  'นับรวมขุนพลที่ประจำการต่างเมืองด้วย':'including chiefs stationed elsewhere'
 
 };

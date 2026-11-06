@@ -483,6 +483,7 @@ var Renderer = (function(){
   var W = 0, H = 0, dpr = 1;
   var cam = { x:0, y:0 }, zi = CFG.ZOOM_DEFAULT;
   var CAP_N = 3; /* ขนาดรูปเมืองหลวงเป็นช่อง (ใช้เลขคี่: 3, 5) */
+  var homeHit = null;   /* v14Y — ตำแหน่งลูกศรกลับเมือง (ใช้ตอนแตะ) */
   var selected = null, drag = null, needDraw = true, lastAnim = 0, editing = false;
   var OA_IC = { wheat:['🌾'], wood:['🪵'], iron:['⛏️'], clay:['🧱'],
                 double:['🌾','🪵'] };
@@ -759,6 +760,37 @@ if (capH >= x0 && -capH <= x1 && capH >= y0 && -capH <= y1) {
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
   ctx.strokeRect(ps.x - ts*sn/2, ps.y - ts*sn/2, ts*sn, ts*sn);
     }
+       
+        /* v14Y — ลูกศรขอบจอชี้ไปเมืองที่เปิดอยู่ */
+    homeHit = null;
+    var hv = Game.villages && Game.villages[Game.active];
+    if (hv){
+      var hp = screenOf(hv.x, hv.y, ts);
+      var L = 34, R = W - 34, T = 64, B = H - 64;
+      if (hp.x < L || hp.x > R || hp.y < T || hp.y > B){
+        var dx = hp.x - W/2, dy = hp.y - H/2;
+        var sx2 = dx ? ((dx > 0 ? R : L) - W/2) / dx : 1e9;
+        var sy2 = dy ? ((dy > 0 ? B : T) - H/2) / dy : 1e9;
+        var sc = Math.min(Math.abs(sx2), Math.abs(sy2));
+        var ax = W/2 + dx*sc, ay = H/2 + dy*sc, ang = Math.atan2(dy, dx);
+        var dist = Math.round(Math.hypot(hv.x - cam.x, hv.y - cam.y));
+        ctx.save();
+        ctx.translate(ax, ay);
+        ctx.rotate(ang);
+        ctx.fillStyle = '#ffcf40';
+        ctx.beginPath(); ctx.moveTo(34, 0); ctx.lineTo(20, -10); ctx.lineTo(20, 10); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        ctx.beginPath(); ctx.arc(ax, ay, 21, 0, 6.284);
+        ctx.fillStyle = 'rgba(30,22,12,.9)'; ctx.fill();
+        ctx.lineWidth = 2.5; ctx.strokeStyle = '#ffcf40'; ctx.stroke();
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = '12px sans-serif'; ctx.fillText('🏠', ax, ay - 7);
+        ctx.fillStyle = '#ffcf40'; ctx.font = 'bold 11px sans-serif';
+        ctx.fillText(dist > 999 ? '999+' : String(dist), ax, ay + 8);
+        ctx.textBaseline = 'alphabetic';
+        homeHit = { x:ax, y:ay, r:30 };
+      }
+    }
     drawMovements(ts);
     drawMinimap();
     syncCoord();
@@ -886,12 +918,20 @@ if (capH >= x0 && -capH <= x1 && capH >= y0 && -capH <= y1) {
       cam.x = drag.cx - dx/ts; cam.y = drag.cy + dy/ts;
       clampCam(); needDraw = true;
     });
-    cv.addEventListener('pointerup', function(){
+        cv.addEventListener('pointerup', function(){
       if (!moved && startPt){
         var r = cv.getBoundingClientRect();
-        var t = tileAt(startPt.x - r.left, startPt.y - r.top);
-if (Assets.get('wc_capital') && Math.abs(t.x) <= (CAP_N-1)/2 && Math.abs(t.y) <= (CAP_N-1)/2) t = { x:0, y:0 };
-if (World.inBounds(t.x, t.y)){ selected = t; showTileInfo(t); } 
+        var mx = startPt.x - r.left, my = startPt.y - r.top;
+        /* v14Y — แตะลูกศร → กลับไปที่เมือง */
+        if (homeHit && Math.hypot(mx - homeHit.x, my - homeHit.y) <= homeHit.r){
+          var hv2 = Game.villages[Game.active];
+          if (hv2) center(hv2.x, hv2.y);
+          drag = null; needDraw = true;
+          return;
+        }
+        var t = tileAt(mx, my);
+        if (Assets.get('wc_capital') && Math.abs(t.x) <= (CAP_N-1)/2 && Math.abs(t.y) <= (CAP_N-1)/2) t = { x:0, y:0 };
+        if (World.inBounds(t.x, t.y)){ selected = t; showTileInfo(t); }
       }
       drag = null; needDraw = true;
     });
