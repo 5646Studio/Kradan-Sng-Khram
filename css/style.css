@@ -1033,3 +1033,7 @@ body.day .pfi-l input,body.day .stacc{background:#fffaf0!important;color:#3a2c18
   border:1px dashed #6b552f;border-radius:9px;color:#ffcf40;font-size:12px!important}
 body.day #modalbox .mvgrid button{background:#fffaf0!important;color:#8a5a00!important}
 
+.hnm{position:relative}
+.hnm input{padding-right:40px!important}
+.hnm .hnm-ic{position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;font-size:16px;opacity:.85}
+
