@@ -4,7 +4,21 @@
             ฝึกทหาร · เดินทัพ · การรบ · ปล้น · สอดแนม · รายงาน · ลบบัญชี
    ===================================================================== */
 const VERSION = 'B2';
-const SPEED = 1;
+let SPEED = 1, TSPEED = 1;   /* v14Z — ตั้งได้จากหน้า admin (meta 'speed') */
+const SPEED_BASE = { season:135, fort:60, cap:90, hold:15 };   /* ค่าที่ x1 */
+function speedSet(o){
+  if (!o){   /* ไม่ได้ตั้ง → กติกาเดิม */
+    SPEED = 1; TSPEED = 1; SEASON_DAYS = 45; FORT_DAY = 20; CAP_DAY = 30; HOLD_DAYS = 5; HOLD_STEP = 5;
+    return;
+  }
+  SPEED = Math.min(10, Math.max(1, Math.round(+o.s || 1)));
+  TSPEED = Math.min(SPEED, Math.max(1, Math.round(+o.ts || SPEED)));
+  SEASON_DAYS = Math.round(SPEED_BASE.season / SPEED);
+  FORT_DAY = Math.round(SPEED_BASE.fort / SPEED);
+  CAP_DAY = Math.round(SPEED_BASE.cap / SPEED);
+  HOLD_DAYS = Math.max(2, Math.round(SPEED_BASE.hold / SPEED));
+  HOLD_STEP = Math.max(1, HOLD_DAYS);
+}
 const SEED = 20260913 + 7777;
 const MAP_R = 100, NOBUILD = 5, SPAWN_R = 70;
 const START_GOLD = 50, PROTECT_DAYS = 5, BASE_CAP = 3000;
@@ -239,7 +253,7 @@ function prod(d, r){
   for (const k in BD) if (BD[k].boost === r) mb += sumLv(d, k) * 0.05;
   let s = 0;
   for (const f of d.fields) if (f.res === r) s += PROD[f.level] * (1 + bb) * (1 + mb);
-  return Math.floor(s) + heroProd(d);
+  return Math.floor((Math.floor(s) + heroProd(d)) * SPEED);
 
 }
 function population(d){
@@ -656,6 +670,23 @@ async function route(req, env){
     '/train': ctx => { const V = findV(ctx, b.vid); trainUnits(V.d, ctx.P.tribe, ctx.t, String(b.u || ''), b.n); V.dirty = true; },
     '/train/cancel': ctx => { const V = findV(ctx, b.vid); const n = trainCancel(V.d, ctx.t, String(b.bld || ''), b.idx | 0); V.dirty = true; return { n }; },
     '/send': ctx => sendArmy(ctx, env, b),
+    /* v14Z — เรียกทัพกลับภายใน 1 นาทีหลังออกเดินทาง */
+    '/recall': async ctx => {
+    const id = b.id | 0, t = ctx.t;
+    const m = ctx.moves.find(x => x.id === id && x.uid === ctx.P.uid);
+    if (!m || m.state !== 'go') throw ue('ไม่พบกองทัพที่กำลังเดินทาง');
+    if (m.mission === 'trade' || m.st) throw ue('ขบวนนี้เรียกกลับไม่ได้');
+    const gone = t - m.depart;
+    if (gone > 60000) throw ue('เรียกกลับได้ภายใน 1 นาทีหลังออกเดินทางเท่านั้น');
+    const back = Math.max(1000, gone);
+    const f = Math.min(1, gone / Math.max(1, m.arrive - m.depart));
+    const cx = Math.round(m.fx + (m.tx - m.fx) * f), cy = Math.round(m.fy + (m.ty - m.fy) * f);
+    const r = await env.DB.prepare("UPDATE moves SET state='back', tx=?, ty=?, depart=?, arrive=?, loot='{}', to_vid=NULL, to_uid=NULL WHERE id=? AND uid=? AND state='go' AND lock<?")
+      .bind(cx, cy, t, t + back, id, ctx.P.uid, t - 60000).run();
+    if (!r.meta.changes) throw ue('กองทัพนี้กำลังถูกประมวลผล ลองใหม่อีกครั้ง');
+    Object.assign(m, { state:'back', tx:cx, ty:cy, depart:t, arrive:t + back, loot:'{}', to_vid:null, to_uid:null });
+    return { back:Math.round(back / 1000) };
+  },
     '/quest/claim': ctx => questClaim(ctx, env, b)
   };
   
@@ -1066,7 +1097,7 @@ async function admin(p, b, q, env, by){
     return json({ ok:true }, 200, env);
   }
   if (p === '/admin/season'){
-    if (b.action === 'day') await setMeta(env, 'start', t - (Math.max(1, b.day | 0) - 1) * 86400000 / SPEED);
+    if (b.action === 'day') await setMeta(env, 'start', t - (Math.max(1, b.day | 0) - 1) * 86400000);
     else if (b.action === 'reset') await DB.prepare("DELETE FROM meta WHERE k IN ('winner','holder','hold_since','holder_name')").run();
         else if (b.action === 'win'){
       const nm = String(b.name || '').trim();
@@ -1189,6 +1220,18 @@ async function admin(p, b, q, env, by){
     } else if (b.action === 'reset') await setMeta(env, 'tune', '{}');
     TUNE_C.at = 0; await tuneLoad(env, t);
     return json({ ok:true, cur:tuneCur(), def:TUNE_DEF, lim:TUNE_LIM }, 200, env);
+  }
+    if (p === '/admin/speed'){
+    if (b.action === 'set'){
+      const s = Math.round(+b.s), ts = Math.round(+b.ts || s);
+      if (!(s >= 1 && s <= 10)) throw ue('สปีดต้องอยู่ระหว่าง 1 - 10');
+      if (!(ts >= 1 && ts <= s)) throw ue('สปีดเดินทัพต้องอยู่ระหว่าง 1 - ' + s);
+      await setMeta(env, 'speed', JSON.stringify({ s, ts }));
+    } else if (b.action === 'clear') await DB.prepare("DELETE FROM meta WHERE k='speed'").run();
+    TUNE_C.at = 0; await tuneLoad(env, t);
+    const S = await seasonState(env);
+    return json({ ok:true, set:!!(await getMeta(env, 'speed')), s:SPEED, ts:TSPEED, day:S.day,
+      len:SEASON_DAYS, fort:FORT_DAY, cap:CAP_DAY, hold:HOLD_DAYS }, 200, env);
   }
   return json({ ok:false, err:'ไม่พบคำสั่งแอดมิน' }, 404, env);
 }
@@ -1836,7 +1879,7 @@ function bagMax(d){ return 12 + Math.floor(lvl(d, 'hero') * 1.2); }
 function healSec(d){ return Math.max(60, Math.round(3 * 3600 * (1 - 0.025 * lvl(d, 'hero')) / SPEED)); }
 function heroHp(h, t){
   if (h.dead || h.dung || h.army) return h.hp;
-  return Math.min(100, h.hp + (10 + eqStat(h, 'regen')) * Math.max(0, t - h.hpAt) / 3600000);
+  return Math.min(100, h.hp + (10 + eqStat(h, 'regen')) * SPEED * Math.max(0, t - h.hpAt) / 3600000);
 }
 function gainExp(h, x){
   h.exp += x;
@@ -2106,7 +2149,7 @@ async function sendArmy(ctx, env, b){
     if (!T.npc && !T.oasis) throw ue('ไม่มีเมืองที่พิกัดนี้');
   }
   const spd = minS * (1 + 0.03 * lvl(d, 'trainground'));
-  const sec = Math.max(60, Math.round(Math.hypot(tx - V.row.x, ty - V.row.y) / spd * 3600 / SPEED));
+  const sec = Math.max(60, Math.round(Math.hypot(tx - V.row.x, ty - V.row.y) / spd * 3600 / TSPEED));
   for (const k in tr){ d.troops[k] -= tr[k]; if (d.troops[k] <= 0) delete d.troops[k]; }
   if (hj) d.hero.army = ctx.t;
   V.dirty = true;
@@ -2335,7 +2378,7 @@ function trainCancel(d, t, bk, idx){
 /* ขากลับ: ครั้งสุดท้ายของโควตา → กลับเมืองเจ้าของตรงจากสนามรบ */
 function backLeg(m, aV, left, at){
   if (m.st_last && aV)
-    return { x:aV.x, y:aV.y, arrive:at + Math.max(60, Math.round(Math.hypot(aV.x - m.tx, aV.y - m.ty) / minSpd(left) * 3600 / SPEED)) * 1000 };
+    return { x:aV.x, y:aV.y, arrive:at + Math.max(60, Math.round(Math.hypot(aV.x - m.tx, aV.y - m.ty) / minSpd(left) * 3600 / TSPEED)) * 1000 };
   return { x:m.fx, y:m.fy, arrive:at + (at - m.depart) };
 }
 
@@ -2479,7 +2522,7 @@ async function stationApi(p, b, env, uid){
     }
     for (const k in send){ tr[k] -= send[k]; if (tr[k] <= 0) delete tr[k]; }
     const raids = s.raids + 1, last = raids >= s.quota ? 1 : 0;
-    const sec = Math.max(60, Math.round(Math.hypot(tx - s.x, ty - s.y) / minSpd(send) * 3600 / SPEED));
+    const sec = Math.max(60, Math.round(Math.hypot(tx - s.x, ty - s.y) / minSpd(send) * 3600 / TSPEED));
     const lootVid = s.host_uid === s.owner_uid ? s.host_vid : s.owner_vid;
     const MV = 'INSERT INTO moves(uid,from_vid,fx,fy,tx,ty,to_vid,to_uid,mission,troops,loot,depart,arrive,state,lock,tries,hero,st,st_last,loot_vid) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,NULL,?,?,? WHERE (SELECT raids FROM stations WHERE id=?)=?';
     const st = [
@@ -2532,7 +2575,7 @@ function chiefCap(d){ const p = lvl(d, 'palace'); return p >= 20 ? 4 : p >= 15 ?
 function loyNow(d, t){
   const l = d.loy == null ? 100 : d.loy;
   const r = 1 + 0.5 * Math.max(lvl(d, 'residence'), lvl(d, 'palace'));
-  return Math.max(0, Math.min(100, l + r * Math.max(0, t - (d.loyAt || t)) / 3600000));
+  return Math.max(0, Math.min(100, l + r * SPEED * Math.max(0, t - (d.loyAt || t)) / 3600000));
 }
 function unitHave(ctx, V, id){
   let n = V.d.troops[id] || 0;
@@ -3043,7 +3086,8 @@ async function guildApi(p, b, env, uid){
 /* =====================================================================
    B5-4 : ฤดูกาล · ป้อม 8 แห่ง · เมืองหลวงโลก · ผู้ชนะเซิร์ฟเวอร์
    ===================================================================== */
-const SEASON_DAYS = 45, FORT_DAY = 20, CAP_DAY = 30, HOLD_DAYS = 5, CAP_NEED_FORTS = 2, FORT_CP = 50;
+let SEASON_DAYS = 45, FORT_DAY = 20, CAP_DAY = 30, HOLD_DAYS = 5, HOLD_STEP = 5;
+const CAP_NEED_FORTS = 2, FORT_CP = 50;
 const FORT_UID = '__fort__', FORT_NAME = 'ผู้พิทักษ์แผ่นดิน', CAP_NAME = 'นครหลวงสุวรรณภูมิ';
 const FORT_NAMES = ['ป้อมอุดร','ป้อมอีสาน','ป้อมบูรพา','ป้อมอาคเนย์','ป้อมทักษิณ','ป้อมหรดี','ป้อมประจิม','ป้อมพายัพ'];
 const FORT_G = { u0_inf_d:1500, u0_inf_a:500, u0_cav_h:300 };
@@ -3062,7 +3106,7 @@ async function serverStart(env){
 }
 async function seasonState(env){
   const t = Date.now(), start = await serverStart(env), w = await getMeta(env, 'winner');
-  return { start, now:t, day:Math.floor((t - start) / 86400000 * SPEED) + 1,
+  return { start, now:t, day:Math.floor((t - start) / 86400000) + 1,
     holder:(await getMeta(env, 'holder')) || '', holdSince:+(await getMeta(env, 'hold_since')) || 0,
     holderName:(await getMeta(env, 'holder_name')) || '', winner:w ? JSON.parse(w) : null, n:+(await getMeta(env, 'season_n')) || 1 };
 }
@@ -3109,7 +3153,7 @@ async function regenForts(env, t){
     d._away = 0;
     advance(d, t, P);
     const B0 = d.cap ? CAP_G : FORT_G;
-    for (const k in B0) d.troops[k] = Math.min(B0[k], (d.troops[k] || 0) + Math.ceil(B0[k] * 0.01));
+    for (const k in B0) d.troops[k] = Math.min(B0[k], (d.troops[k] || 0) + Math.ceil(B0[k] * 0.01 * SPEED));
     st.push(vUpd(env, r, d, t));
   }
   if (st.length) await env.DB.batch(st);
@@ -3138,7 +3182,7 @@ async function seasonTick(env){
   if (hk !== S.holder){
     await setMeta(env, 'holder', hk); await setMeta(env, 'hold_since', hk ? t : 0); await setMeta(env, 'holder_name', hn);
     if (hk) await worldSay(env, '👑 ' + hn + ' ต้องรักษาไว้ ' + holdNeed(S.day) + ' วัน', t);
-  } else if (hk && t - S.holdSince >= holdNeed(S.day) * 86400000 / SPEED) return await declareWin(env, hn, 'hold', t);
+  } else if (hk && t - S.holdSince >= holdNeed(S.day) * 86400000 ) return await declareWin(env, hn, 'hold', t);
 }
 async function seasonInfo(env){
   const t = Date.now(), S = await seasonState(env);
@@ -3149,7 +3193,7 @@ async function seasonInfo(env){
       loy:Math.round(loyNow(d, t)), wall:d.wallLv | 0, garrison:npc ? tcount(d.troops) : null };
   });
   return json(Object.assign({ ok:true, len:SEASON_DAYS, fortDay:FORT_DAY, capDay:CAP_DAY, hold:holdNeed(S.day), over:S.day > SEASON_DAYS,
-    needForts:CAP_NEED_FORTS, fortCp:FORT_CP, forts }, S), 200, env);
+    needForts:CAP_NEED_FORTS, fortCp:FORT_CP, speed:SPEED, tspeed:TSPEED, forts }, S), 200, env);
 }
 
 /* =====================================================================
@@ -3158,7 +3202,7 @@ async function seasonInfo(env){
 /* หลังวันที่ 45 ลดวันครองลง 1 วันทุก 5 วัน ต่ำสุด 2 วัน */
 function holdNeed(day){
   if (day <= SEASON_DAYS) return HOLD_DAYS;
-  return Math.max(2, HOLD_DAYS - Math.ceil((day - SEASON_DAYS) / 5));
+  return Math.max(2, HOLD_DAYS - Math.ceil((day - SEASON_DAYS) / HOLD_STEP));
 }
 
 /* item = ระดับอุปกรณ์ (2 ดี · 3 หายาก · 4 ตำนาน) · builder = ช่างคนที่ 3 24 ชม. · sched = แผนการรบ (วัน) */
@@ -3956,6 +4000,7 @@ async function tuneLoad(env, t){
   if (t - TUNE_C.at < 60000) return;
   TUNE_C.at = t;
   try { tuneSet(JSON.parse((await getMeta(env, 'tune')) || '{}')); } catch (e){}
+  try { const sp = await getMeta(env, 'speed'); speedSet(sp ? JSON.parse(sp) : null); } catch (e){}
 }
 
 /* ---------- สถิติสมดุล ---------- */
