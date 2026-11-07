@@ -1037,3 +1037,7 @@ body.day #modalbox .mvgrid button{background:#fffaf0!important;color:#8a5a00!imp
 .hnm input{padding-right:40px!important}
 .hnm .hnm-ic{position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;font-size:16px;opacity:.85}
 
+.tp-x{margin-left:8px;min-width:28px;height:28px;line-height:28px;text-align:center;border-radius:50%;
+  background:rgba(160,40,30,.35);color:#ff9a8a;font-size:14px;font-weight:700;cursor:pointer;flex:0 0 auto}
+.tp-x:active{background:rgba(200,50,40,.6)}
+
