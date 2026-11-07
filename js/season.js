@@ -5,12 +5,12 @@ var Season = (function(){
     return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
   function load(cb){
     Api.get('/season', null, false).then(function(r){
-      if (r && r.ok){ S = r; S._at = Date.now(); }
+      if (r && r.ok){ S = r; S._at = Date.now(); CFG.SPEED = r.speed || 1; CFG.TSPEED = r.tspeed || CFG.SPEED; CFG.TOTAL_DAYS = r.len; CFG.FORT_OPEN_DAY = r.fortDay; CFG.CAPITAL_OPEN_DAY = r.capDay; CFG.CAPITAL_HOLD_DAYS = r.hold; }
       if (cb) cb(S);
     });
   }
   function sNow(){ return S ? S.now + (Date.now() - S._at) : Date.now(); }
-  function at(day){ return S.start + (day - 1) * D / CFG.SPEED; }
+  function at(day){ return S.start + (day - 1) * D; }
   function line(){
     if (!S) return '';
     var e = Math.max(0, sNow() - S.start), d = Math.floor(e / D), h = Math.floor(e % D / 3600000);
@@ -34,7 +34,7 @@ var Season = (function(){
     else if (S.day < S.fortDay) h += '<div class="dgrun">🏰 ป้อมทั้ง 8 แห่งจะปรากฏในอีก ' + UI.dur((at(S.fortDay) - n) / 1000) + '</div>';
     else if (S.day < S.capDay) h += '<div class="dgrun">👑 เมืองหลวงโลกจะปรากฏในอีก ' + UI.dur((at(S.capDay) - n) / 1000) + '</div>';
     else if (S.holder) h += '<div class="dgrun">👑 <b>' + esc(S.holderName) + '</b> ครองเมืองหลวง<br>ชนะเซิร์ฟเวอร์ในอีก ' +
-      UI.dur((S.holdSince + S.hold * D / CFG.SPEED - n) / 1000) + '</div>';
+      UI.dur((S.holdSince + S.hold * D - n) / 1000) + '</div>';
     else h += '<div class="dgrun">👑 เมืองหลวงโลกยังไม่มีเจ้าของ</div>';
     var cap = S.forts.filter(function(f){ return f.cap; }), fs = S.forts.filter(function(f){ return !f.cap; });
     if (cap.length) h += '<h4>👑 เมืองหลวงโลก</h4>' + cap.map(card).join('');
@@ -42,7 +42,7 @@ var Season = (function(){
     h += '<div class="infobox" style="line-height:1.7">• วันที่ ' + S.fortDay + ' ป้อม 8 แห่งปรากฏ ยึดด้วยขุนพล (ต้องอยู่ในกิลด์ ไม่ใช้ CP)<br>' +
       '• ป้อมให้ +' + S.fortCp + ' CP/วัน · สร้างหรือฝึกทหารในป้อมไม่ได้ ให้ส่งกำลังหนุนไปประจำการ<br>' +
       '• วันที่ ' + S.capDay + ' เมืองหลวงโลก (0|0) ปรากฏ กิลด์ต้องมีป้อม ' + S.needForts + ' แห่งขึ้นไปจึงจะยึดได้<br>' +
-      '• ครองเมืองหลวงครบ 5 วันติดต่อกันชนะเซิร์ฟเวอร์<br>• หลังวันที่ ' + S.len + ' เกมยังไม่จบจนกว่าจะมีผู้ครองครบ แต่วันที่ต้องครองจะลดลง 1 วันทุก 5 วัน (ต่ำสุด 2 วัน) · ตอนนี้ต้องครอง <b>' + S.hold + '</b> วัน</div>' +
+      '• ครองเมืองหลวงครบ ' + S.hold + ' วันติดต่อกันชนะเซิร์ฟเวอร์<br>• หลังวันที่ ' + S.len + ' เกมยังไม่จบจนกว่าจะมีผู้ครองครบ แต่วันที่ต้องครองจะลดลง 1 วันทุก 5 วัน (ต่ำสุด 2 วัน) · ตอนนี้ต้องครอง <b>' + S.hold + '</b> วัน</div>' +
       '<button class="btn-cancel" onclick="UI.close()">ปิด</button>';
     UI.modal(h);
     document.querySelectorAll('[data-fs]').forEach(function(b){

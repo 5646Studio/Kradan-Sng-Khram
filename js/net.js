@@ -148,7 +148,7 @@ var Net = (function(){
       });
       return { vills:d.villages.length, pop:pop,
         gold: Math.floor((d.player && d.player.gold) || 0),
-        day: Math.max(1, Math.floor((Date.now() - d.startedAt)/86400000*CFG.SPEED) + 1) };
+        day: Math.max(1, Math.floor((Date.now() - d.startedAt)/86400000) + 1) };
     } catch(e){ return null; }
   }
   function peekSave(cb){

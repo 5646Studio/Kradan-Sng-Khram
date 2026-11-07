@@ -163,12 +163,63 @@
     $('gfPrev').onclick = gfPreview;
     $('gfGo').onclick = gfSend;
   }
-
+  /* ---------- ⚡ ความเร็วเซิร์ฟเวอร์ (v14Z) ---------- */
+  var SPB = { season:135, fort:60, cap:90, hold:15 };
+  function spCalc(s){ return { len:Math.round(SPB.season / s), fort:Math.round(SPB.fort / s), cap:Math.round(SPB.cap / s), hold:Math.max(2, Math.round(SPB.hold / s)) }; }
+  function spCard(){
+    var o = '';
+    for (var i = 1; i <= 5; i++) o += '<option value="' + i + '">⚡ x' + i + ' · ฤดูกาล ' + spCalc(i).len + ' วัน</option>';
+    return '<b>⚡ ความเร็วเซิร์ฟเวอร์</b><div id="spInfo" style="font-size:11.5px;color:#b9ac92;margin:6px 0">กำลังโหลด…</div>' +
+      '<select id="spS">' + o + '</select><select id="spT"></select><div id="spPrev" class="a2h"></div>' +
+      '<p style="font-size:10.5px;color:#7a6c4e;margin:4px 0">มีผลกับทุกคนภายใน 1 นาที · ควรตั้งก่อนกด 🏁 เริ่มฤดูกาลใหม่</p>' +
+      '<button class="btn b1" id="spSave">💾 ตั้งความเร็ว</button>' +
+      '<button class="btn red" id="spClear">↺ กลับเป็นแบบเดิม (x1 · 45 วัน)</button><div id="spMsg" style="font-size:11.5px;margin-top:4px"></div>';
+  }
+  function spTroop(sel){
+    var s = +$('spS').value, h = '';
+    for (var i = 1; i <= s; i++) h += '<option value="' + i + '"' + (i === sel ? ' selected' : '') + '>🐎 เดินทัพ x' + i + '</option>';
+    $('spT').innerHTML = h;
+  }
+  function spPrev(){
+    var s = +$('spS').value, c = spCalc(s);
+    $('spPrev').innerHTML = 'ฤดูกาล <b>' + c.len + '</b> วัน · ป้อมเปิดวันที่ <b>' + c.fort + '</b> · เมืองหลวงวันที่ <b>' + c.cap +
+      '</b> · ครอง <b>' + c.hold + '</b> วันชนะ<br>ก่อสร้าง ฝึกทหาร ผลิต CP เร็วขึ้น x' + s + ' · เดินทัพ x' + $('spT').value;
+  }
+  function spPaint(r){
+    $('spInfo').innerHTML = r.set
+      ? 'ตอนนี้: <b>x' + r.s + '</b> · เดินทัพ x' + r.ts + ' · วันที่ ' + r.day + ' / ' + r.len + ' · ป้อมวันที่ ' + r.fort + ' · เมืองหลวงวันที่ ' + r.cap
+      : 'ตอนนี้: <b>แบบเดิม</b> (x1 · ฤดูกาล 45 วัน) · วันที่ ' + r.day;
+    $('spS').value = r.set ? r.s : 3;
+    spTroop(r.set ? r.ts : 2);
+    spPrev();
+  }
+  function loadSpeed(){
+    Api.post('/admin/speed', { action:'list' }).then(function(r){
+      if (r && r.ok) spPaint(r); else $('spInfo').textContent = (r && r.err) || 'โหลดไม่สำเร็จ (deploy worker แล้วหรือยัง)';
+    });
+  }
+  function spBind(){
+    $('spS').onchange = function(){ spTroop(Math.min(+$('spT').value || 1, +$('spS').value)); spPrev(); };
+    $('spT').onchange = spPrev;
+    $('spSave').onclick = function(){
+      var s = +$('spS').value, ts = +$('spT').value;
+      if (!confirm('ตั้งความเร็ว x' + s + ' (เดินทัพ x' + ts + ')\nมีผลกับผู้เล่นทุกคนทันที\n\nยืนยัน?')) return;
+      Api.post('/admin/speed', { action:'set', s:s, ts:ts }).then(function(r){
+        say('spMsg', r && r.ok ? '✔ ตั้งแล้ว' : esc(r && r.err), r && r.ok); if (r && r.ok) spPaint(r);
+      });
+    };
+    $('spClear').onclick = function(){
+      if (!confirm('กลับเป็นกติกาเดิม (x1 · ฤดูกาล 45 วัน)?')) return;
+      Api.post('/admin/speed', { action:'clear' }).then(function(r){
+        say('spMsg', r && r.ok ? '✔ กลับเป็นแบบเดิมแล้ว' : esc(r && r.err), r && r.ok); if (r && r.ok) spPaint(r);
+      });
+    };
+  }
   /* ---------- แท็บ ---------- */
   function lazy(t){
     if (loaded[t]) return;
     loaded[t] = 1;
-    if (t === 'ov') loadStats();
+    if (t === 'ov'){ loadStats(); loadSpeed(); }
     if (t === 'bt') loadTune();
   }
   function show(t){
@@ -202,6 +253,9 @@
     /* การ์ดสถิติสมดุล */
     ovx.appendChild(mk('div', 'card', '<b>📈 สถิติสมดุล</b><div id="a2st" style="margin-top:6px;font-size:11.5px;color:#b9ac92">กำลังโหลด…</div>' +
       '<button class="btn b3" id="a2stRe">🔄 โหลดใหม่</button>'));
+    ovx.appendChild(mk('div', 'card', spCard()));
+    spBind();
+
     /* การ์ดปรับค่าเกม */
     $('p-bt').appendChild(mk('div', 'card', '<b>🎛 ปรับค่าเกม</b><p style="font-size:10.5px;color:#7a6c4e;margin:4px 0">มีผลภายใน 1 นาที · ช่องว่าง = ค่าเริ่มต้น</p>' +
       '<div id="a2tu">กำลังโหลด…</div><button class="btn b1" id="a2tuSave">💾 บันทึก</button>' +

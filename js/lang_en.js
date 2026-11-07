@@ -248,6 +248,11 @@ var LANG_EN = {
   'เลือกได้เฉพาะช่องว่าง (กรอบสีทอง)':'Only empty slots (gold outline) can be chosen',
   'เมืองหลวง':'Capital',  'โอเอซิสของฉัน':'My oases', 'ยังไม่มีโอเอซิส':'No oases yet', 'ยึดได้ด้วยวีรบุรุษ + โจมตี':'capture with hero + attack',
   'ขุนพลออกรบจากฐานไม่ได้ ต้องถอนกลับเมืองก่อน':'Chiefs cannot sortie from a base. Recall them home first',
-  'นับรวมขุนพลที่ประจำการต่างเมืองด้วย':'including chiefs stationed elsewhere'
+  'นับรวมขุนพลที่ประจำการต่างเมืองด้วย':'including chiefs stationed elsewhere',  'ไม่มีเมืองรับโบนัส':'No village receives the bonus', 'ยึดครองโดย':'Held by', 'ของคุณ':'yours', 'ยึดแล้ว':'Captured',
+  'ยกเลิกแล้ว':'Cancelled', 'เรียกกองทัพกลับเมือง?':'Recall the army?', 'เรียกกองทัพกลับแล้ว':'Army recalled',
+  'เรียกกลับได้ภายใน 1 นาทีหลังออกเดินทางเท่านั้น':'Armies can only be recalled within 1 minute of departure',
+  'ขบวนนี้เรียกกลับไม่ได้':'This march cannot be recalled', 'ไม่พบกองทัพที่กำลังเดินทาง':'No marching army found',
+  'กองทัพนี้กำลังถูกประมวลผล ลองใหม่อีกครั้ง':'This army is being processed, please try again',
+  'คืนทรัพยากรตามเวลาที่เหลือ (อย่างน้อย 20%)':'Refund based on remaining time (at least 20%)'
 
 };

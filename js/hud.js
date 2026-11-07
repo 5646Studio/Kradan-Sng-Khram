@@ -125,7 +125,7 @@ var HUD = (function(){
         '<span class="tp-tx">' + r.t + (r.sub ? '<em>' + r.sub + '</em>' : '') +
         '</span>' + (r.rush ? '<span class="tp-rush" data-rq="' + r.rush.i +
         '">⚡💰' + r.rush.g + '</span>' : '') +
-        '<b class="tp-tm">' + r.tm + '</b></div>';
+        '<b class="tp-tm">' + r.tm + '</b>' + (r.cx ? '<span class="tp-x" data-cx="' + r.cx + '">✕</span>' : '') + '</div>';
     });
     return h + '</div>';
   }
@@ -157,7 +157,8 @@ var HUD = (function(){
         sub: q.kind === 'field' ? 'หน้าทรัพยากร'
            : q.kind === 'wall' ? 'กำแพงเมือง' : 'หน้าเมือง',
         tm: q.active ? UI.dur(left) : 'รอคิว', act:'queue',
-        rush: q.active ? { i:i, g:goldRush(left) } : null });
+        rush: q.active ? { i:i, g:goldRush(left) } : null,
+  cx: 'q:' + i });
     });
     h += sec('🔨 รายการก่อสร้าง', 'ช่าง ' +
       v.queue.filter(function(q){ return q.active; }).length + '/' +
@@ -200,7 +201,8 @@ var HUD = (function(){
             (mi ? mi.name : 'ส่งทัพ') + ' (' + m.tx + '|' + m.ty + ')') +
            (m.hero ? ' 🗿' : ''),
         sub: Military.troopLine ? Military.troopLine(m.troops) : '',
-        tm: UI.dur((m.arriveAt - t)/1000), act:'rally' });
+        tm: UI.dur((m.arriveAt - t)/1000), 
+        cx: (!m.returning && m.id != null && t - (m.departAt || m.depart || 0) < 60000) ? 'm:' + m.id : null,act:'rally' });
     });
     var wl = cityLevel(v, 'watchtower');
     (Game.incoming || []).forEach(function(m){
@@ -208,7 +210,8 @@ var HUD = (function(){
       if ((m.arriveAt - t) > (5 + wl*5)*60000) return;
       army.unshift({ c:'danger', ic:'⚠️',
         t:'ศัตรูกำลังบุก! (' + m.fx + '|' + m.fy + ')', sub:'เตรียมป้องกันด่วน',
-        tm: UI.dur((m.arriveAt - t)/1000), act:'rally' });
+        tm: UI.dur((m.arriveAt - t)/1000), 
+        act:'rally' });
     });
     if (typeof Station !== 'undefined'){
       Station.mine(v).forEach(function(st){
@@ -282,6 +285,23 @@ var HUD = (function(){
           if (window.BldTool && BldTool.manage) BldTool.manage(sl);
         }
 
+      };
+    });
+        /* v14Z — ✕ ยกเลิกงานก่อสร้าง / เรียกทัพกลับ */
+    el.querySelectorAll('[data-cx]').forEach(function(n){
+      n.onclick = function(e){
+        e.stopPropagation();
+        var p = n.dataset.cx.split(':'), cv = Game.villages[Game.active];
+        if (p[0] === 'q'){
+          var q = cv.queue[+p[1]]; if (!q) return;
+          if (!confirm('ยกเลิก "' + UI.nameOfQ(cv, q) + '" ?' + (q.active ? '\nคืนทรัพยากรตามเวลาที่เหลือ (อย่างน้อย 20%)' : ''))) return;
+          Sync.cmd('/cancel', { vid:cv.id, idx:+p[1] }, function(r){
+            Sync.toast('✕ ยกเลิกแล้ว' + (r && r.refund != null ? ' · คืน ' + r.refund + '%' : ''));
+          });
+        } else if (p[0] === 'm'){
+          if (!confirm('เรียกกองทัพกลับเมือง?')) return;
+          Sync.cmd('/recall', { id:+p[1] }, function(){ Sync.toast('↩️ เรียกกองทัพกลับแล้ว'); });
+        }
       };
     });
   }

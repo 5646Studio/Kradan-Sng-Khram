@@ -981,7 +981,20 @@ if (capH >= x0 && -capH <= x1 && capH >= y0 && -capH <= y1) {
     cam.x = Math.max(-R, Math.min(R, cam.x));
     cam.y = Math.max(-R, Math.min(R, cam.y));
   }
-
+  /* v14Z — ชื่อผู้ยึดครองโอเอซิส */
+  function oaWho(x, y){
+    var vacant = 'ยังว่าง · ส่งวีรบุรุษไปยึดได้ในระยะ ' + CFG.OASIS_RANGE + ' ช่อง';
+    if (!window.OasisWho){ var e0 = document.getElementById('tiOaOwn'); if (e0 && e0.textContent === '…') e0.textContent = vacant; return; }
+    OasisWho.world(function(){
+      var el = document.getElementById('tiOaOwn'); if (!el) return;
+      var k = x + ',' + y, o = OasisWho.W.oa[k], mine = !!Game.oasis[k];
+      var vv = o && OasisWho.W.vn[o.vid], vn = vv ? vv.vn : '';
+      var es = function(s){ return String(s || '').replace(/[<>&"]/g, ''); };
+      if (mine) el.innerHTML = '✓ ยึดแล้ว · ของคุณ' + (vn ? ' (🏘 ' + es(vn) + ')' : '');
+      else if (o) el.innerHTML = '<span style="color:#ff9a7a">🚩 ยึดครองโดย <b>' + es(o.pn || '?') + '</b>' + (vn ? ' · 🏘 ' + es(vn) : '') + '</span>';
+      else el.textContent = OasisWho.W.ok ? vacant : '—';
+    });
+  }
   function showTileInfo(t){
     try {
       var box = document.getElementById('tileinfo');
@@ -1023,8 +1036,8 @@ if (capH >= x0 && -capH <= x1 && capH >= y0 && -capH <= y1) {
         h += '<div class="ti-line" style="color:#4fd6a0">' +
           (OA_IC[tile.oasis.type]||['🌿']).join('') + ' <b>โอเอซิส' +
           (OA_NM[tile.oasis.type]||'') + ' +' + tile.oasis.pct + '%</b><br>' +
-          (ow ? '✓ ยึดแล้ว' : 'ยังว่าง · ส่งวีรบุรุษไปยึดได้ในระยะ ' +
-            CFG.OASIS_RANGE + ' ช่อง') + '</div>';
+          '<span id="tiOaOwn">' + (ow ? '✓ ยึดแล้ว · ของคุณ' : '…') + '</span></div>';
+        setTimeout(function(){ oaWho(t.x, t.y); }, 0);
       } else if (World.isCapital(t.x, t.y)){
         h += '<div class="ti-line" style="color:#ffcf40">👑 <b>เมืองหลวงโลก</b></div>';
       } else if (World.fortAt(t.x, t.y)){

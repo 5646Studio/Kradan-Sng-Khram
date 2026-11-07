@@ -3,8 +3,8 @@ function saveKeyOf(id){ return 'sw_s' + id + '_save'; }
 function hofKeyOf(id){ return 'sw_s' + id + '_hof'; }
 
 var SERVERS = [
-  { id:1, name:'ทวารวดี', speed:1, days:45,
-    desc:'เซิร์ฟทดสอบ · ป้อมเปิดวันที่ 20 · เมืองหลวงวันที่ 35 · ยึดครองครบ 5 วันชนะ' }
+  { id:1, name:'ทวารวดี', speed:1, days:45, hold:5,
+    desc:'เซิร์ฟทดสอบ · ป้อมเปิดวันที่ 20 · เมืองหลวงวันที่ 30 · ยึดครองครบ 5 วันชนะ' }
 ];
 
 //var SERVERS = [
@@ -173,7 +173,7 @@ function renderHOF(){
   if (!hof.length){
     el.innerHTML = '<div class="hof-empty">เซิร์ฟเวอร์ ' + id + ' — ' + s.name +
       '<br>ยังไม่มีกิลด์ใดชนะ<br><br>' +
-      'ยึดเมืองหลวงโลกให้ครบ ' + Math.round(12/s.speed) +
+      'ยึดเมืองหลวงโลกให้ครบ ' + s.hold +
       ' วัน<br>เพื่อจารึกชื่อกิลด์ของคุณที่นี่</div>';
     return;
   }
