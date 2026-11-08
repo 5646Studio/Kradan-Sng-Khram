@@ -4,7 +4,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="assets/ui/app_192.png">
 <meta name="theme-color" content="#1a1510">
-<script src="js/lang_en.js?v=14X"></script>
+<script src="js/lang_en.js?v=15A"></script>
 <script src="js/i18n.js?v=14X"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -76,6 +76,7 @@ input::placeholder{color:#5f553e}
 </style>
 </head>
 <body>
+<script src="js/loader.js?v=15A"></script>
 <div class="wrap">
   <div class="hero">
     <h1>สุวรรณภูมิ</h1>
@@ -170,8 +171,9 @@ input::placeholder{color:#5f553e}
 <script src="js/config.js?v=14O"></script>
 <script src="js/firebase-config.js?v=14O"></script>
 <script src="js/net.js?v=14O"></script>
-<script src="js/api.js?v=14O"></script>
-<script src="js/update.js?v=14Z"></script>
+<script src="js/api.js?v=15A"></script>
+<script src="js/srv.js?v=15A"></script>
+<script src="js/update.js?v=15A"></script>
 <script>
 (function(){
   function $(i){ return document.getElementById(i); }
@@ -186,7 +188,7 @@ input::placeholder{color:#5f553e}
   function msg(id, t, ok){ $(id).innerHTML = t ? '<div class="' + (ok ? 'ok' : 'err') + '">' + esc(t) + '</div>' : ''; }
   function busy(on){ ['lgGoogle','lgFb','lgEmail','rgEmail','lgGuest'].forEach(function(k){ $(k).disabled = on; }); }
 
-  $('srvname').textContent = CFG.SERVER_NAME;
+  $('srvname').textContent = srvLabel();
   var ONLINE = Net.enabled() && !!Api.base();
   $('mode').textContent = ONLINE ? '🌐 ออนไลน์' : '📴 ออฟไลน์';
   var myName = '';
