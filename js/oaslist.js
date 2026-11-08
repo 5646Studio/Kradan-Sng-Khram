@@ -1,4 +1,4 @@
-l/* ============ oaslist v15A — ปุ่ม 🌴 โอเอซิสของฉัน + ข้อมูลผู้ครอง (ใช้ร่วมกับ render.js) ============ */
+/* ============ oaslist v15A — ปุ่ม 🌴 โอเอซิสของฉัน + ข้อมูลผู้ครอง (ใช้ร่วมกับ render.js) ============ */
 (function(){
   function $(i){ return document.getElementById(i); }
   function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
