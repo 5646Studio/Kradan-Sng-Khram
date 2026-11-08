@@ -640,6 +640,7 @@ async function route(req, env){
   if (PSH) return PSH;
   const INV = await inviteApi(p, b, env, uid);
   if (INV) return INV; 
+  if (p === '/oasis/release') return await oasisRelease(env, uid, b);
   const STN = await stationApi(p, b, env, uid);
   if (STN) return STN;
   const RM = await roomApi(p, b, env, uid);
@@ -2067,6 +2068,22 @@ async function patchV(env, vid, fn){
   return false;
 }
 
+/* v15A — ปล่อยโอเอซิส (ฟรี) */
+async function oasisRelease(env, uid, b){
+  const me = await getP(env, uid);
+  if (!me) throw ue('ยังไม่ได้ลงทะเบียน');
+  if (me.banned) throw ue('บัญชีนี้ถูกระงับ');
+  const k = String(b.k || '');
+  const o = await env.DB.prepare('SELECT k, uid, vid FROM oasis WHERE k=?').bind(k).first();
+  if (!o || o.uid !== uid) throw ue('โอเอซิสนี้ไม่ใช่ของคุณ');
+  if (o.vid){
+    const r = await patchV(env, o.vid, d => { d.oa = (d.oa || []).filter(x => x.k !== k); });
+    if (typeof r === 'string') throw ue(r);
+  }
+  await env.DB.prepare('DELETE FROM oasis WHERE k=? AND uid=?').bind(k, uid).run();
+  return json({ ok:true, k }, 200, env);
+}
+
 function fight(at, aB, dt, dB, wall, mission, base, aX, dX){
   let ai = 0, ac = 0;
   for (const k in at){ const u = UNITS[k]; if (!u) continue; const p = at[k] * u.atk; if (u.type === 'cav') ac += p; else ai += p; }
@@ -2478,7 +2495,7 @@ async function stationApi(p, b, env, uid){
     const st = [DB.prepare('DELETE FROM stations WHERE id=? AND raids=? AND troops=?').bind(s.id, s.raids, s.troops)];
     let sec = 0;
     if (tcount(tr) && A){
-      sec = Math.max(60, Math.round(Math.hypot(A.x - s.x, A.y - s.y) / minSpd(tr) * 3600 / SPEED));
+      sec = Math.max(60, Math.round(Math.hypot(A.x - s.x, A.y - s.y) / minSpd(tr) * 3600 / TSPEED));
       st.push(DB.prepare('INSERT INTO moves(uid,from_vid,fx,fy,tx,ty,to_vid,to_uid,mission,troops,loot,depart,arrive,state,lock,tries) SELECT ?,?,?,?,?,?,NULL,NULL,?,?,?,?,?,?,0,0 WHERE changes()>0')
         .bind(uid, A.id, s.x, s.y, A.x, A.y, 'support', s.troops, '{}', t, t + sec * 1000, 'back'));
     }
@@ -2496,7 +2513,7 @@ async function stationApi(p, b, env, uid){
     let n = 0, onlyScout = true;
     for (const k in (b.troops || {})){
       const c = Math.floor(b.troops[k]);
-      if (UNITS[k] && UNITS[k].type === 'chief') throw ue('ขุนพลออกรบจากฐานไม่ได้ ต้องถอนกลับเมืองก่อน');
+      if (UNITS[k] && UNITS[k].type === 'chief' && s.owner_uid !== uid) throw ue('สั่งขุนพลของผู้เล่นอื่นไม่ได้');
       if (!(c > 0)) continue;
       if ((tr[k] || 0) < c) throw ue('ทหารในฐานไม่พอ');
       send[k] = c; n += c;
@@ -2532,7 +2549,7 @@ async function stationApi(p, b, env, uid){
     ];
     if (last){
       if (tcount(tr)){
-        const hs = Math.max(60, Math.round(Math.hypot(A.x - s.x, A.y - s.y) / minSpd(tr) * 3600 / SPEED));
+        const hs = Math.max(60, Math.round(Math.hypot(A.x - s.x, A.y - s.y) / minSpd(tr) * 3600 / TSPEED));
         st.push(DB.prepare(MV).bind(s.owner_uid, s.owner_vid, s.x, s.y, A.x, A.y, null, null, 'support', JSON.stringify(tr), '{}',
           t, t + hs * 1000, 'back', null, 1, null, s.id, raids));
       }
