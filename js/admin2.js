@@ -1,4 +1,4 @@
-/* ============ Admin2 v14U — แก้การ์ดภาพรวมหาย · รอล็อกอิน · แจกทอง/ชดเชยทั้งเซิร์ฟเวอร์ ============ */
+/* ============ Admin2 v15A — แก้การ์ดภาพรวมหาย · รอล็อกอิน · แจกทอง/ชดเชยทั้งเซิร์ฟเวอร์ ============ */
 (function(){
   /* [แท็บ, คำในหัวการ์ด, วางบนสุดของแท็บ] */
   var PLACE = [
@@ -215,6 +215,30 @@
       });
     };
   }
+  /* ---------- 🌐 เลือกเซิร์ฟเวอร์ (v15A) ---------- */
+  function srvBar(){
+    if ($('a2srvBar') || typeof SERVERS === 'undefined' || !SERVERS.length) return;
+    var cur = SERVERS[0].id;
+    try { cur = (JSON.parse(localStorage.getItem('adm_srv') || 'null') || {}).id || cur; } catch(e){}
+    var bar = mk('div', 'card', '<b>🌐 เซิร์ฟเวอร์ที่กำลังดู</b><select id="a2srv">' +
+      SERVERS.map(function(s){ return '<option value="' + s.id + '"' + (s.id === cur ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join('') +
+      '</select><div id="a2srvI" style="font-size:11.5px;color:#b9ac92;margin-top:4px">…</div>');
+    bar.id = 'a2srvBar';
+    bar.style.borderColor = '#ffcf40';
+    var h1 = document.querySelector('h1');
+    if (h1) h1.parentNode.insertBefore(bar, h1.nextSibling);
+    else document.body.insertBefore(bar, document.body.firstChild);
+    $('a2srv').onchange = function(){
+      try { localStorage.setItem('adm_srv', JSON.stringify({ id:+this.value })); } catch(e){}
+      location.reload();
+    };
+    function bad(){ var e = $('a2srvI'); if (e) e.textContent = '⚠ เชื่อมต่อเซิร์ฟเวอร์นี้ไม่ได้'; }
+    Api.get('/season').then(function(r){
+      if (!r || !r.ok) return bad();
+      $('a2srvI').innerHTML = (r.speed > 1 ? '⚡ SPEED x' + r.speed : 'ปกติ (x1)') + ' · เดินทัพ x' + (r.tspeed || r.speed || 1) +
+        ' · วันที่ ' + (r.day || '?') + ' / ' + r.len;
+    }, bad);
+  }
   /* ---------- แท็บ ---------- */
   function lazy(t){
     if (loaded[t]) return;
@@ -276,7 +300,7 @@
     };
     /* การ์ดที่ยังลอยอยู่นอกแท็บ → แท็บระบบ */
     document.querySelectorAll('.card').forEach(function(c){
-      if (!c.closest('.pane') && !c.closest('#gate') && !c.closest('#a2ovx')) sys.appendChild(c);
+      if (!c.closest('.pane') && !c.closest('#gate') && !c.closest('#a2ovx') && c.id !== 'a2srvBar') sys.appendChild(c);
     });
     /* ผูกปุ่มแท็บใหม่ทั้งหมด */
     tabs.querySelectorAll('[data-t]').forEach(function(x){ x.onclick = function(){ show(x.dataset.t); }; });
@@ -285,5 +309,6 @@
     show(last);
     return true;
   }
+  srvBar();
   var iv = setInterval(function(){ if (build()) clearInterval(iv); }, 500);
 })();

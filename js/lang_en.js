@@ -253,6 +253,15 @@ var LANG_EN = {
   'เรียกกลับได้ภายใน 1 นาทีหลังออกเดินทางเท่านั้น':'Armies can only be recalled within 1 minute of departure',
   'ขบวนนี้เรียกกลับไม่ได้':'This march cannot be recalled', 'ไม่พบกองทัพที่กำลังเดินทาง':'No marching army found',
   'กองทัพนี้กำลังถูกประมวลผล ลองใหม่อีกครั้ง':'This army is being processed, please try again',
-  'คืนทรัพยากรตามเวลาที่เหลือ (อย่างน้อย 20%)':'Refund based on remaining time (at least 20%)'
-
+  'คืนทรัพยากรตามเวลาที่เหลือ (อย่างน้อย 20%)':'Refund based on remaining time (at least 20%)',
+  'ปกติ (x1)':'Normal (x1)',
+  'เซิร์ฟเวอร์ที่กำลังดู':'Viewing server',
+  'ปล่อย':'Release',
+  'ปล่อยโอเอซิสแล้ว':'Oasis released',
+  'ปล่อยไม่สำเร็จ':'Release failed',
+  'โบนัสทรัพยากรจะหายทันที และผู้อื่นยึดต่อได้':'The resource bonus is lost immediately and others can capture it',
+  'โอเอซิสนี้ไม่ใช่ของคุณ':'This oasis is not yours',
+  'ปล่อยโอเอซิส':'Release oasis',
+  'สั่งขุนพลของผู้เล่นอื่นไม่ได้':'You cannot command another player\'s chief',
+  'กำลังเชื่อมต่อเซิร์ฟเวอร์':'Connecting to server'
 };

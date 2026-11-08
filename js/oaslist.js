@@ -1,4 +1,4 @@
-/* ============ oaslist v14Z — ปุ่ม 🌴 โอเอซิสของฉัน + ข้อมูลผู้ครอง (ใช้ร่วมกับ render.js) ============ */
+l/* ============ oaslist v15A — ปุ่ม 🌴 โอเอซิสของฉัน + ข้อมูลผู้ครอง (ใช้ร่วมกับ render.js) ============ */
 (function(){
   function $(i){ return document.getElementById(i); }
   function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
@@ -30,7 +30,8 @@
     '#oaBox .r{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:10px;background:#2a2216;margin:6px 0;cursor:pointer}' +
     '#oaBox .r .ic{font-size:20px;min-width:44px}#oaBox .r span{flex:1;font-size:12.5px;color:#f3e6c8}' +
     '#oaBox .r small{display:block;color:#9a8a6a;font-size:11px}#oaBox .r small.bad{color:#ff8a6a}#oaBox .r b{color:#7fd17f;font-size:13px}' +
-    '#oaBox .x{width:100%;margin-top:8px;padding:9px;border:0;border-radius:10px;background:#3a2e1e;color:#e0cfa8;font-size:14px}';
+    '#oaBox .x{width:100%;margin-top:8px;padding:9px;border:0;border-radius:10px;background:#3a2e1e;color:#e0cfa8;font-size:14px}' +
+    '#oaBox .oaX{margin-left:6px;padding:6px 10px;border-radius:8px;background:rgba(160,40,30,.35);color:#ff9a8a;font-size:12px;font-weight:700}';
   document.head.appendChild(css);
 
   function keys(){
@@ -68,7 +69,8 @@
         return '<div class="r" data-i="' + i + '"><div class="ic">' + o.ic + '</div><span>(' + o.x + '|' + o.y + ')' +
           '<small>' + (o.vn ? '🏘 ' + esc(o.vn) + ' · ' : '') + '📏 ' + o.dist + ' ช่อง</small>' +
           (o.bonus ? '' : '<small class="bad">⚠ ไม่มีเมืองรับโบนัส</small>') + '</span>' +
-          (o.pct ? '<b>+' + o.pct + '%</b>' : '') + '</div>';
+          (o.pct ? '<b>+' + o.pct + '%</b>' : '') +
+          '<span class="oaX" data-k="' + o.x + ',' + o.y + '">✕ ปล่อย</span></div>';
       }).join('') : '<p style="color:#9a8a6a;font-size:12.5px">ยังไม่มีโอเอซิส · ยึดได้ด้วยวีรบุรุษ + โจมตี</p>') +
       '<button class="x">ปิด</button></div>';
     box._L = L;
@@ -81,6 +83,21 @@
     world(function(){ if (box.parentNode) paint(box); });
     box.onclick = function(e){
       if (e.target === box || e.target.classList.contains('x')) return box.remove();
+      var xb = e.target.closest('.oaX');
+      if (xb){
+        var k = xb.dataset.k;
+        if (!confirm('ปล่อยโอเอซิส (' + k.replace(',', '|') + ') ?\nโบนัสทรัพยากรจะหายทันที และผู้อื่นยึดต่อได้')) return;
+        Api.post('/oasis/release', { k:k }).then(function(r){
+          if (!r || !r.ok) return Sync.toast('⚠ ' + ((r && r.err) || 'ปล่อยไม่สำเร็จ'));
+          if (Game.oasis) delete Game.oasis[k];
+          (Game.villages || []).forEach(function(v){ if (v.oa) v.oa = v.oa.filter(function(o){ return o.k !== k; }); });
+          W.at = 0;
+          Sync.toast('🌴 ปล่อยโอเอซิสแล้ว');
+          try { Sync.cmd('/me', {}, function(){}); } catch(x){}
+          world(function(){ if (box.parentNode) paint(box); });
+        });
+        return;
+      }
       var r = e.target.closest('.r');
       if (!r || !box._L) return;
       var o = box._L[+r.dataset.i];
