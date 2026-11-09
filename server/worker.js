@@ -2068,20 +2068,33 @@ async function patchV(env, vid, fn){
   return false;
 }
 
-/* v15A — ปล่อยโอเอซิส (ฟรี) */
+/* v15B — ปล่อยโอเอซิส (ฟรี) + ล้างโอเอซิสที่ค้างอยู่ในเมืองของเรา */
 async function oasisRelease(env, uid, b){
   const me = await getP(env, uid);
   if (!me) throw ue('ยังไม่ได้ลงทะเบียน');
   if (me.banned) throw ue('บัญชีนี้ถูกระงับ');
   const k = String(b.k || '');
+  if (!/^-?\d+,-?\d+$/.test(k)) throw ue('พิกัดโอเอซิสไม่ถูกต้อง');
   const o = await env.DB.prepare('SELECT k, uid, vid FROM oasis WHERE k=?').bind(k).first();
-  if (!o || o.uid !== uid) throw ue('โอเอซิสนี้ไม่ใช่ของคุณ');
-  if (o.vid){
-    const r = await patchV(env, o.vid, d => { d.oa = (d.oa || []).filter(x => x.k !== k); });
+  const mine = !!o && String(o.uid) === String(uid);
+  /* เมืองของเราทุกเมืองที่อาจมีโอเอซิสนี้ค้างอยู่ */
+  const vr = await env.DB.prepare('SELECT id FROM villages WHERE uid=? AND data LIKE ?').bind(uid, '%"' + k + '"%').all();
+  const ids = new Set((vr.results || []).map(r => r.id));
+  if (mine && o.vid) ids.add(o.vid);
+  let fixed = 0;
+  for (const id of ids){
+    let had = false;
+    const r = await patchV(env, id, d => {
+      const n = (d.oa || []).length;
+      d.oa = (d.oa || []).filter(x => x.k !== k);
+      had = d.oa.length !== n;
+    });
     if (typeof r === 'string') throw ue(r);
+    if (had) fixed++;
   }
-  await env.DB.prepare('DELETE FROM oasis WHERE k=? AND uid=?').bind(k, uid).run();
-  return json({ ok:true, k }, 200, env);
+  if (!mine && !fixed) throw ue('โอเอซิสนี้ไม่ใช่ของคุณ');
+  if (mine) await env.DB.prepare('DELETE FROM oasis WHERE k=? AND uid=?').bind(k, uid).run();
+  return json({ ok:true, k, fixed: mine ? 0 : fixed }, 200, env);
 }
 
 function fight(at, aB, dt, dB, wall, mission, base, aX, dX){
