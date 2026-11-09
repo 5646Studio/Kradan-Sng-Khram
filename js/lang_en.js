@@ -263,5 +263,6 @@ var LANG_EN = {
   'โอเอซิสนี้ไม่ใช่ของคุณ':'This oasis is not yours',
   'ปล่อยโอเอซิส':'Release oasis',
   'สั่งขุนพลของผู้เล่นอื่นไม่ได้':'You cannot command another player\'s chief',
-  'กำลังเชื่อมต่อเซิร์ฟเวอร์':'Connecting to server'
+  'กำลังเชื่อมต่อเซิร์ฟเวอร์':'Connecting to server',
+  'พิกัดโอเอซิสไม่ถูกต้อง':'Invalid oasis coordinates'
 };
