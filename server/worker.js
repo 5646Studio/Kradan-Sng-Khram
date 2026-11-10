@@ -561,6 +561,7 @@ const APP = {
   async scheduled(ev, env, ctx){
     ctx.waitUntil((async () => {
       try { await resolveDue(env, Date.now(), 60); } catch (e){ console.log('resolve', e && e.message); }
+      try { await stationSweep(env); } catch (e){}
       try { await firePlans(env, Date.now()); } catch (e){ console.log('plan', e && e.message); }
       try { await waveTick(env, Date.now()); } catch (e){ console.log('wave', e && e.message); }
       try { await warnTick(env, Date.now()); } catch (e){ console.log('warn', e && e.message); }
@@ -1233,6 +1234,42 @@ async function admin(p, b, q, env, by){
     const S = await seasonState(env);
     return json({ ok:true, set:!!(await getMeta(env, 'speed')), s:SPEED, ts:TSPEED, day:S.day,
       len:SEASON_DAYS, fort:FORT_DAY, cap:CAP_DAY, hold:HOLD_DAYS }, 200, env);
+  }
+  if (p === '/admin/forts'){
+    const lv = v => Math.max(-2, Math.min(2, v | 0));
+    if (b.action === 'pow'){
+      FPOW = { fort:lv(b.fort), cap:lv(b.cap) };
+      await setMeta(env, 'fort_pow', JSON.stringify(FPOW));
+      await regenForts(env, t);                       /* ลดระดับ → ตัดทหารส่วนเกินทันที */
+    }
+    if (b.action === 'refill' || b.action === 'repair'){
+      const id = b.id | 0;
+      const row = await DB.prepare('SELECT uid, data FROM villages WHERE id=?').bind(id).first();
+      if (!row || !JSON.parse(row.data).fort) throw ue('ไม่ใช่ป้อมหรือเมืองหลวง');
+      if (row.uid !== FORT_UID) throw ue('มีผู้เล่นยึดอยู่ ปรับไม่ได้');
+      const r = await patchV(env, id, d => {
+        d.troops = Object.assign(d.troops || {}, fortBase(d.cap));
+        if (b.action === 'repair'){
+          const L2 = d.cap ? 20 : 15;
+          d.wallLv = L2;
+          d.city[0] = { k:'main', level:L2 }; d.city[2] = { k:'warehouse', level:L2 }; d.city[3] = { k:'granary', level:L2 };
+          (d.fields || []).forEach(f => { f.level = 15; });
+          d.loy = 100; d.loyAt = t;
+        }
+      });
+      if (typeof r === 'string') throw ue(r);
+    }
+    const rows = (await DB.prepare('SELECT v.id, v.x, v.y, v.name, v.uid, v.data, p.name pn FROM villages v LEFT JOIN players p ON p.uid = v.uid WHERE v.data LIKE ? ORDER BY v.x, v.y')
+      .bind('%"fort":1%').all()).results || [];
+    const list = rows.map(r => {
+      const d = JSON.parse(r.data), L2 = d.cap ? 20 : 15;
+      return { id:r.id, x:r.x, y:r.y, name:r.name, npc:r.uid === FORT_UID, pn:r.pn || '', cap:!!d.cap,
+        troops:d.troops || {}, base:fortBase(d.cap), wall:d.wallLv || 0, L2, loy:Math.round(d.loy || 0),
+        city:(d.city || []).map(c => c && c.level ? { n:(BD[c.k] && BD[c.k].n) || c.k, lv:c.level } : null).filter(Boolean) };
+    });
+    const un = {};
+    for (const k in FORT_G) un[k] = (UNITS[k] && (UNITS[k].n || UNITS[k].name)) || k;
+    return json({ ok:true, pow:FPOW, list, un }, 200, env);
   }
   return json({ ok:false, err:'ไม่พบคำสั่งแอดมิน' }, 404, env);
 }
@@ -2477,6 +2514,13 @@ async function stationReturn(env, m){
   return true;
 }
 
+/* v15C — ลบฐานที่ไม่เหลือทหาร และไม่มีทัพที่ยังเดินทาง/กำลังกลับฐาน */
+async function stationSweep(env){
+  await env.DB.prepare(
+    "DELETE FROM stations WHERE NOT EXISTS (SELECT 1 FROM json_each(stations.troops) WHERE CAST(value AS INTEGER) > 0) " +
+    "AND NOT EXISTS (SELECT 1 FROM moves m WHERE m.st = stations.id AND m.state IN ('go','back'))"
+  ).run();
+}
 async function stationApi(p, b, env, uid){
   if (p.indexOf('/station/') !== 0) return null;
   const DB = env.DB, t = Date.now(), ok = o => json(Object.assign({ ok:true }, o || {}), 200, env);
@@ -2485,6 +2529,7 @@ async function stationApi(p, b, env, uid){
   if (me.banned) throw ue('บัญชีนี้ถูกระงับ');
 
   if (p === '/station/list'){
+    try { await stationSweep(env); } catch (e){}
     const q = 'SELECT s.*, hv.name AS hn, hp.name AS hpn, ov.name AS ovn, op.name AS opn FROM stations s LEFT JOIN villages hv ON hv.id=s.host_vid LEFT JOIN players hp ON hp.uid=s.host_uid LEFT JOIN villages ov ON ov.id=s.owner_vid LEFT JOIN players op ON op.uid=s.owner_uid WHERE ';
     const mine = (await DB.prepare(q + 's.owner_uid=? ORDER BY s.id').bind(uid).all()).results || [];
     const host = (await DB.prepare(q + 's.host_uid=? AND s.owner_uid<>? ORDER BY s.id').bind(uid, uid).all()).results || [];
@@ -3122,6 +3167,14 @@ const FORT_UID = '__fort__', FORT_NAME = 'ผู้พิทักษ์แผ�
 const FORT_NAMES = ['ป้อมอุดร','ป้อมอีสาน','ป้อมบูรพา','ป้อมอาคเนย์','ป้อมทักษิณ','ป้อมหรดี','ป้อมประจิม','ป้อมพายัพ'];
 const FORT_G = { u0_inf_d:1500, u0_inf_a:500, u0_cav_h:300 };
 const CAP_G  = { u0_inf_d:6000, u0_inf_a:2000, u0_cav_h:1500 };
+/* v15C — ระดับพลังป้อม/เมืองหลวง (meta 'fort_pow') */
+let FPOW = { fort:0, cap:0 };
+const POW_M = { '-2':0.5, '-1':0.75, '0':1, '1':1.25, '2':1.5 };
+function fortBase(cap){
+  const B = cap ? CAP_G : FORT_G, m = POW_M[String(cap ? FPOW.cap : FPOW.fort)] || 1, o = {};
+  for (const k in B) o[k] = Math.round(B[k] * m);
+  return o;
+}
 
 function nReal(arr, f){ let n = 0; for (const x of arr) if (!f(x).fort) n++; return n; }
 function fortClosed(){ return 'ป้อมเปิดวันที่ ' + FORT_DAY + ' · เมืองหลวงโลกเปิดวันที่ ' + CAP_DAY + ' ของเซิร์ฟเวอร์'; }
@@ -3151,7 +3204,7 @@ function fortData(x, y, cap, t){
   for (const [r, n] of [['wheat',14],['wood',2],['iron',2],['clay',2]]) for (let i = 0; i < n; i++) d.fields.push({ res:r, level:15 });
   d.city[0] = { k:'main', level:L2 }; d.city[2] = { k:'warehouse', level:L2 }; d.city[3] = { k:'granary', level:L2 };
   d.wallLv = L2; d.fort = 1; if (cap) d.cap = 1;
-  d.hero = null; d.troops = Object.assign({}, cap ? CAP_G : FORT_G);
+  d.hero = null; d.troops = fortBase(cap);
   for (const r of RES) d.res[r] = 5000;
   d.loy = 100; d.loyAt = t;
   return d;
@@ -3182,7 +3235,7 @@ async function regenForts(env, t){
     if (!d.troops) d.troops = {};
     d._away = 0;
     advance(d, t, P);
-    const B0 = d.cap ? CAP_G : FORT_G;
+    const B0 = fortBase(d.cap);
     for (const k in B0) d.troops[k] = Math.min(B0[k], (d.troops[k] || 0) + Math.ceil(B0[k] * 0.01 * SPEED));
     st.push(vUpd(env, r, d, t));
   }
@@ -4031,6 +4084,7 @@ async function tuneLoad(env, t){
   TUNE_C.at = t;
   try { tuneSet(JSON.parse((await getMeta(env, 'tune')) || '{}')); } catch (e){}
   try { const sp = await getMeta(env, 'speed'); speedSet(sp ? JSON.parse(sp) : null); } catch (e){}
+  try { const fp = await getMeta(env, 'fort_pow'); FPOW = fp ? JSON.parse(fp) : { fort:0, cap:0 }; } catch (e){}
 }
 
 /* ---------- สถิติสมดุล ---------- */
