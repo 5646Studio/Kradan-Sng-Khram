@@ -264,5 +264,6 @@ var LANG_EN = {
   'ปล่อยโอเอซิส':'Release oasis',
   'สั่งขุนพลของผู้เล่นอื่นไม่ได้':'You cannot command another player\'s chief',
   'กำลังเชื่อมต่อเซิร์ฟเวอร์':'Connecting to server',
-  'พิกัดโอเอซิสไม่ถูกต้อง':'Invalid oasis coordinates'
+  'พิกัดโอเอซิสไม่ถูกต้อง':'Invalid oasis coordinates',
+  'ยืนยัน':'Confirm', 'ตกลง':'OK', 'เรียกกองทัพกลับเมือง?':'Recall the army?'
 };

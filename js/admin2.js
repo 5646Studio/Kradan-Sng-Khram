@@ -239,12 +239,66 @@
         ' · วันที่ ' + (r.day || '?') + ' / ' + r.len;
     }, bad);
   }
+  /* ---------- 🏰 ป้อมและเมืองหลวง (v15C) ---------- */
+  var FPL = [[2,'+2 (150%)'],[1,'+1 (125%)'],[0,'ปกติ (100%)'],[-1,'−1 (75%)'],[-2,'−2 (50%)']];
+  function fpOpt(){ return FPL.map(function(o){ return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join(''); }
+  function fpCard(){
+    return '<b>🏰 ป้อมและเมืองหลวง</b>' +
+      '<div class="a2row"><span>🏰 พลังป้อมทั้ง 8</span><select id="fpF" style="width:130px;margin:0">' + fpOpt() + '</select></div>' +
+      '<div class="a2row"><span>👑 พลังเมืองหลวง</span><select id="fpC" style="width:130px;margin:0">' + fpOpt() + '</select></div>' +
+      '<button class="btn b1" id="fpSave">💾 ตั้งระดับพลัง</button><button class="btn b3" id="fpRe">🔄 โหลดสถานะ</button>' +
+      '<div id="fpMsg" style="font-size:11.5px;margin-top:4px"></div><div id="fpList" style="margin-top:6px">กำลังโหลด…</div>';
+  }
+  function fpBar(c, m){
+    var p = m ? Math.round(c / m * 100) : 0, col = p >= 70 ? '#7fd17f' : p >= 35 ? '#ffcf40' : '#ff7a5a';
+    return '<div class="gfbar" style="margin:2px 0 4px"><i style="width:' + Math.min(100, p) + '%;background:' + col + '"></i></div>';
+  }
+  function fpPaint(r){
+    if (!r || !r.ok){ $('fpList').textContent = (r && r.err) || 'โหลดไม่สำเร็จ'; return; }
+    $('fpF').value = r.pow.fort || 0; $('fpC').value = r.pow.cap || 0;
+    if (!r.list.length){ $('fpList').innerHTML = '<div class="a2h">ยังไม่มีป้อมหรือเมืองหลวง (เปิดตามวันในฤดูกาล)</div>'; return; }
+    $('fpList').innerHTML = r.list.sort(function(a, b){ return b.cap - a.cap; }).map(function(f){
+      var tc = 0, tm = 0;
+      var tr = Object.keys(f.base).map(function(k){
+        var c = f.troops[k] || 0, m = f.base[k]; tc += c; tm += m;
+        return '<tr><td>' + esc(r.un[k] || k) + '</td><td>' + fmt(c) + ' / ' + fmt(m) + '</td><td>' + (m ? Math.round(c / m * 100) : 0) + '%</td></tr>';
+      }).join('');
+      return '<div class="a2h" style="border-left-color:' + (f.npc ? '#ffcf40' : '#ff7a5a') + '">' +
+        '<b>' + (f.cap ? '👑 ' : '🏰 ') + esc(f.name) + '</b> (' + f.x + '|' + f.y + ') · ' +
+        (f.npc ? 'NPC' : '🚩 ' + esc(f.pn || '?')) + ' · ❤ ภักดี ' + f.loy + '%' +
+        '<div style="margin-top:4px">⚔ ทหารรวม ' + fmt(tc) + ' / ' + fmt(tm) + '</div>' + fpBar(tc, tm) +
+        '<table class="a2tb">' + tr + '</table>' +
+        '🧱 กำแพง Lv.' + f.wall + ' / ' + f.L2 + fpBar(f.wall, f.L2) +
+        '<div style="font-size:10.5px;color:#b9ac92">🏛 ' + (f.city.map(function(c){ return esc(c.n) + ' Lv.' + c.lv; }).join(' · ') || 'อาคารถูกทำลายหมด') + '</div>' +
+        (f.npc ? '<button class="btn b3" data-fa="refill" data-id="' + f.id + '">⚔ เติมทหารเต็ม</button>' +
+          '<button class="btn red" data-fa="repair" data-id="' + f.id + '">🔧 ซ่อมทั้งหมด</button>' : '') + '</div>';
+    }).join('');
+  }
+  function loadForts(){ $('fpList').textContent = 'กำลังโหลด…'; Api.post('/admin/forts', { action:'list' }).then(fpPaint); }
+  function fpBind(){
+    $('fpRe').onclick = loadForts;
+    $('fpSave').onclick = function(){
+      var f = +$('fpF').value, c = +$('fpC').value;
+      if (!confirm('ตั้งพลังป้อม ' + (f > 0 ? '+' : '') + f + ' · เมืองหลวง ' + (c > 0 ? '+' : '') + c + ' ?\nถ้าลดระดับ ทหารส่วนเกินจะถูกตัดทันที')) return;
+      Api.post('/admin/forts', { action:'pow', fort:f, cap:c }).then(function(r){
+        say('fpMsg', r && r.ok ? '✔ ตั้งแล้ว' : esc(r && r.err), r && r.ok); fpPaint(r);
+      });
+    };
+    $('fpList').onclick = function(e){
+      var b = e.target.closest('[data-fa]'); if (!b) return;
+      var a = b.dataset.fa;
+      if (!confirm(a === 'repair' ? 'ซ่อมทั้งหมด: กำแพง อาคาร หลุมทรัพยากร ความภักดี และเติมทหารเต็ม?' : 'เติมทหารให้เต็ม?')) return;
+      Api.post('/admin/forts', { action:a, id:+b.dataset.id }).then(function(r){
+        say('fpMsg', r && r.ok ? '✔ เรียบร้อย' : esc(r && r.err), r && r.ok); if (r && r.ok) fpPaint(r);
+      });
+    };
+  }
   /* ---------- แท็บ ---------- */
   function lazy(t){
     if (loaded[t]) return;
     loaded[t] = 1;
     if (t === 'ov'){ loadStats(); loadSpeed(); }
-    if (t === 'bt') loadTune();
+    if (t === 'bt'){ loadTune(); loadForts(); }
   }
   function show(t){
     if (!$('p-' + t)) t = 'ov';
@@ -284,6 +338,8 @@
     $('p-bt').appendChild(mk('div', 'card', '<b>🎛 ปรับค่าเกม</b><p style="font-size:10.5px;color:#7a6c4e;margin:4px 0">มีผลภายใน 1 นาที · ช่องว่าง = ค่าเริ่มต้น</p>' +
       '<div id="a2tu">กำลังโหลด…</div><button class="btn b1" id="a2tuSave">💾 บันทึก</button>' +
       '<button class="btn red" id="a2tuReset">↺ กลับค่าเริ่มต้นทั้งหมด</button><div id="a2tuMsg" style="font-size:11px;margin-top:4px"></div>'));
+    $('p-bt').appendChild(mk('div', 'card', fpCard()));
+    fpBind();
     /* การ์ดแจกทอง — บนสุดของแท็บการเงิน */
     var gd = $('p-gd');
     if (gd){ var gc = mk('div', 'card', gfCard()); gd.insertBefore(gc, gd.firstChild); gfBind(); }

@@ -1,4 +1,4 @@
-/* ============ oaslist v15A — ปุ่ม 🌴 โอเอซิสของฉัน + ข้อมูลผู้ครอง (ใช้ร่วมกับ render.js) ============ */
+/* ============ oaslist v15C — ปุ่ม 🌴 โอเอซิสของฉัน + ข้อมูลผู้ครอง (ใช้ร่วมกับ render.js) ============ */
 (function(){
   function $(i){ return document.getElementById(i); }
   function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
@@ -34,10 +34,22 @@
     '#oaBox .oaX{margin-left:6px;padding:6px 10px;border-radius:8px;background:rgba(160,40,30,.35);color:#ff9a8a;font-size:12px;font-weight:700}';
   document.head.appendChild(css);
 
+  /* v15C — นับเฉพาะโอเอซิสของ ID ที่ล็อกอิน (ใช้ข้อมูลเซิร์ฟเวอร์เป็นหลัก) */
+  function myUid(){ try { return window.Net && Net.uid ? String(Net.uid()) : ''; } catch(e){ return ''; } }
+  function isMine(o){
+    if (!o) return false;
+    if (myUid() && String(o.uid) === myUid()) return true;
+    return (Game.villages || []).some(function(v){ return String(v.id) === String(o.vid); });
+  }
+  window.OasisMine = isMine;
   function keys(){
     var K = {};
-    Object.keys((window.Game && Game.oasis) || {}).forEach(function(k){ K[k] = 1; });
     (Game.villages || []).forEach(function(v){ (v.oa || []).forEach(function(o){ if (o && o.k) K[o.k] = 1; }); });
+    if (W.ok){
+      Object.keys(W.oa).forEach(function(k){ if (isMine(W.oa[k])) K[k] = 1; });
+    } else {
+      Object.keys((window.Game && Game.oasis) || {}).forEach(function(k){ K[k] = 1; });   /* ยังโหลดไม่เสร็จ */
+    }
     return Object.keys(K);
   }
   function list(){
@@ -52,7 +64,6 @@
       var wo = W.oa[k], gv = Game.oasis && Game.oasis[k];
       var vid = wo ? wo.vid : (gv && typeof gv === 'object' ? gv.vid : gv);
       if (!vn && vid != null) (Game.villages || []).forEach(function(v){ if (String(v.id) === String(vid)) vn = v.name; });
-      if (!vn && vid != null && W.vn[vid]) vn = W.vn[vid].vn;
       if (!type || !pct){
         try { var t = World.tile(x, y); if (t && t.oasis){ type = type || t.oasis.type; pct = pct || t.oasis.pct; } } catch(e){}
       }
@@ -121,7 +132,9 @@
     b.innerHTML = '🌴<i></i>';
     zo.parentNode.insertBefore(b, zo.nextSibling);
     b.onclick = function(e){ e.stopPropagation(); open(); };
-    count(); setInterval(count, 3000);
+    world(count);
+    setInterval(count, 3000);
+    setInterval(function(){ W.at = 0; world(count); }, 60000);   /* ดึงข้อมูลผู้ครองใหม่ทุก 1 นาที */
   }
   start();
 })();
