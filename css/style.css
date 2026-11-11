@@ -1041,3 +1041,10 @@ body.day #modalbox .mvgrid button{background:#fffaf0!important;color:#8a5a00!imp
   background:rgba(160,40,30,.35);color:#ff9a8a;font-size:14px;font-weight:700;cursor:pointer;flex:0 0 auto}
 .tp-x:active{background:rgba(200,50,40,.6)}
 
+/* v15D — โปรไฟล์: ปุ่มกลับหน้าหลัก · บรรทัดแจกแจงทหาร */
+.pf-head{position:relative}
+.pf-head .pf-id{padding-right:46px}
+.pf-home{position:absolute;top:10px;right:10px;width:42px;height:42px;border-radius:12px;border:1px solid #6a5530;
+  background:linear-gradient(#3a2e1e,#241a10);font-size:20px;line-height:1;cursor:pointer;box-shadow:0 2px 0 #120c06}
+.pf-home:active{transform:translateY(1px)}
+.pf-trd{font-size:11px;color:#9a8a6a;text-align:center;margin:-4px 0 8px}
