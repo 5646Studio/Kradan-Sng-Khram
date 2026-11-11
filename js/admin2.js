@@ -256,8 +256,10 @@
   function fpPaint(r){
     if (!r || !r.ok){ $('fpList').textContent = (r && r.err) || 'โหลดไม่สำเร็จ'; return; }
     $('fpF').value = r.pow.fort || 0; $('fpC').value = r.pow.cap || 0;
-    if (!r.list.length){ $('fpList').innerHTML = '<div class="a2h">ยังไม่มีป้อมหรือเมืองหลวง (เปิดตามวันในฤดูกาล)</div>'; return; }
-    $('fpList').innerHTML = r.list.sort(function(a, b){ return b.cap - a.cap; }).map(function(f){
+    var capNote = r.list.some(function(f){ return f.cap; }) ? '' :
+      '<div class="a2h">👑 เมืองหลวงยังไม่เปิด · จะปรากฏวันที่ ' + (r.capDay || '?') + ' ของฤดูกาล (ตั้งระดับพลังไว้ล่วงหน้าได้)</div>';
+    if (!r.list.length){ $('fpList').innerHTML = capNote + '<div class="a2h">🏰 ป้อมยังไม่เปิด · จะปรากฏวันที่ ' + (r.fortDay || '?') + '</div>'; return; }
+    $('fpList').innerHTML = capNote + r.list.sort(function(a, b){ return b.cap - a.cap; }).map(function(f){
       var tc = 0, tm = 0;
       var tr = Object.keys(f.base).map(function(k){
         var c = f.troops[k] || 0, m = f.base[k]; tc += c; tm += m;

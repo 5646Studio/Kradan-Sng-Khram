@@ -77,4 +77,50 @@
     box(String(msg == null ? '' : msg), false, null);
   };
   window.GameDialog = { ask:function(m, cb){ box(String(m), true, cb); }, tell:function(m){ box(String(m), false, null); } };
+  /* ---------- v15D — รายการเลือก (select) แบบธีมเกม ---------- */
+  var css2 = document.createElement('style');
+  css2.textContent =
+    '#gSel{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;animation:gDf .15s}' +
+    '#gSel .in{width:min(94vw,440px);max-height:70vh;overflow:auto;margin-bottom:14px;background:linear-gradient(#2a2016,#1a130b);' +
+    'border:2px solid #c9a24a;border-radius:16px;padding:6px;box-shadow:0 10px 40px rgba(0,0,0,.7)}' +
+    '#gSel .o{padding:13px 12px;border-radius:10px;color:#f3e6c8;font-size:15px;line-height:1.4;display:flex;align-items:center;gap:10px;cursor:pointer}' +
+    '#gSel .o+.o{border-top:1px solid rgba(201,162,74,.18)}' +
+    '#gSel .o.on{background:rgba(255,207,64,.14);color:#ffcf40;font-weight:700}' +
+    '#gSel .o.on::after{content:"✔";margin-left:auto}#gSel .o.dis{opacity:.4}';
+  document.head.appendChild(css2);
+
+  var selOpen = false;
+  function pick(sel){
+    if (selOpen || sel.disabled) return;
+    selOpen = true;
+    var w = document.createElement('div'); w.id = 'gSel';
+    var h = '<div class="in">';
+    Array.prototype.forEach.call(sel.options, function(o, i){
+      h += '<div class="o' + (i === sel.selectedIndex ? ' on' : '') + (o.disabled ? ' dis' : '') + '" data-i="' + i + '"></div>';
+    });
+    w.innerHTML = h + '</div>';
+    var os = w.querySelectorAll('.o');
+    Array.prototype.forEach.call(sel.options, function(o, i){ os[i].textContent = o.textContent; });
+    document.body.appendChild(w);
+    var on = w.querySelector('.on'); if (on) on.scrollIntoView({ block:'nearest' });
+    w.onclick = function(e){
+      e.stopPropagation();
+      var o = e.target.closest('.o');
+      if (o && o.classList.contains('dis')) return;
+      w.remove(); setTimeout(function(){ selOpen = false; }, 300);
+      if (!o) return;
+      var i = +o.dataset.i;
+      if (i !== sel.selectedIndex){
+        sel.selectedIndex = i;
+        sel.dispatchEvent(new Event('input', { bubbles:true }));
+        sel.dispatchEvent(new Event('change', { bubbles:true }));
+      }
+    };
+  }
+  function isSel(t){
+    var s = t && t.closest && t.closest('select');
+    return s && !s.multiple && !s.hasAttribute('data-native') ? s : null;
+  }
+  document.addEventListener('mousedown', function(e){ var s = isSel(e.target); if (!s) return; e.preventDefault(); pick(s); }, true);
+  document.addEventListener('focusin', function(e){ var s = isSel(e.target); if (!s) return; s.blur(); pick(s); }, true);
 })();

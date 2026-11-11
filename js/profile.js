@@ -16,6 +16,30 @@ var Profile = (function(){
   applyTheme();
   setInterval(applyTheme, 300000);
   function stat(ic, v, lb){ return '<div class="pf-st"><span>' + ic + '</span><b>' + v + '</b><i>' + lb + '</i></div>'; }
+  /* v15D — ทหารทั้งหมด = ในเมือง + ประจำการที่อื่น + กำลังเดินทาง */
+  function sumT(o){ var n = 0; for (var k in (o || {})) n += (o[k] | 0); return n; }
+  function pfTroops(home){
+    var me = ''; try { me = String(Net.uid()); } catch(e){}
+    var mv = 0;
+    (Game.movements || []).forEach(function(m){
+      if (!m || !m.troops) return;
+      if (m.uid != null ? String(m.uid) !== me : (m.incoming || m.enemy || m.hostile)) return;   /* ไม่นับทัพศัตรูที่กำลังมา */
+      mv += sumT(m.troops);
+    });
+    function put(st, ok){
+      var b = document.querySelector('#pfTr b'), d = document.getElementById('pfTrD');
+      if (!b) return;
+      b.textContent = UI.fmt(home + st + mv);
+      if (d) d.textContent = '🏠 ในเมือง ' + UI.fmt(home) + ' · 🛡 ประจำการที่อื่น ' + (ok ? UI.fmt(st) : '…') + ' · 🚶 เดินทาง ' + UI.fmt(mv);
+    }
+    put(0, false);
+    if (!window.Api) return;
+    Api.post('/station/list', {}).then(function(r){
+      var L = (r && (r.mine || r.list || r.stations || r.out)) || (Array.isArray(r) ? r : []), st = 0;
+      L.forEach(function(s){ if (s) st += sumT(s.troops); });   /* mine = ทหารของเราที่ประจำการอยู่ตามเมืองต่าง ๆ (เก็บแยกจากทหารในเมือง) */
+      put(st, true);
+    }, function(){ put(0, true); });
+  }
   function li(id, ic, tx, ex){ return '<button class="pf-li" id="' + id + '"><span>' + ic + '</span>' + tx + (ex || '') + '<em>›</em></button>'; }
   function on(id, fn){ var e = $(id); if (e) e.onclick = fn; }
 
@@ -47,11 +71,15 @@ var Profile = (function(){
       ['pq8', '💳', 'เติมทอง', function(){ if (typeof Shop !== 'undefined') Shop.open(); }, true]
     ].filter(function(q){ return q[4]; });
 
-    var h = '<div class="pf"><div class="pf-head"><div class="pf-av">' + av + '</div><div class="pf-id"><b>' + esc(G.name) +
-      (tag ? ' <span class="gt">[' + esc(tag) + ']</span>' : '') + '</b><i>เผ่า' + tribe + ' · เซิร์ฟเวอร์ ' + CFG.SERVER_NAME + '</i>' +
+    var h = '<div class="pf"><div class="pf-head"><button class="pf-home" id="pfHome" title="กลับหน้าหลัก">🏠</button>' +
+      '<div class="pf-av">' + av + '</div><div class="pf-id"><b>' + esc(G.name) +
+      (tag ? ' <span class="gt">[' + esc(tag) + ']</span>' : '') + '</b><i>เผ่า' + tribe + ' · เซิร์ฟเวอร์ ' +
+      esc(window.srvLabel ? srvLabel() : CFG.SERVER_NAME) + '</i>' +
       (typeof Season !== 'undefined' ? Season.line() : '') + '</div></div>' +
       '<div class="pf-stats">' + stat('🏘', vs.length, 'เมือง') + stat('👥', UI.fmt(pop), 'ประชากร') +
-      stat('💰', UI.fmt(G.gold), 'ทอง') + stat('⚔', UI.fmt(tr), 'ทหาร') + '</div>' +
+      stat('💰', UI.fmt(G.gold), 'ทอง') +
+      '<div class="pf-st" id="pfTr"><span>⚔</span><b>' + UI.fmt(tr) + '</b><i>ทหารทั้งหมด</i></div></div>' +
+      '<div class="pf-trd" id="pfTrD">กำลังนับทหารที่อยู่นอกเมือง…</div>' +
       '<div class="pf-cp"><div class="pf-cph"><span>🎭 Culture Points</span><b>' + UI.fmt(cp) + ' / ' + UI.fmt(next) + '</b></div>' +
       '<div class="hbar"><i style="width:' + pct + '%;background:#c9a24a"></i><span>เมืองที่ ' + (vs.length + 1) + ' · ' + eta +
       '</span></div><div class="pf-sub">+' + UI.fmt(rate) + ' CP/วัน</div></div>' +
@@ -64,6 +92,11 @@ var Profile = (function(){
       li('pfBug', '🐞', 'แจ้งปัญหา') + li('pfSet', '⚙', 'ตั้งค่า') + '</div></div>' +
       '<button class="btn-cancel" onclick="UI.close()">ปิด</button>';
     UI.modal(h);
+    var hb = document.getElementById('pfHome');
+    if (hb) hb.onclick = function(){
+      if (confirm('กลับไปหน้าหลัก?')) location.href = 'index.html';
+    };
+    pfTroops(tr);
     Q.forEach(function(q){ on(q[0], q[3]); });
     on('pfSea', function(){ if (typeof Season !== 'undefined' && online()) Season.open(); else if (typeof Conquest !== 'undefined') Conquest.openEndgame(); });
     on('pfHof', function(){ if (typeof B7 !== 'undefined') B7.hof(); });

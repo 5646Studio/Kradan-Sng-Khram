@@ -265,5 +265,8 @@ var LANG_EN = {
   'สั่งขุนพลของผู้เล่นอื่นไม่ได้':'You cannot command another player\'s chief',
   'กำลังเชื่อมต่อเซิร์ฟเวอร์':'Connecting to server',
   'พิกัดโอเอซิสไม่ถูกต้อง':'Invalid oasis coordinates',
-  'ยืนยัน':'Confirm', 'ตกลง':'OK', 'เรียกกองทัพกลับเมือง?':'Recall the army?'
+  'ยืนยัน':'Confirm', 'ตกลง':'OK', 'เรียกกองทัพกลับเมือง?':'Recall the army?',
+  'ทหารทั้งหมด':'Total troops', 'ในเมือง':'At home', 'ประจำการที่อื่น':'Stationed elsewhere', 'เดินทาง':'Marching',
+  'กำลังนับทหารที่อยู่นอกเมือง':'Counting troops outside the village', 'กลับไปหน้าหลัก?':'Return to the main menu?',
+  'ฝึกหน่วยนี้ไม่ได้':'cannot train this unit', 'ค่ายทหารหลวง':'Great Barracks', 'คอกม้าหลวง':'Great Stable'
 };
