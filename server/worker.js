@@ -428,21 +428,26 @@ function SJ(d){ return JSON.stringify(d, (k, v) => (k && k[0] === '_') ? undefin
 
 /* ---------- ฝึกทหาร ---------- */
 function eachSec(u, bl){ return Math.max(5, Math.round(u.time * Math.pow(0.9, bl - 1) / SPEED)); }
-function trainUnits(d, tribe, t, id, n){
+function trainUnits(d, tribe, t, id, n, bk){
   if (d.fort) throw ue('ฝึกทหารในป้อมไม่ได้ ให้ส่งกำลังหนุนมาประจำการแทน');
   const u = UNITS[id];
   if (!u || u.tribe !== tribe) throw ue('ไม่พบหน่วยนี้ในเผ่าของคุณ');
   n = Math.floor(n);
   if (!(n > 0) || n > 5000) throw ue('จำนวนต้องอยู่ระหว่าง 1 - 5,000');
-  const bl = u.type === 'settle' ? Math.max(lvl(d, 'residence'), lvl(d, 'palace')) : lvl(d, u.bld);
-  if (bl < 1) throw ue('ต้องสร้าง' + BD[u.bld].n + 'ก่อน');
-  if (bl < u.lv) throw ue('ต้องมี' + BD[u.bld].n + 'ระดับ ' + u.lv);
+  /* v15D — ค่ายทหารหลวง / คอกม้าหลวง: คิวแยก · ราคา x3 */
+  const GREAT = { greatbarracks:'barracks', greatstable:'stable' };
+  const great = bk && GREAT[bk] ? bk : null;
+  if (great && u.bld !== GREAT[great]) throw ue(BD[great].n + 'ฝึกหน่วยนี้ไม่ได้');
+  const qk = great || u.bld, mul = great ? 3 : 1;
+  const bl = u.type === 'settle' ? Math.max(lvl(d, 'residence'), lvl(d, 'palace')) : lvl(d, qk);
+  if (bl < 1) throw ue('ต้องสร้าง' + BD[qk].n + 'ก่อน');
+  if (u.type !== 'settle' && lvl(d, u.bld) < u.lv) throw ue('ต้องมี' + BD[u.bld].n + 'ระดับ ' + u.lv);
   if (u.req && lvl(d, u.req[0]) < u.req[1]) throw ue('ต้องมี' + BD[u.req[0]].n + 'ระดับ ' + u.req[1]);
-  for (const r of RES) if (d.res[r] + 1e-6 < u.cost[r] * n) throw ue('ทรัพยากรไม่พอ');
-  for (const r of RES) d.res[r] -= u.cost[r] * n;
+  for (const r of RES) if (d.res[r] + 1e-6 < u.cost[r] * n * mul) throw ue('ทรัพยากรไม่พอ');
+  for (const r of RES) d.res[r] -= u.cost[r] * n * mul;
   const each = eachSec(u, bl) * 1000;
   if (!d.train) d.train = {};
-  const q = d.train[u.bld] || (d.train[u.bld] = []);
+  const q = d.train[qk] || (d.train[qk] = []);
   const last = q[q.length - 1];
   const start = last ? last.next + last.each * (last.left - 1) : t;
   q.push({ u:id, n, left:n, each, next:Math.max(start, t) + each });
@@ -669,7 +674,7 @@ async function route(req, env){
       if (/[<>]/.test(nm)) throw ue('ห้ามใช้อักขระ < >');
       V.row.name = nm; V.dirty = true;
     },
-    '/train': ctx => { const V = findV(ctx, b.vid); trainUnits(V.d, ctx.P.tribe, ctx.t, String(b.u || ''), b.n); V.dirty = true; },
+    '/train': ctx => { const V = findV(ctx, b.vid); trainUnits(V.d, ctx.P.tribe, ctx.t, String(b.u || ''), b.n, String(b.bld || '')); V.dirty = true; },
     '/train/cancel': ctx => { const V = findV(ctx, b.vid); const n = trainCancel(V.d, ctx.t, String(b.bld || ''), b.idx | 0); V.dirty = true; return { n }; },
     '/send': ctx => sendArmy(ctx, env, b),
     /* v14Z — เรียกทัพกลับภายใน 1 นาทีหลังออกเดินทาง */
@@ -1269,7 +1274,7 @@ async function admin(p, b, q, env, by){
     });
     const un = {};
     for (const k in FORT_G) un[k] = (UNITS[k] && (UNITS[k].n || UNITS[k].name)) || k;
-    return json({ ok:true, pow:FPOW, list, un }, 200, env);
+    return json({ ok:true, pow:FPOW, list, un, capDay:CAP_DAY, fortDay:FORT_DAY }, 200, env);
   }
   return json({ ok:false, err:'ไม่พบคำสั่งแอดมิน' }, 404, env);
 }
@@ -2673,7 +2678,7 @@ async function trainEx(ctx, env, b){
     for (const s of (sr.results || [])) have += (JSON.parse(s.troops || '{}')[u.id] || 0);
     if (have + n > cap) throw ue('มีขุนพลได้สูงสุด ' + cap + ' นาย (พระราชวัง Lv.5/10/15/20 → 1/2/3/4) · นับรวมขุนพลที่ประจำการต่างเมืองด้วย');
   }
-  trainUnits(d, ctx.P.tribe, ctx.t, String(b.u || ''), b.n);
+  trainUnits(d, ctx.P.tribe, ctx.t, String(b.u || ''), b.n, String(b.bld || ''));
   V.dirty = true;
 }
 
