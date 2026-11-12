@@ -450,7 +450,7 @@ function trainUnits(d, tribe, t, id, n, bk){
   const q = d.train[qk] || (d.train[qk] = []);
   const last = q[q.length - 1];
   const start = last ? last.next + last.each * (last.left - 1) : t;
-  q.push({ u:id, n, left:n, each, next:Math.max(start, t) + each });
+  q.push({ u:id, n, left:n, each, next:Math.max(start, t) + each, mul });
 }
 
 /* ---------- การรบ ---------- */
@@ -2437,7 +2437,7 @@ function trainCancel(d, t, bk, idx){
   const q = d.train && d.train[bk];
   if (!q || !q[idx]) throw ue('ไม่พบรายการฝึก');
   const j = q[idx], u = UNITS[j.u], c = caps(d);
-  for (const r of RES) d.res[r] = Math.min(r === 'wheat' ? c.gran : c.store, d.res[r] + (u ? u.cost[r] * j.left : 0));
+  for (const r of RES) d.res[r] = Math.min(r === 'wheat' ? c.gran : c.store, d.res[r] + (u ? u.cost[r] * j.left * (j.mul || 1) : 0));
   q.splice(idx, 1);
   for (let i = idx; i < q.length; i++){
     const p = q[i - 1];
