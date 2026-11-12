@@ -268,5 +268,6 @@ var LANG_EN = {
   'ยืนยัน':'Confirm', 'ตกลง':'OK', 'เรียกกองทัพกลับเมือง?':'Recall the army?',
   'ทหารทั้งหมด':'Total troops', 'ในเมือง':'At home', 'ประจำการที่อื่น':'Stationed elsewhere', 'เดินทาง':'Marching',
   'กำลังนับทหารที่อยู่นอกเมือง':'Counting troops outside the village', 'กลับไปหน้าหลัก?':'Return to the main menu?',
-  'ฝึกหน่วยนี้ไม่ได้':'cannot train this unit', 'ค่ายทหารหลวง':'Great Barracks', 'คอกม้าหลวง':'Great Stable'
+  'ฝึกหน่วยนี้ไม่ได้':'cannot train this unit', 'ค่ายทหารหลวง':'Great Barracks', 'คอกม้าหลวง':'Great Stable',
+  'เข้าคิวฝึก':'Queued for training', 'ต้นทุนต่อนาย 3 เท่า แต่ฝึกพร้อมกับค่ายปกติได้':'Cost per unit x3, but trains alongside the normal building'
 };
