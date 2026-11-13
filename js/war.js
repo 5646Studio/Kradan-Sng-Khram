@@ -1,10 +1,11 @@
 /* ============ War v14b — ฝึกทหาร / ส่งกองทัพ / รายงาน (ออนไลน์) ============ */
 var War = (function(){
   var R = { units:[], byId:{} }, ORIG = {}, inst = false, lastArr = 0, REP = [];
-  var IC = { inf_a:'⚔️', inf_d:'🛡️', inf_x:'🗡️', scout:'👁️', cav_l:'🐎', cav_h:'🐘', ram:'🐏' };
+  var IC = { inf_a:'⚔️', inf_d:'🛡️', inf_x:'🗡️', scout:'👁️', cav_l:'🐎', cav_h:'🐘', ram:'🐏', cata:'💣' };
   var MIS = { attack:{ ic:'⚔️', name:'โจมตี' }, raid:{ ic:'💰', name:'ปล้น' },
               scout:{ ic:'👁️', name:'สอดแนม' }, support:{ ic:'🛡️', name:'เสริมทัพ' }, settle:{ ic:'🏘️', name:'ตั้งเมืองใหม่' }, trade:{ ic:'🐫', name:'ส่งสินค้า' } };
-  var BLD_OK = { barracks:1, stable:1, workshop:1, residence:1, palace:1 };
+  var BLD_OK = { barracks:1, stable:1, workshop:1, residence:1, palace:1, greatbarracks:1, greatstable:1 };
+  var GREAT = { greatbarracks:'barracks', greatstable:'stable' };   /* v15F — ค่ายหลวง → หน่วยของค่ายปกติ */
 
   function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
     return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
@@ -45,31 +46,35 @@ var War = (function(){
 
   /* ---------- ฝึกทหาร ---------- */
   function openTrain(bk){
+    var h0 = '';
     if (!BLD_OK[bk]){
       return Sync.soon(bk === 'residence' || bk === 'palace' ? 'ฝึกผู้ตั้งถิ่นฐาน / ขุนพล' : 'ค่ายหลวง');
     }
     var v = V(); refresh(v);
-    var bl = cityLevel(v, bk), B = BUILDINGS[bIndex(bk)];
+    var src = GREAT[bk] || bk, mul = GREAT[bk] ? 3 : 1;
+    var bl = cityLevel(v, bk), sl = cityLevel(v, src), B = BUILDINGS[bIndex(bk)], SB = BUILDINGS[bIndex(src)];
+    if (mul > 1) h0 = '<div class="infobox">👑 ต้นทุนต่อนาย 3 เท่า แต่ฝึกพร้อมกับ' + SB.name + 'ได้ · หน่วยที่ฝึกได้ขึ้นกับเลเวล' + SB.name + '</div>';
     var h = '<h3>' + B.ic + ' ' + B.name + ' Lv.' + bl + '</h3>';
     if (bl < 1) h += '<div class="bc-lock">🔒 ยังไม่ได้สร้าง' + B.name + '</div>';
+    h += h0;
     if ((bk === 'residence' || bk === 'palace') && v.srvExp){
     var E = v.srvExp;
       h += '<div class="infobox">🏘️ ช่องขยายเมือง <b>' + Math.max(0, E.slots - E.used) + '/' + E.slots + '</b> (ใช้ไปแล้ว ' + E.used +
         ')<br>คฤหาสน์/พระราชวัง Lv.5/10/15/20 → 1/2/3/4 ช่อง · ช่องละ 3 นาย · ส่ง 3 นายต่อ 1 เมือง' +
         (bk === 'palace' ? '<br>👑 ขุนพลสูงสุด <b>' + E.chief + '</b> นาย (พระราชวัง Lv.5/10/15/20 → 1/2/3/4)' : '') + '</div>';
     }
-    myUnits(bk).forEach(function(u){
-      var why = bl < u.lv ? 'ต้องมี' + B.name + 'ระดับ ' + u.lv
+    myUnits(src).forEach(function(u){
+      var why = bl < 1 ? 'ยังไม่ได้สร้าง' + B.name : sl < u.lv ? 'ต้องมี' + SB.name + 'ระดับ ' + u.lv
         : (u.req && cityLevel(v, u.req[0]) < u.req[1])
           ? 'ต้องมี' + BUILDINGS[bIndex(u.req[0])].name + 'ระดับ ' + u.req[1] : null;
       var mx = 99999;
-      RES.forEach(function(r){ if (u.cost[r] > 0) mx = Math.min(mx, Math.floor(v.res[r] / u.cost[r])); });
+      RES.forEach(function(r){ if (u.cost[r] > 0) mx = Math.min(mx, Math.floor(v.res[r] / (u.cost[r] * mul))); });
       mx = Math.max(0, Math.min(5000, mx));
       h += '<div class="ucard' + (why ? ' lockcard' : '') + '"><div class="uhead"><b>' + icon(u) + ' ' + esc(u.name) +
         '</b><span class="ustat">⚔ ' + u.atk + ' · 🛡 ' + u.di + '/' + u.dc + '<br>🐾 ' + u.spd +
         ' · 📦 ' + u.carry + ' · 🌾 ' + u.up + '/ชม.</span></div>' +
         '<div class="ucost">' + RES.map(function(r){
-          return '<span' + (v.res[r] < u.cost[r] ? ' class="lack"' : '') + '>' + RES_IC[r] + fmt(u.cost[r]) + '</span>';
+          return '<span' + (v.res[r] < u.cost[r] * mul ? ' class="lack"' : '') + '>' + RES_IC[r] + fmt(u.cost[r] * mul) + '</span>';
         }).join('') + '<span>⏱ ' + UI.dur(eachSec(u, Math.max(1, bl))) + '/นาย</span></div>' +
         (why ? '<div class="bc-lock">🔒 ' + why + '</div>'
              : '<div class="urow"><input type="number" min="0" max="' + mx + '" value="0" id="tn_' + u.id + '">' +
@@ -106,7 +111,7 @@ var War = (function(){
         var id = b.dataset.tr, n = parseInt(document.getElementById('tn_' + id).value, 10) || 0;
         if (n < 1) return alert('ใส่จำนวนที่ต้องการฝึก');
         b.disabled = true;
-        Sync.cmd('/train', { vid:v.id, u:id, n:n }, function(r){
+        Sync.cmd('/train', { vid:v.id, u:id, n:n, bld:bk }, function(r){
           b.disabled = false;
           if (r && r.ok){ Sync.toast('⚔️ เริ่มฝึก ' + unit(id).name + ' ×' + n); openTrain(bk); }
         });
@@ -141,7 +146,7 @@ var War = (function(){
     var mx = rallySlots(rl);
     var h = '<h3>⚔ ส่งกองทัพ — ' + esc(v.name) + '</h3>' +
       '<div class="rbar"><span>ลานรวมพล Lv.' + rl + '</span><b>ขบวนที่ออกไป ' + used + '/' + mx + '</b></div>';
-    if (!L.length) h += '<p class="stnone">ไม่มีทหารในเมือง — ฝึกได้ที่ค่ายทหาร / คอกม้า / โรงงาน</p>';
+    if (!L.length) h += '<p class="stnone">ไม่มีทหารในเมือง — ฝึกได้ที่ค่ายทหาร / คอกม้า / ค่ายปืนใหญ่</p>';
     else {
       h += '<div class="tgrid2">';
       L.forEach(function(u){
@@ -318,6 +323,7 @@ var War = (function(){
     if (d.loy) h += '<div class="rpt-g">🏳️ ความภักดี ' + d.loy.a + '% → <b>' + d.loy.b + '%</b>' +
        (d.captured ? ' · <b style="color:#ffcf40">👑 ยึดเมืองสำเร็จ!</b>' : '') + (d.loy.why ? '<br>✖ ' + esc(d.loy.why) : '') + '</div>';
     if (d.wall) h += '<div class="rpt-g">🧱 กำแพง Lv.' + d.wall[0] + ' → Lv.' + d.wall[1] + '</div>';
+    if (d.cata) h += '<div class="rpt-g">💣 ปืนใหญ่ยิง ' + esc(d.cata[0]) + ' Lv.' + d.cata[1] + ' → <b>Lv.' + d.cata[2] + '</b>' + (d.cata[2] <= 0 ? ' · พังทั้งหลัง' : '') + '</div>';
     if (d.intel){
       h += '<div class="rpt-g"><b>👁️ ข้อมูลที่สอดแนมได้</b><br>' + resLine(d.intel.res) +
         (d.intel.hide ? '<br>🕳 ซ่อนได้ ' + fmt(d.intel.hide) + ' ต่อชนิด' : '') +
