@@ -48,21 +48,22 @@ const UT = [
   ['scout','scout','stable',1,null,           0,20,10, 16,  0,2,[40,140,160,20], 1100],
   ['cav_l','cav','stable',3,null,           120,65,50, 14,100,2,[90,350,450,300],2200],
   ['cav_h','cav','stable',10,null,          160,90,110,10, 70,3,[150,550,700,450],3000],
-  ['ram','siege','workshop',1,null,          60,30,75,  4,  0,3,[70,900,370,360],4600]
+  ['ram','siege','workshop',1,null,          60,30,75,  4,  0,3,[70,900,370,360],4600],
+  ['cata','cata','workshop',10,['smithy',10], 75,60,10,  3,  0,6,[150,950,250,1350],9000]
 ];
 const TRIBES = [
   { name:'สุโขทัย', desc:'สมดุลทุกด้าน ทหารราบแข็งแรง เหมาะกับมือใหม่', a:1, d:1, s:1, c:1,
-    n:['ทหารดาบ','ทหารหอก','องครักษ์','กองสอดแนม','ทหารม้าเบา','ทหารม้าเกราะ','ซุงกระทุ้ง'] },
+    n:['ทหารดาบ','ทหารหอก','องครักษ์','กองสอดแนม','ทหารม้าเบา','ทหารม้าเกราะ','ซุงกระทุ้ง','ปืนใหญ่'] },
   { name:'ล้านนา', desc:'เน้นตั้งรับ ป้องกัน +15% แต่โจมตีและเดินทัพช้ากว่า', a:0.9, d:1.15, s:0.95, c:1,
-    n:['นักรบดาบ','พลหอกยาว','ทหารเสือ','พรานป่า','ม้าศึกดอย','ช้างศึก','ซุงกระทุ้ง'] },
+    n:['นักรบดาบ','พลหอกยาว','ทหารเสือ','พรานป่า','ม้าศึกดอย','ช้างศึก','ซุงกระทุ้ง','ปืนใหญ่'] },
   { name:'ขอม', desc:'เน้นบุก โจมตี +15% แต่ป้องกันอ่อนกว่า', a:1.15, d:0.9, s:1, c:1,
-    n:['นักรบขวาน','พลโล่','นักรบนาค','นักสืบ','ม้าศึกขอม','ช้างทรง','รถกระทุ้ง'] },
+    n:['นักรบขวาน','พลโล่','นักรบนาค','นักสืบ','ม้าศึกขอม','ช้างทรง','รถกระทุ้ง','ปืนใหญ่'] },
   { name:'ศรีวิชัย', desc:'เคลื่อนที่เร็ว +15% บรรทุกของปล้นได้มากขึ้น 20%', a:1, d:0.95, s:1.15, c:1.2,
-    n:['นักรบกริช','พลทวน','ทหารเรือ','สายลับทะเล','ม้าเร็ว','ทหารม้าศรีวิชัย','ซุงกระทุ้ง'] }
+    n:['นักรบกริช','พลทวน','ทหารเรือ','สายลับทะเล','ม้าเร็ว','ทหารม้าศรีวิชัย','ซุงกระทุ้ง','ปืนใหญ่'] }
 ];
 const UNITS = {}, UNIT_LIST = [];
 TRIBES.forEach((T, ti) => UT.forEach((u, i) => {
-  const o = { id:'u' + ti + '_' + u[0], k:u[0], tribe:ti, name:T.n[i], type:u[1], bld:u[2], lv:u[3], req:u[4],
+  const o = { id:'u' + ti + '_' + u[0], k:u[0], tribe:ti, name:T.n[i] || (u[0] === 'cata' ? 'ปืนใหญ่' : u[0]), type:u[1], bld:u[2], lv:u[3], req:u[4],
     atk:Math.round(u[5] * T.a), di:Math.round(u[6] * T.d), dc:Math.round(u[7] * T.d),
     spd:+(u[8] * T.s).toFixed(1), carry:Math.round(u[9] * T.c), up:u[10],
     cost:{ wheat:u[11][0], wood:u[11][1], iron:u[11][2], clay:u[11][3] }, time:u[12] };
@@ -188,7 +189,7 @@ const BD = {
   embassy:B('สถานทูต',[80,180,150,130],{cp:6,req:[['main',1]]}),
   barracks:B('ค่ายทหาร',[120,210,260,140],{cat:'mil',req:[['main',3],['rally',1]]}),
   stable:B('คอกม้า',[100,260,220,140],{cat:'mil',cp:2,req:[['barracks',3],['smithy',1]]}),
-  workshop:B('โรงงาน',[320,460,600,510],{cat:'mil',cp:3,req:[['barracks',3],['main',5]]}),
+  workshop:B('ค่ายปืนใหญ่',[320,460,600,510],{cat:'mil',cp:3,req:[['barracks',3],['main',5]]}),
   smithy:B('โรงตีเหล็ก',[160,180,500,250],{cat:'mil',cp:2,req:[['barracks',1],['main',3]]}),
   armoury:B('โรงฟอกหนัง',[130,130,410,210],{cat:'mil',cp:2,req:[['barracks',1],['main',3]]}),
   wall:B('กำแพงเมือง',[0,110,70,160],{cat:'wall'}),
@@ -486,6 +487,22 @@ function scoutFight(tr, smA, dd){
 }
 function carryOf(t){ let s = 0; for (const k in t){ const u = UNITS[k]; if (u) s += t[k] * u.carry; } return s; }
 function ramCount(t){ let s = 0; for (const k in t){ const u = UNITS[k]; if (u && u.type === 'siege') s += t[k]; } return s; }
+/* v15F — ปืนใหญ่ยิงอาคารแบบสุ่ม 1 หลัง (สูตรเดียวกับซุงกระทุ้ง) */
+function cataCount(t){ let s = 0; for (const k in t){ const u = UNITS[k]; if (u && u.type === 'cata') s += t[k]; } return s; }
+function cataHit(dd, n, rep){
+  const can = [];
+  (dd.city || []).forEach((c, i) => { if (c && c.k && c.level > (c.k === 'main' ? 1 : 0) && c.k !== 'wall') can.push(i); });
+  if (!can.length) return;
+  const s = can[Math.floor(Math.random() * can.length)], c = dd.city[s], a = c.level;
+  const nm = (BD[c.k] && BD[c.k].n) || c.k, min = c.k === 'main' ? 1 : 0;
+  const drop = Math.max(0, Math.min(a - min, Math.floor(n / (2 + a * 0.6))));
+  const b = a - drop;
+  if (b <= 0){
+    dd.city[s] = emptySlot();
+    if (dd.demo && dd.demo.slot === s) dd.demo = null;
+  } else c.level = b;
+  rep.cata = [nm, a, b];
+}
 function takeLoot(res, hide, carry){
   const out = { wheat:0, wood:0, iron:0, clay:0 }, av = {};
   for (const r of RES) av[r] = Math.max(0, Math.floor((res[r] || 0) - hide));
@@ -2353,6 +2370,8 @@ async function doArrive(env, m){
             const drop = Math.min(wall, Math.floor(rams / (2 + wall * 0.6)));
             if (drop > 0){ dd.wallLv = wall - drop; rep.wall = [wall, dd.wallLv]; }
           }
+          const cats = cataCount(left);
+          if (m.mission === 'attack' && cats > 0) cataHit(dd, cats, rep);
         }
         rep.loot = loot;
       }
