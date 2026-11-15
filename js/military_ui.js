@@ -331,11 +331,19 @@ var MilUI = (function(){
     };
   }
 
+  /* v15G: ปืนใหญ่แสดงเป็นภาพ (ถ้ามีภาพ) ไม่มีค่อยใช้ 💣 */
+  function cannonImg(u){
+    try {
+      var t = -1;
+      TRIBES.forEach(function(x, i){ if (x.key === u.tribe) t = i; });
+      return (t >= 0 && typeof Icons !== 'undefined') ? Icons.unit(t, 'cata') : null;
+    } catch(e){ return null; }
+  }
   function unitIcon(u){
     return u.cls === 'inf' ? (u.atk >= 60 ? '🗡️' : '🔪')
       : u.cls === 'scout' ? '🐴'
       : u.cls === 'cav' ? (u.up >= 3 ? '🏇' : '🐎')
-      : u.cls === 'cata' ? '💣'
+      : u.cls === 'cata' ? (cannonImg(u) || '💣')
       : u.cls === 'chief' ? '👑'
       : u.cls === 'settler' ? '🏕️' : '⚔️';
   }

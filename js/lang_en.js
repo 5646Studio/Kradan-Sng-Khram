@@ -272,5 +272,6 @@ var LANG_EN = {
   'เข้าคิวฝึก':'Queued for training', 'ต้นทุนต่อนาย 3 เท่า แต่ฝึกพร้อมกับค่ายปกติได้':'Cost per unit x3, but trains alongside the normal building',
   'ค่ายปืนใหญ่':'Cannon Foundry', 'ปืนใหญ่':'Cannon', 'ปืนใหญ่ยิง':'Cannons hit', 'พังทั้งหลัง':'destroyed',
   'ต้นทุนต่อนาย 3 เท่า แต่ฝึกพร้อมกับ':'Cost per unit x3, but trains alongside the',
-  'หน่วยที่ฝึกได้ขึ้นกับเลเวล':'available units depend on the level of the'
+  'หน่วยที่ฝึกได้ขึ้นกับเลเวล':'available units depend on the level of the',
+  'ยืนยันการใช้ทอง':'Confirm spending gold', 'ทองคงเหลือ':'Gold left'
 };

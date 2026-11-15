@@ -156,6 +156,7 @@ var Sheets = (function(){
 var UnitSheet = {
   get:function(tribe, k){
     var k2 = (k === 'cav_h' && (tribe === 1 || tribe === 2)) ? 'elephant' : k;
+    if (k2 === 'cata') k2 = 'cannon';   /* v15G: ปืนใหญ่ (cls cata) ใช้ภาพ cannon จากแผ่นรวม */
     return Sheets.get('u' + tribe + '_' + k2) || Sheets.get('u_' + k2);
   }
 };
