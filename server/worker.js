@@ -22,7 +22,10 @@ function speedSet(o){
 const SEED = 20260913 + 7777;
 const MAP_R = 100, NOBUILD = 5, SPAWN_R = 70;
 const START_GOLD = 50, PROTECT_DAYS = 5, BASE_CAP = 3000;
-const BOT_TARGET = 60, BOT_SPAWN_PER_TICK = 10, BOT_BATCH = 60;
+/* v15H — ค่าที่ปรับได้จากหน้า admin */
+let BOT_ON = 1, BOT_TARGET = 40, BOT_BATCH = 20, BOT_EVERY = 15;
+let FORT_REGEN = 1, CAP_REGEN = 1;
+let CAP_NEED_FORTS = 2, FORT_CP = 50;
 const ONLINE_MS = 3 * 60000;
 const RES = ['wheat', 'wood', 'iron', 'clay'];
 const RTH = { wheat:'ข้าว', wood:'ไม้', iron:'เหล็ก', clay:'โคลน' };
@@ -582,21 +585,20 @@ const APP = {
   },
   async scheduled(ev, env, ctx){
     ctx.waitUntil((async () => {
-      try { await resolveDue(env, Date.now(), 60); } catch (e){ console.log('resolve', e && e.message); }
-      try { await stationSweep(env); } catch (e){}
-      try { await firePlans(env, Date.now()); } catch (e){ console.log('plan', e && e.message); }
-      try { await waveTick(env, Date.now()); } catch (e){ console.log('wave', e && e.message); }
-      try { await warnTick(env, Date.now()); } catch (e){ console.log('warn', e && e.message); }
-      try { await msgTick(env, Date.now()); } catch (e){ console.log('msgpush', e && e.message); }
-      try { await pushTick(env, Date.now()); } catch (e){ console.log('push', e && e.message); }
-      if (new Date(ev.scheduledTime).getUTCMinutes() % 10 === 5) try { await inviteTick(env, Date.now()); } catch (e){ console.log('invite', e && e.message); } 
-      if (new Date(ev.scheduledTime).getUTCMinutes() === 30){
-      try { await socialCleanup(env, Date.now()); } catch (e){ console.log('clean', e && e.message); }
+      const now = Date.now(), mi = new Date(ev.scheduledTime).getUTCMinutes();
+      try { await resolveDue(env, now, 60); } catch (e){ console.log('resolve', e && e.message); }
+      try { await firePlans(env, now); } catch (e){ console.log('plan', e && e.message); }
+      try { await waveTick(env, now); } catch (e){ console.log('wave', e && e.message); }
+      try { await warnTick(env, now); } catch (e){ console.log('warn', e && e.message); }
+      try { await msgTick(env, now); } catch (e){ console.log('msgpush', e && e.message); }
+      try { await pushTick(env, now); } catch (e){ console.log('push', e && e.message); }
+      if (mi % 10 === 5) try { await inviteTick(env, now); } catch (e){ console.log('invite', e && e.message); }
+      if (mi === 30) try { await socialCleanup(env, now); } catch (e){ console.log('clean', e && e.message); }
+      if (mi % 5 === 0){
+        try { await stationSweep(env); } catch (e){}
+        try { await seasonTick(env); } catch (e){ console.log('season', e && e.message); }
       }
-      if (new Date(ev.scheduledTime).getUTCMinutes() % 5 === 0){
-      try { await botTick(env); } catch (e){ console.log('bot', e && e.message); }
-      try { await seasonTick(env); } catch (e){ console.log('season', e && e.message); }
-      }
+      if (BOT_ON && mi % BOT_EVERY === 0) try { await botTick(env); } catch (e){ console.log('bot', e && e.message); }
     })());
   }
 };
@@ -1099,7 +1101,32 @@ async function admin(p, b, q, env, by){
   }
 
   if (p === '/admin/bots'){
-    if (b.action === 'spawn') return json({ ok:true, spawned:await spawnBots(env, Math.max(1, Math.min(50, (b.n | 0) || 10))) }, 200, env);
+    if (b.action === 'info'){
+      const zr = (await DB.prepare('SELECT zone, COUNT(*) n FROM players WHERE is_bot=1 GROUP BY zone').all()).results || [];
+      const zone = { 1:0, 2:0, 3:0, 4:0 }; let total = 0;
+      zr.forEach(r => { if (zone[r.zone] != null) zone[r.zone] = r.n; total += r.n; });
+      return json({ ok:true, total, zone, on:BOT_ON, target:BOT_TARGET, every:BOT_EVERY, batch:BOT_BATCH }, 200, env);
+    }
+    if (b.action === 'spawn') return json({ ok:true, spawned:await spawnBots(env, Math.max(1, Math.min(50, (b.n | 0) || 10)), b.zone | 0) }, 200, env);
+    if (b.action === 'remove'){
+      const n = Math.max(1, Math.min(50, b.n | 0)), z = b.zone | 0;
+      const ids = ((await DB.prepare('SELECT p.uid FROM players p LEFT JOIN villages v ON v.uid = p.uid WHERE p.is_bot=1' +
+        (z ? ' AND p.zone=?' : '') + ' GROUP BY p.uid ORDER BY COALESCE(SUM(v.pop),0) ASC LIMIT ?')
+        .bind(...(z ? [z, n] : [n])).all()).results || []).map(r => r.uid);
+      if (!ids.length) return json({ ok:true, removed:0 }, 200, env);
+      const Q = ids.map(() => '?').join(',');
+      await DB.batch([
+        DB.prepare('UPDATE players SET guild_id=NULL WHERE is_bot=1 AND guild_id IN (SELECT id FROM guilds WHERE is_bot=1 AND owner IN (' + Q + '))').bind(...ids),
+        DB.prepare('DELETE FROM guilds WHERE is_bot=1 AND owner IN (' + Q + ') AND id NOT IN (SELECT guild_id FROM players WHERE guild_id IS NOT NULL)').bind(...ids),
+        DB.prepare('UPDATE moves SET to_vid=NULL, to_uid=NULL WHERE to_uid IN (' + Q + ')').bind(...ids),
+        DB.prepare('DELETE FROM moves WHERE uid IN (' + Q + ')').bind(...ids),
+        DB.prepare('DELETE FROM stations WHERE owner_uid IN (' + Q + ')').bind(...ids),
+        DB.prepare('DELETE FROM oasis WHERE uid IN (' + Q + ')').bind(...ids),
+        DB.prepare('DELETE FROM villages WHERE uid IN (' + Q + ')').bind(...ids),
+        DB.prepare('DELETE FROM players WHERE uid IN (' + Q + ')').bind(...ids)
+      ]);
+      return json({ ok:true, removed:ids.length }, 200, env);
+    }
     if (b.action === 'tick'){ await botTick(env); return json({ ok:true }, 200, env); }
     if (b.action === 'clear'){
       await DB.batch([
@@ -1107,12 +1134,11 @@ async function admin(p, b, q, env, by){
         DB.prepare('DELETE FROM villages WHERE uid IN (SELECT uid FROM players WHERE is_bot=1)'),
         DB.prepare('DELETE FROM players WHERE is_bot=1'),
         DB.prepare('DELETE FROM guilds WHERE is_bot=1')
-
       ]);
       return json({ ok:true }, 200, env);
     }
     if (b.action === 'raid') return json({ ok:true, n:await botRaidTest(env, b.name, b.x, b.y) }, 200, env);
-    throw ue('action ต้องเป็น spawn / tick / clear');
+    throw ue('action ต้องเป็น info / spawn / remove / tick / clear / raid');
   }
     if (p === '/admin/cp'){
     const pl = await DB.prepare('SELECT uid FROM players WHERE name=?').bind(String(b.name || '').trim()).first();
@@ -1262,7 +1288,7 @@ async function admin(p, b, q, env, by){
     if (b.action === 'pow'){
       FPOW = { fort:lv(b.fort), cap:lv(b.cap) };
       await setMeta(env, 'fort_pow', JSON.stringify(FPOW));
-      await regenForts(env, t);                       /* ลดระดับ → ตัดทหารส่วนเกินทันที */
+      await regenForts(env, t, true);                 /* ลดระดับ → ตัดทหารส่วนเกินทันที */
     }
     if (b.action === 'refill' || b.action === 'repair'){
       const id = b.id | 0;
@@ -1280,6 +1306,20 @@ async function admin(p, b, q, env, by){
         }
       });
       if (typeof r === 'string') throw ue(r);
+    }
+    if (b.action === 'setpct'){
+      const pct = Math.max(0, Math.min(200, +b.pct || 0)) / 100;
+      const rs = (await DB.prepare('SELECT id, data FROM villages WHERE uid=?').bind(FORT_UID).all()).results || [];
+      for (const r0 of rs){
+        const d0 = JSON.parse(r0.data);
+        if (!d0.fort) continue;
+        if (b.id ? r0.id !== (b.id | 0) : (b.scope === 'cap' ? !d0.cap : b.scope === 'fort' ? !!d0.cap : false)) continue;
+        const r = await patchV(env, r0.id, d => {
+          const B0 = fortBase(d.cap); d.troops = d.troops || {};
+          for (const k in B0) d.troops[k] = Math.round(B0[k] * pct);
+        });
+        if (typeof r === 'string') throw ue(r);
+      }
     }
     const rows = (await DB.prepare('SELECT v.id, v.x, v.y, v.name, v.uid, v.data, p.name pn FROM villages v LEFT JOIN players p ON p.uid = v.uid WHERE v.data LIKE ? ORDER BY v.x, v.y')
       .bind('%"fort":1%').all()).results || [];
@@ -1316,14 +1356,20 @@ function persona(uid){
   for (let i = 0; i < uid.length; i++) s = (Math.imul(s, 31) + uid.charCodeAt(i)) | 0;
   return PERS[(s >>> 0) % PERS.length];
 }
-async function spawnBots(env, n){
+async function spawnBots(env, n, zone0){
   const t = Date.now(), occ = await occSet(env);
   const used = new Set(((await env.DB.prepare('SELECT name FROM players').all()).results || []).map(r => String(r.name).toLowerCase()));
+  const zc = { 1:0, 2:0, 3:0, 4:0 };
+  ((await env.DB.prepare('SELECT zone, COUNT(*) n FROM players WHERE is_bot=1 GROUP BY zone').all()).results || [])
+    .forEach(r => { if (zc[r.zone] != null) zc[r.zone] = r.n; });
   const st = [];
   let made = 0;
   for (let i = 0; i < n; i++){
-    const zone = 1 + Math.floor(Math.random() * 4), s = findSpawn(zone, occ);
+    const order = zone0 >= 1 && zone0 <= 4 ? [zone0] : [1, 2, 3, 4].sort((a, b) => zc[a] - zc[b] || Math.random() - 0.5);
+    let zone = 0, s = null;
+    for (const z of order){ s = findSpawn(z, occ); if (s){ zone = z; break; } }
     if (!s) break;
+    zc[zone]++;
     occ.add(s.x + ',' + s.y);
     let name = pick(BOT_PRE) + pick(BOT_NM), k = 2;
     while (used.has(name.toLowerCase())) name = pick(BOT_PRE) + pick(BOT_NM) + ' ' + (k++);
@@ -1682,11 +1728,12 @@ function botAttack(d, r, W, t){
     t, t + sec * 1000, 'go', 0, 0];
 }
 
-/* ---------- รอบบอท (ทุก 5 นาที) ---------- */
+/* ---------- รอบบอท (ทุก BOT_EVERY นาที) ---------- */
 async function botTick(env){
+  if (!BOT_ON) return;
   const t = Date.now(), DB = env.DB;
   const nb = ((await DB.prepare('SELECT COUNT(*) n FROM players WHERE is_bot=1').first()) || {}).n || 0;
-  if (nb < BOT_TARGET) await spawnBots(env, Math.min(BOT_SPAWN_PER_TICK, BOT_TARGET - nb));
+  if (nb < BOT_TARGET) await spawnBots(env, Math.min(20, BOT_TARGET - nb));
   try { await botGuilds(env, t); } catch (e){ console.log('guild', e && e.message); }
   try { await botExpand(env, t); } catch (e){ console.log('expand', e && e.message); }
   try { await botReplies(env, t); } catch (e){ console.log('reply', e && e.message); }
@@ -3186,7 +3233,6 @@ async function guildApi(p, b, env, uid){
    B5-4 : ฤดูกาล · ป้อม 8 แห่ง · เมืองหลวงโลก · ผู้ชนะเซิร์ฟเวอร์
    ===================================================================== */
 let SEASON_DAYS = 45, FORT_DAY = 20, CAP_DAY = 30, HOLD_DAYS = 5, HOLD_STEP = 5;
-const CAP_NEED_FORTS = 2, FORT_CP = 50;
 const FORT_UID = '__fort__', FORT_NAME = 'ผู้พิทักษ์แผ่นดิน', CAP_NAME = 'นครหลวงสุวรรณภูมิ';
 const FORT_NAMES = ['ป้อมอุดร','ป้อมอีสาน','ป้อมบูรพา','ป้อมอาคเนย์','ป้อมทักษิณ','ป้อมหรดี','ป้อมประจิม','ป้อมพายัพ'];
 const FORT_G = { u0_inf_d:1500, u0_inf_a:500, u0_cav_h:300 };
@@ -3250,7 +3296,7 @@ async function spawnForts(env, cap, t){
     ? '📢 เมืองหลวงโลก (0|0) ปรากฏแล้ว! กิลด์ที่มีป้อม ' + CAP_NEED_FORTS + ' แห่งขึ้นไปยึดได้ ครองครบ ' + HOLD_DAYS + ' วันชนะเซิร์ฟเวอร์'
     : '📢 ป้อมปราการ 8 แห่งปรากฏรอบใจกลางแผนที่แล้ว! ยึดด้วยขุนพล (ต้องอยู่ในกิลด์)', t);
 }
-async function regenForts(env, t){
+async function regenForts(env, t, trim){
   const rows = (await env.DB.prepare('SELECT * FROM villages WHERE uid=?').bind(FORT_UID).all()).results || [];
   const st = [], P = { builders:2, builder_until:0 };
   for (const r of rows){
@@ -3260,7 +3306,13 @@ async function regenForts(env, t){
     d._away = 0;
     advance(d, t, P);
     const B0 = fortBase(d.cap);
-    for (const k in B0) d.troops[k] = Math.min(B0[k], (d.troops[k] || 0) + Math.ceil(B0[k] * 0.01 * SPEED));
+    const rate = (d.cap ? CAP_REGEN : FORT_REGEN) * SPEED / 100;
+    if (rate) for (const k in B0){
+      const c = d.troops[k] || 0, inc = Math.ceil(B0[k] * Math.abs(rate));
+      if (rate > 0 && c < B0[k]) d.troops[k] = Math.min(B0[k], c + inc);
+      else if (rate < 0) d.troops[k] = Math.max(0, c - inc);
+    }
+    if (trim) for (const k in B0) if ((d.troops[k] || 0) > B0[k]) d.troops[k] = B0[k];   /* ลดระดับพลัง → ตัดส่วนเกิน */
     st.push(vUpd(env, r, d, t));
   }
   if (st.length) await env.DB.batch(st);
@@ -4092,16 +4144,24 @@ function bldAct(ctx, b, op){
 
 /* ---------- ปรับค่าเกมจากแผงผู้พัฒนา ---------- */
 const TUNE_LIM = { botAtt:[0, 60], botHit:[0, 1], botRange:[5, 60], botPrey:[0.3, 10], botPreyWar:[0.3, 20],
-  botPlayerW:[0, 10], cpBase:[0, 300], invGold:[0, 500], invFriend:[0, 300] };
+  botPlayerW:[0, 10], cpBase:[0, 300], invGold:[0, 500], invFriend:[0, 300],
+  botOn:[0, 1], botTarget:[0, 200], botEvery:[5, 60], botBatch:[5, 60],
+  fortRegen:[-10, 10], capRegen:[-10, 10], fortCp:[0, 500], capNeed:[0, 8] };
 function tuneCur(){
   return { botAtt:BOT_ATT_MAX, botHit:BOT_HIT_PLAYERS ? 1 : 0, botRange:BOT_RANGE, botPrey:BOT_PREY, botPreyWar:BOT_PREY_WAR,
-    botPlayerW:BOT_PLAYER_W, cpBase:CP_BASE, invGold:INV_GOLD, invFriend:INV_FRIEND_GOLD };
+    botPlayerW:BOT_PLAYER_W, cpBase:CP_BASE, invGold:INV_GOLD, invFriend:INV_FRIEND_GOLD,
+    botOn:BOT_ON, botTarget:BOT_TARGET, botEvery:BOT_EVERY, botBatch:BOT_BATCH,
+    fortRegen:FORT_REGEN, capRegen:CAP_REGEN, fortCp:FORT_CP, capNeed:CAP_NEED_FORTS };
 }
 const TUNE_DEF = tuneCur(), TUNE_C = { at:0 };
 function tuneSet(o){
   const v = Object.assign({}, TUNE_DEF, o);
   BOT_ATT_MAX = v.botAtt; BOT_HIT_PLAYERS = !!v.botHit; BOT_RANGE = v.botRange; BOT_PREY = v.botPrey;
   BOT_PREY_WAR = v.botPreyWar; BOT_PLAYER_W = v.botPlayerW; CP_BASE = v.cpBase; INV_GOLD = v.invGold; INV_FRIEND_GOLD = v.invFriend;
+  BOT_ON = +v.botOn ? 1 : 0; BOT_TARGET = Math.round(+v.botTarget); BOT_BATCH = Math.round(+v.botBatch);
+  BOT_EVERY = [5, 10, 15, 20, 30, 60].reduce((a, b) => Math.abs(b - v.botEvery) < Math.abs(a - v.botEvery) ? b : a);
+  FORT_REGEN = +v.fortRegen; CAP_REGEN = +v.capRegen;
+  FORT_CP = Math.round(+v.fortCp); CAP_NEED_FORTS = Math.round(+v.capNeed);
 }
 async function tuneLoad(env, t){
   if (t - TUNE_C.at < 60000) return;
