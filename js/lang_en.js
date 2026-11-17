@@ -273,5 +273,14 @@ var LANG_EN = {
   'ค่ายปืนใหญ่':'Cannon Foundry', 'ปืนใหญ่':'Cannon', 'ปืนใหญ่ยิง':'Cannons hit', 'พังทั้งหลัง':'destroyed',
   'ต้นทุนต่อนาย 3 เท่า แต่ฝึกพร้อมกับ':'Cost per unit x3, but trains alongside the',
   'หน่วยที่ฝึกได้ขึ้นกับเลเวล':'available units depend on the level of the',
-  'ยืนยันการใช้ทอง':'Confirm spending gold', 'ทองคงเหลือ':'Gold left'
+  'ยืนยันการใช้ทอง':'Confirm spending gold', 'ทองคงเหลือ':'Gold left',
+  /* v15I — แผนจากกองเสริมทัพ + ค้นหาโอเอซิส */
+  'แผนจากกองเสริมทัพ':'Plans from reinforcements', 'ค้นหาโอเอซิส':'Find oases', 'ตั้งแผน':'Plan',
+  'ตั้งแผนการรบ':'Schedule attack', 'บันทึกแผน':'Save plan', 'แผนที่ตั้งไว้':'Scheduled plans', 'ยังไม่มีแผน':'No plans yet',
+  'เวลาออกเดินทาง':'Departure time', 'สิทธิ์ใช้ได้ถึง':'Access valid until', 'ถึงเมื่อ':'Arrived',
+  'มีเจ้าของ':'Owned', 'ของฉัน':'Mine',
+  'ฟีเจอร์นี้สำหรับผู้ที่มีสิทธิ์แผนการรบ':'This feature requires the battle plan pass',
+  'กองเสริมทัพนี้ไม่อยู่แล้ว':'This reinforcement group no longer exists',
+  'ทหารในกองเสริมทัพไม่เหลือแล้ว':'No troops left in this reinforcement group',
+  'กองนี้ใช้โควตาออกรบครบแล้ว':'This group has used all its sorties', 'จากกองเสริมทัพ':'from reinforcements'
 };

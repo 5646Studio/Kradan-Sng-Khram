@@ -11,13 +11,16 @@ var B5 = (function(){
   function card(s, mine){
     var left = s.quota - s.raids, c = cnt(s.troops), canRaid = (mine || s.cmd) && left > 0 && c > 0;
     return '<div class="stcard' + (mine ? '' : ' ally') + '"><div class="vh"><b>' +
-      (mine ? (s.own ? '🏘 ' : '🏯 ') + esc(s.hostName) + (s.own ? '' : ' · ' + esc(s.hostPlayer))
-            : 'จาก ' + esc(s.ownerName) + ' · ' + esc(s.ownerVill)) +
+      (mine ? (s.own ? '🏘 ' : '🏯 ') + esc(s.hostName) + (s.own ? '' : ' · ' + esc(s.hostPlayer)) + ' · กอง ' + (s.no || 1)
+            : 'จาก ' + esc(s.ownerName) + ' · ' + esc(s.ownerVill) + ' · กอง ' + (s.no || 1)) +
       '</b><span>(' + s.x + '|' + s.y + ')</span></div>' +
       '<div class="stline">' + (c ? War.troopLine(s.troops) : 'ทหารออกรบอยู่ทั้งหมด') + '</div>' +
+      (s.since ? '<div class="suphint">🕒 ถึงเมื่อ ' + new Date(s.since).toLocaleString('th-TH',
+        { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) + '</div>' : '') +
       '<div class="stbar"><i>⚔ โควตา</i><span class="stdots">' + dots(s.raids, s.quota) + '</span><b style="color:' +
       (left ? '#8fbf5f' : '#ff6b6b') + '">เหลือ ' + left + '/' + s.quota + '</b></div><div class="grow2">' +
       (canRaid ? '<button class="btn-use mini2" data-sr="' + s.id + '">⚔ ออกรบจากที่นี่</button>' : '') +
+      (canRaid && window.Plan2 ? '<button class="btn-use mini2" data-sp="' + s.id + '">⏰ ตั้งแผน</button>' : '') +
       (mine && c ? '<button class="btn-del mini2" data-sb="' + s.id + '">↩ เรียกกลับ</button>' : '') + '</div>' +
       (mine && !s.own ? '<label class="misr" style="margin-top:6px"><input type="checkbox" data-sc="' + s.id + '"' +
         (s.cmd ? ' checked' : '') + '><span>🤝 ให้เจ้าของเมืองสั่งกองนี้ได้</span></label>' : '') +

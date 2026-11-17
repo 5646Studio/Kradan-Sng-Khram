@@ -396,6 +396,7 @@ var MilUI = (function(){
     if (Schedule.active())
       o += '<button class="btn-use" onclick="UI.close();Schedule.open()">' +
         '⏰ ตั้งแผนการรบ</button>';
+    if (window.Plan2) o += '<button class="btn-use" onclick="UI.close();Plan2.open({})">⏰ แผนจากกองเสริมทัพ · 🔍 ค้นหาโอเอซิส</button>';
     document.getElementById('rbody').innerHTML = o;
   }
 
