@@ -1453,7 +1453,7 @@ async function whoOf(env, b, me){
 }
 
 async function social(p, b, env, uid){
-  if (p !== '/account/rename' && p.indexOf('/chat/') !== 0 && p.indexOf('/plan/') !== 0) return null;
+  if (p !== '/account/rename' && p !== '/oasis/near' && p.indexOf('/chat/') !== 0 && p.indexOf('/plan/') !== 0) return null;
   const DB = env.DB, t = Date.now();
   const ok = o => json(Object.assign({ ok:true }, o || {}), 200, env);
   const me = await getP(env, uid);
@@ -1558,7 +1558,7 @@ async function social(p, b, env, uid){
 
   /* ---------- แผนการรบ ---------- */
   if (p === '/plan/list'){
-    const r = await DB.prepare('SELECT id, vid, tx, ty, mission, troops, fire_at FROM plans WHERE uid=? ORDER BY fire_at').bind(uid).all();
+    const r = await DB.prepare('SELECT id, vid, tx, ty, mission, troops, fire_at, st FROM plans WHERE uid=? ORDER BY fire_at').bind(uid).all();
     return ok({ until:me.sched_until || 0,
       list:(r.results || []).map(x => Object.assign(x, { troops:JSON.parse(x.troops || '{}') })) });
   }
@@ -1572,22 +1572,52 @@ async function social(p, b, env, uid){
     if (n >= PLAN_MAX) throw ue('ตั้งแผนได้สูงสุด ' + PLAN_MAX + ' แผน');
     if (!(await DB.prepare('SELECT id FROM villages WHERE id=? AND uid=?').bind(b.vid | 0, uid).first()))
       throw ue('ไม่พบเมืองนี้');
+    /* v15I — แผนจากกองเสริมทัพ */
+    const stId = b.st | 0;
+    if (stId){
+      const s0 = await DB.prepare('SELECT owner_uid, host_uid, can_cmd, raids, quota FROM stations WHERE id=?').bind(stId).first();
+      if (!s0 || !(s0.owner_uid === uid || (s0.host_uid === uid && s0.can_cmd))) throw ue('คุณไม่มีสิทธิ์สั่งกองทหารนี้');
+      if (s0.raids >= s0.quota) throw ue('กองนี้ใช้โควตาออกรบครบแล้ว');
+    }
     const tr = {};
     let c = 0;
     for (const k in (b.troops || {})){
       const v = Math.floor(b.troops[k]), u = UNITS[k];
-      if (v > 0 && u && u.tribe === me.tribe){ tr[k] = v; c += v; }
+      if (v > 0 && u && (stId || u.tribe === me.tribe)){ tr[k] = v; c += v; }
     }
     if (!c) throw ue('ยังไม่ได้เลือกทหาร');
     const tx = b.tx | 0, ty = b.ty | 0;
     if (Math.abs(tx) > MAP_R || Math.abs(ty) > MAP_R) throw ue('พิกัดอยู่นอกแผนที่');
-    await DB.prepare('INSERT INTO plans(uid,vid,tx,ty,mission,troops,fire_at,created) VALUES(?,?,?,?,?,?,?,?)')
-      .bind(uid, b.vid | 0, tx, ty, b.mission, JSON.stringify(tr), fire, t).run();
+    await DB.prepare('INSERT INTO plans(uid,vid,tx,ty,mission,troops,fire_at,created,st) VALUES(?,?,?,?,?,?,?,?,?)')
+      .bind(uid, b.vid | 0, tx, ty, b.mission, JSON.stringify(tr), fire, t, stId || null).run();
     return ok({});
   }
   if (p === '/plan/del'){
     await DB.prepare('DELETE FROM plans WHERE id=? AND uid=?').bind(b.id | 0, uid).run();
     return ok({});
+  }
+  /* v15I — ค้นหาโอเอซิสรอบเมือง 30 ช่อง (เฉพาะผู้มีสิทธิ์แผนการรบ) */
+  if (p === '/oasis/near'){
+    if ((me.sched_until || 0) <= t) throw ue('ฟีเจอร์นี้สำหรับผู้ที่มีสิทธิ์แผนการรบ');
+    const V = await DB.prepare('SELECT x, y FROM villages WHERE id=? AND uid=?').bind(b.vid | 0, uid).first();
+    if (!V) throw ue('ไม่พบเมืองนี้');
+    const R = 30, own = {};
+    ((await DB.prepare('SELECT o.k, o.uid, p.name pn, v.name vn FROM oasis o LEFT JOIN players p ON p.uid=o.uid LEFT JOIN villages v ON v.id=o.vid ' +
+      'WHERE o.x BETWEEN ? AND ? AND o.y BETWEEN ? AND ?').bind(V.x - R, V.x + R, V.y - R, V.y + R).all()).results || [])
+      .forEach(r => { own[r.k] = r; });
+    const list = [];
+    for (let x = V.x - R; x <= V.x + R; x++) for (let y = V.y - R; y <= V.y + R; y++){
+      if (Math.abs(x) > MAP_R || Math.abs(y) > MAP_R) continue;
+      const d = Math.hypot(x - V.x, y - V.y);
+      if (d > R) continue;
+      const T = tile(x, y);
+      if (!T || !T.oasis) continue;
+      const o = own[x + ',' + y];
+      list.push({ x, y, type:T.oasis.type, pct:T.oasis.pct, d:Math.round(d * 10) / 10,
+        mine:!!o && o.uid === uid, pn:o ? (o.pn || '?') : '', vn:o ? (o.vn || '') : '' });
+    }
+    list.sort((a, c) => a.d - c.d);
+    return ok({ list, until:me.sched_until });
   }
   return json({ ok:false, err:'ไม่พบคำสั่ง ' + p }, 404, env);
 }
@@ -1600,13 +1630,29 @@ async function firePlans(env, t){
     if (!d.meta.changes) continue;
     let err = null;
     try {
-      const out = await session(env, r.uid, ctx => sendArmy(ctx, env,
-        { vid:r.vid, tx:r.tx, ty:r.ty, mission:r.mission, troops:JSON.parse(r.troops || '{}') }));
-      if (!out) err = 'ไม่พบบัญชี';
-      else if (!out.ok) err = out.err || 'ไม่ทราบสาเหตุ';
+      if (r.st){
+        /* v15I — แผนจากกองเสริมทัพ: ส่งเท่าที่กองยังมีอยู่ */
+        const s = await env.DB.prepare('SELECT troops FROM stations WHERE id=?').bind(r.st).first();
+        if (!s) err = 'กองเสริมทัพนี้ไม่อยู่แล้ว';
+        else {
+          const have = JSON.parse(s.troops || '{}'), want = JSON.parse(r.troops || '{}'), send = {};
+          for (const k in want){ const n = Math.min(want[k], have[k] || 0); if (n > 0) send[k] = n; }
+          if (!Object.keys(send).length) err = 'ทหารในกองเสริมทัพไม่เหลือแล้ว';
+          else {
+            const res = await stationApi('/station/raid', { id:r.st, mission:r.mission, tx:r.tx, ty:r.ty, troops:send }, env, r.uid);
+            const j = res ? await res.json() : null;
+            if (!j || !j.ok) err = (j && j.err) || 'ไม่ทราบสาเหตุ';
+          }
+        }
+      } else {
+        const out = await session(env, r.uid, ctx => sendArmy(ctx, env,
+          { vid:r.vid, tx:r.tx, ty:r.ty, mission:r.mission, troops:JSON.parse(r.troops || '{}') }));
+        if (!out) err = 'ไม่พบบัญชี';
+        else if (!out.ok) err = out.err || 'ไม่ทราบสาเหตุ';
+      }
     } catch (e){ err = (e && e.user) ? e.message : 'ระบบผิดพลาด'; }
-    const title = err ? '⏰ แผนการรบล้มเหลว — ' + err
-                      : '⏰ แผนการรบออกเดินทางแล้ว → (' + r.tx + '|' + r.ty + ')';
+    const title = err ? '⏰ แผนการรบล้มเหลว — ' + err + (r.st ? ' (จากกองเสริมทัพ)' : '')
+                      : '⏰ แผนการรบออกเดินทางแล้ว → (' + r.tx + '|' + r.ty + ')' + (r.st ? ' (จากกองเสริมทัพ)' : '');
     await env.DB.prepare('INSERT INTO reports(uid,at,kind,title,data,read) VALUES(?,?,?,?,?,0)')
       .bind(r.uid, t, 'war', title, JSON.stringify({ plan:{ tx:r.tx, ty:r.ty, mission:r.mission } })).run();
   }
@@ -2545,14 +2591,9 @@ async function supportArrive(env, m){
     return true;
   }
   const cmd = hv.uid === m.uid ? 1 : ((JSON.parse(m.loot || '{}').cmd | 0) ? 1 : 0);
-  const ex = await DB.prepare('SELECT * FROM stations WHERE owner_vid=? AND host_vid=?').bind(m.from_vid, hv.id).first();
-  const st = [];
-  if (ex){
-    const t0 = JSON.parse(ex.troops || '{}');
-    for (const k in tr) t0[k] = (t0[k] || 0) + tr[k];
-    st.push(DB.prepare('UPDATE stations SET troops=?, raids=0, can_cmd=? WHERE id=?').bind(JSON.stringify(t0), cmd, ex.id));
-  } else st.push(DB.prepare('INSERT INTO stations(owner_uid,owner_vid,host_uid,host_vid,x,y,troops,raids,quota,can_cmd,since) VALUES(?,?,?,?,?,?,?,0,3,?,?)')
-    .bind(m.uid, m.from_vid, hv.uid, hv.id, hv.x, hv.y, JSON.stringify(tr), cmd, at));
+  /* v15I — ส่งไปแต่ละรอบ = กองใหม่ (ไม่รวมกับกองเดิม) */
+  const st = [DB.prepare('INSERT INTO stations(owner_uid,owner_vid,host_uid,host_vid,x,y,troops,raids,quota,can_cmd,since) VALUES(?,?,?,?,?,?,?,0,3,?,?)')
+    .bind(m.uid, m.from_vid, hv.uid, hv.id, hv.x, hv.y, JSON.stringify(tr), cmd, at)];
   st.push(DB.prepare('DELETE FROM moves WHERE id=?').bind(m.id));
   if (aP && aP.is_bot === 0) st.push(DB.prepare('INSERT INTO reports(uid,at,kind,title,data,read) VALUES(?,?,?,?,?,0)')
     .bind(m.uid, at, 'war', '🛡 กำลังหนุนถึง ' + hv.name + ' แล้ว · ออกรบจากฐานได้ 3 ครั้ง', JSON.stringify(data)));
@@ -2604,8 +2645,9 @@ async function stationApi(p, b, env, uid){
     const q = 'SELECT s.*, hv.name AS hn, hp.name AS hpn, ov.name AS ovn, op.name AS opn FROM stations s LEFT JOIN villages hv ON hv.id=s.host_vid LEFT JOIN players hp ON hp.uid=s.host_uid LEFT JOIN villages ov ON ov.id=s.owner_vid LEFT JOIN players op ON op.uid=s.owner_uid WHERE ';
     const mine = (await DB.prepare(q + 's.owner_uid=? ORDER BY s.id').bind(uid).all()).results || [];
     const host = (await DB.prepare(q + 's.host_uid=? AND s.owner_uid<>? ORDER BY s.id').bind(uid, uid).all()).results || [];
+    const no = {}, num = s => { const k = s.owner_vid + ':' + s.host_vid; return (no[k] = (no[k] || 0) + 1); };
     const f = s => ({ id:s.id, ownerVid:s.owner_vid, hostVid:s.host_vid, x:s.x, y:s.y, troops:JSON.parse(s.troops || '{}'),
-      raids:s.raids, quota:s.quota, cmd:!!s.can_cmd, own:s.host_uid === s.owner_uid,
+      raids:s.raids, quota:s.quota, cmd:!!s.can_cmd, own:s.host_uid === s.owner_uid, no:num(s), since:s.since || 0,
       hostName:s.hn || RUIN_NAME, hostPlayer:s.hpn || RUIN_NAME, ownerName:s.opn || '?', ownerVill:s.ovn || '?' });
     return ok({ mine:mine.map(f), hosted:host.map(f) });
   }
