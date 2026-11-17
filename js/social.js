@@ -298,28 +298,48 @@ var Social = (function(){
     var v = Game.villages.filter(function(x){ return x.id === id; })[0];
     return v ? v.name : 'เมือง #' + id;
   }
+  var planSt = 0;   /* v15I — จำต้นทางที่เลือกล่าสุด (0 = ทหารในเมือง, อื่น ๆ = id กองเสริมทัพ) */
   function openPlan(x, y){
     if (!schedOn()) return buyPlan();
     UI.modal('<h3>⏰ แผนการรบ</h3><p class="stnone">กำลังโหลด…</p>');
-    Api.post('/plan/list', {}).then(function(r){
-      var v = V(), home = v.troops || {}, L = (r && r.list) || [];
-      var ks = Object.keys(home).filter(function(k){ return home[k] > 0 && War.unit(k); });
+    var got = 0, PL = null, STN = [];
+    function ready(){ if (++got === 2) render(); }
+    Api.post('/plan/list', {}).then(function(r){ PL = r; ready(); }, function(){ PL = {}; ready(); });
+    /* v15I — กองเสริมทัพที่สั่งได้: กองของเรา + กองพันธมิตรที่อนุญาตให้สั่ง (เฉพาะกองที่ยังมีโควตา) */
+    Api.post('/station/list', {}).then(function(r){
+      if (r && r.ok){
+        STN = (r.mine || []).filter(function(s){ return s.raids < s.quota; })
+          .concat((r.hosted || []).filter(function(s){ return s.cmd && s.raids < s.quota; })
+            .map(function(s){ s.ally = 1; return s; }));
+      }
+      ready();
+    }, function(){ ready(); });
+
+    function render(){
+      var v = V(), home = v.troops || {}, L = (PL && PL.list) || [], ks = [];
+      var homeKs = Object.keys(home).filter(function(k){ return home[k] > 0 && War.unit(k); });
       var h = '<h3>⏰ แผนการรบ</h3><div class="rbar"><span>สิทธิ์เหลือ ' +
         UI.dur((Game.schedUntil - now()) / 1000) + '</span><b>' + L.length + '/20 แผน</b></div>';
       L.forEach(function(p){
         h += '<div class="stcard"><div class="vh"><b>' + (MIS[p.mission] || p.mission) + ' → (' + p.tx + '|' + p.ty +
-          ')</b><span>' + when(p.fire_at) + '</span></div><div class="stline">จาก ' + esc(vName(p.vid)) + ' · ' +
+          ')</b><span>' + when(p.fire_at) + '</span></div><div class="stline">จาก ' + esc(vName(p.vid)) +
+          (p.st ? ' · 🛡 กองเสริมทัพ' : '') + ' · ' +
           War.troopLine(p.troops) + '</div><button class="mini" data-pd="' + p.id + '">✕ ยกเลิกแผน</button></div>';
       });
-      h += '<h4>➕ ตั้งแผนใหม่ — จาก ' + esc(v.name) + '</h4>';
-      if (!ks.length) h += '<p class="stnone">ไม่มีทหารในเมืองนี้</p>';
+      h += '<h4>➕ ตั้งแผนใหม่' + (STN.length ? '' : ' — จาก ' + esc(v.name)) + '</h4>';
+      if (!homeKs.length && !STN.length) h += '<p class="stnone">ไม่มีทหารในเมืองนี้</p>';
       else {
-        h += '<div class="tgrid2">';
-        ks.forEach(function(k){
-          h += '<div class="tcell"><span class="tic">' + War.icon(War.unit(k)) + '</span><input type="number" min="0" value="0" id="pl_' +
-            k + '"><b class="thave" data-pa="' + k + '" data-n="' + home[k] + '">/' + home[k] + '</b></div>';
-        });
-        h += '</div><div class="destbox"><div class="drow2"><label>X</label><input type="number" id="plx" value="' +
+        if (STN.length){
+          if (planSt && !STN.some(function(s){ return s.id === planSt; })) planSt = 0;
+          h += '<label style="font-size:11px;color:#a89468">ส่งจาก</label><select id="plsrc" class="selbox">' +
+            '<option value="0">🏠 ทหารในเมือง ' + esc(v.name) + '</option>' + STN.map(function(s){
+              return '<option value="' + s.id + '"' + (s.id === planSt ? ' selected' : '') + '>' + (s.ally
+                ? '🤝 กองของ ' + esc(s.ownerName) + ' ที่ ' + esc(s.hostName)
+                : '🛡 กอง ' + (s.no || 1) + ' · ' + esc(s.hostName) + ' (' + s.x + '|' + s.y + ')') +
+                ' · โควตา ' + (s.quota - s.raids) + '/' + s.quota + '</option>';
+            }).join('') + '</select>';
+        }
+        h += '<div id="plgrid"></div><div class="destbox"><div class="drow2"><label>X</label><input type="number" id="plx" value="' +
           (x != null ? x : v.x) + '"><label>Y</label><input type="number" id="ply" value="' + (y != null ? y : v.y) +
           '"></div><label style="font-size:11px;color:#a89468">เวลาออกเดินทาง</label>' +
           '<input type="datetime-local" id="plt" class="selbox" value="' + dtLocal(now() + 15 * 60000) + '"></div>' +
@@ -332,9 +352,29 @@ var Social = (function(){
       h += '<button class="btn-use2" id="plExt">➕ ต่ออายุสิทธิ์</button>' + closeBtn();
       UI.modal(h);
       document.getElementById('plExt').onclick = buyPlan;
-      document.querySelectorAll('[data-pa]').forEach(function(b){
-        b.onclick = function(){ document.getElementById('pl_' + b.dataset.pa).value = b.dataset.n; };
-      });
+
+      /* ตารางทหารตามต้นทางที่เลือก */
+      var sel = document.getElementById('plsrc');
+      function srcId(){ return sel ? (+sel.value || 0) : 0; }
+      function drawGrid(){
+        var box = document.getElementById('plgrid'); if (!box) return;
+        var id = srcId(), T = home;
+        if (id){ var st = STN.filter(function(s){ return s.id === id; })[0]; T = st ? st.troops : {}; }
+        ks = Object.keys(T).filter(function(k){ return T[k] > 0 && War.unit(k); });
+        if (!ks.length){ box.innerHTML = '<p class="stnone">ไม่มีทหารในต้นทางนี้</p>'; return; }
+        var g = '<div class="tgrid2">';
+        ks.forEach(function(k){
+          g += '<div class="tcell"><span class="tic">' + War.icon(War.unit(k)) + '</span><input type="number" min="0" value="0" id="pl_' +
+            k + '"><b class="thave" data-pa="' + k + '" data-n="' + T[k] + '">/' + T[k] + '</b></div>';
+        });
+        box.innerHTML = g + '</div>';
+        box.querySelectorAll('[data-pa]').forEach(function(b){
+          b.onclick = function(){ document.getElementById('pl_' + b.dataset.pa).value = b.dataset.n; };
+        });
+      }
+      if (sel) sel.onchange = function(){ planSt = srcId(); drawGrid(); };
+      drawGrid();
+
       document.querySelectorAll('[data-pd]').forEach(function(b){
         b.onclick = function(){
           if (!confirm('ยกเลิกแผนนี้?')) return;
@@ -352,7 +392,7 @@ var Social = (function(){
         var tv = document.getElementById('plt').value;
         if (!tv) return alert('เลือกเวลาก่อน');
         add.disabled = true;
-        Api.post('/plan/add', { vid:v.id, tx:parseInt(document.getElementById('plx').value, 10),
+        Api.post('/plan/add', { vid:v.id, st:srcId(), tx:parseInt(document.getElementById('plx').value, 10),
           ty:parseInt(document.getElementById('ply').value, 10),
           mission:document.querySelector('input[name=plm]:checked').value, troops:tr,
           fireAt:new Date(tv).getTime() + (Game.timeShift || 0) }).then(function(r2){
@@ -362,7 +402,7 @@ var Social = (function(){
           openPlan(x, y);
         });
       };
-    });
+    }
   }
 
   /* ---------- ติดตั้ง (ใช้ได้ทั้งออนไลน์และออฟไลน์) ---------- */
