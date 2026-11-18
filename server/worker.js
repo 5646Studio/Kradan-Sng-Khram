@@ -3329,18 +3329,18 @@ async function fbLoad(env, t){
   if (t - FBX.at < 15000) return;
   FBX.at = t;
   try {
-    const rows = (await env.DB.prepare('SELECT v.x, v.y, p.guild_id AS gid FROM villages v JOIN players p ON p.uid=v.uid WHERE v.uid<>? AND p.guild_id IS NOT NULL AND ' +
+    const rows = (await env.DB.prepare('SELECT v.x, v.y, p.guild_id AS gid, p.name AS pn FROM villages v JOIN players p ON p.uid=v.uid WHERE v.uid<>? AND p.guild_id IS NOT NULL AND ' +
       '(' + FORTS.map(() => '(v.x=? AND v.y=?)').join(' OR ') + ')').bind(FORT_UID, ...FORTS.flat()).all()).results || [];
     const g = {};
     for (const r of rows){
       const i = FORTS.findIndex(f => f[0] === r.x && f[1] === r.y);
-      if (i >= 0) (g[r.gid] = g[r.gid] || {})[FB_KEYS[i]] = 1;
+      if (i >= 0) (g[r.gid] = g[r.gid] || {})[FB_KEYS[i]] = { x:r.x, y:r.y, by:r.pn };
     }
     FBX.g = g;
   } catch (e){}
 }
 function fbMul(gid, k){ return gid && FBX.g[gid] && FBX.g[gid][k] ? 1 + fbPct(k) / 100 : 1; }
-function fbHeld(gid){ return gid && FBX.g[gid] ? FB_KEYS.filter(k => FBX.g[gid][k]).map(k => ({ k, p:fbPct(k), n:FB_NAME[k] })) : []; }
+function fbHeld(gid){ return gid && FBX.g[gid] ? FB_KEYS.filter(k => FBX.g[gid][k]).map(k => { const h = FBX.g[gid][k]; return { k, p:fbPct(k), n:FB_NAME[k], f:FORT_NAMES[FB_KEYS.indexOf(k)], x:h.x, y:h.y, by:h.by }; }) : []; }
 async function fbGid(env, uid){ const r = uid ? await env.DB.prepare('SELECT guild_id FROM players WHERE uid=?').bind(uid).first() : null; return r ? r.guild_id : null; }
 async function ensureFortOwner(env){
   const t = Date.now();
