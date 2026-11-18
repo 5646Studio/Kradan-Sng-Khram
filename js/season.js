@@ -40,7 +40,7 @@ var Season = (function(){
     var cap = S.forts.filter(function(f){ return f.cap; }), fs = S.forts.filter(function(f){ return !f.cap; });
     if (cap.length) h += '<h4>👑 เมืองหลวงโลก</h4>' + cap.map(card).join('');
     if (Game.fb && Game.fb.length) h += '<div class="infobox" style="line-height:1.7">🎁 <b>กิลด์คุณได้โบนัสจากป้อม</b><br>' +
-      Game.fb.map(function(b){ return '• ' + esc(b.n) + ' +' + b.p + '%'; }).join('<br>') + '</div>';
+      Game.fb.map(function(b){ return '• ' + esc(b.f) + ': ' + esc(b.n) + ' +' + b.p + '%'; }).join('<br>') + '</div>';
     if (fs.length) h += '<h4>🏰 ป้อมปราการ (' + fs.filter(function(f){ return f.owner; }).length + '/' + fs.length + ' มีเจ้าของ)</h4>' + fs.map(card).join('');
     h += '<div class="infobox" style="line-height:1.7">• วันที่ ' + S.fortDay + ' ป้อม 8 แห่งปรากฏ ยึดด้วยขุนพล (ต้องอยู่ในกิลด์ ไม่ใช้ CP)<br>' +
       '• ป้อมให้ +' + S.fortCp + ' CP/วัน · สร้างหรือฝึกทหารในป้อมไม่ได้ ให้ส่งกำลังหนุนไปประจำการ<br>' +

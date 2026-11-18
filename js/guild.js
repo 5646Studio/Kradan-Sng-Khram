@@ -238,8 +238,15 @@ var Guild = (function(){
         UI.fmt(totalPop(g)) + '</b></div>';
       h += '<div class="row"><span>ป้อมที่กิลด์ยึดได้</span>' +
         '<b style="color:#ffcf40">' + forts + ' / 8</b></div>';
-      if (fbl) h += '<div class="row"><span>โบนัสกิลด์</span><b style="color:#8fbf5f">' + (forts ? '' : 'ยังไม่มี') + '</b></div>' +
-        fbl.map(function(b){ return '<div class="row"><span>🎁 ' + b.n + '</span><b style="color:#8fbf5f">+' + b.p + '%</b></div>'; }).join('');
+      if (fbl){
+        var ex = function(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){ return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); };
+        h += '<div class="row"><span>🎁 โบนัสจากป้อมที่ครอง</span><b style="color:#8fbf5f">' + (forts ? '' : 'ยังไม่มี') + '</b></div>' +
+          fbl.map(function(b){
+            return '<div class="row"><span>🏰 ' + ex(b.f) + ' <small style="color:#a89468">(' + b.x + '|' + b.y + ')</small><br>' +
+              '<small style="color:#a89468">' + ex(b.n) + ' · ยึดโดย ' + ex(b.by) + '</small></span>' +
+              '<b style="color:#8fbf5f">+' + b.p + '%</b></div>';
+          }).join('');
+      }
       else h += '<div class="row"><span>โบนัสกิลด์</span>' +
         '<b style="color:#8fbf5f">โจมตี +' + (forts*3) + '%</b></div>';
       h += '<div class="row"><span>ตำแหน่งของคุณ</span><b>' +
