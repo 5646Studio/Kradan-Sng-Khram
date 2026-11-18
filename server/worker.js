@@ -1682,7 +1682,7 @@ const CPN = [0, 0, 300, 750, 1350, 2100, 3000, 4100, 5300, 6600, 8000, 9500, 110
 
 /* ---------- ข้อมูลสาธารณะ (มีแท็กกิลด์) ---------- */
 async function world(env){
-  const r = await env.DB.prepare('SELECT v.id, v.x, v.y, v.name AS vn, v.pop, v.uid, p.name AS pn, p.is_bot AS bot, g.tag AS gt, p.guild_id AS gid FROM villages v JOIN players p ON p.uid=v.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE p.banned=0 LIMIT 5000').all();
+  const r = await env.DB.prepare('SELECT v.id, v.x, v.y, v.name AS vn, v.pop, v.uid, p.name AS pn, p.is_bot AS bot, g.tag AS gt, p.guild_id AS gid, CASE WHEN ' + FORTS.map(f => '(v.x=' + (f[0] | 0) + ' AND v.y=' + (f[1] | 0) + ')').join(' OR ') + ' THEN g.name END AS gn FROM villages v JOIN players p ON p.uid=v.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE p.banned=0 LIMIT 5000').all();
     const oa = await env.DB.prepare('SELECT o.x, o.y, o.uid, o.vid, p.name AS pn FROM oasis o LEFT JOIN players p ON p.uid=o.uid').all();
   return json({ ok:true, now:Date.now(), v:r.results || [], oa:oa.results || [] }, 200, env);
 }
@@ -3425,10 +3425,10 @@ async function seasonTick(env){
 async function seasonInfo(env){
   const t = Date.now(), S = await seasonState(env);
   await fbLoad(env, t);
-  const rows = (await env.DB.prepare("SELECT v.x, v.y, v.name, v.data, p.name AS pn, p.is_bot, p.guild_id AS gid, g.tag FROM villages v JOIN players p ON p.uid=v.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE json_extract(v.data,'$.fort')=1").all()).results || [];
+  const rows = (await env.DB.prepare("SELECT v.x, v.y, v.name, v.data, p.name AS pn, p.is_bot, p.guild_id AS gid, g.tag, g.name AS gnm FROM villages v JOIN players p ON p.uid=v.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE json_extract(v.data,'$.fort')=1").all()).results || [];
   const forts = rows.map(r => {
     const d = JSON.parse(r.data), npc = r.is_bot === 3, bi = FORTS.findIndex(f => f[0] === r.x && f[1] === r.y), bk = bi >= 0 ? FB_KEYS[bi] : null;
-    return { x:r.x, y:r.y, name:r.name, cap:!!d.cap, owner:npc ? null : r.pn, tag:r.tag || null,
+    return { x:r.x, y:r.y, name:r.name, cap:!!d.cap, owner:npc ? null : r.pn, tag:r.tag || null, gname:r.gnm || null,
       bk, bn:bk ? FB_NAME[bk] : null, bp:bk ? fbPct(bk) : 0,
       loy:Math.round(loyNow(d, t, npc ? 1 : fbMul(r.gid, 'loy'))), wall:d.wallLv | 0, garrison:npc ? tcount(d.troops) : null };
   });
