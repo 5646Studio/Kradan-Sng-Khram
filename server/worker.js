@@ -26,6 +26,11 @@ const START_GOLD = 50, PROTECT_DAYS = 5, BASE_CAP = 3000;
 let BOT_ON = 1, BOT_TARGET = 40, BOT_BATCH = 20, BOT_EVERY = 15;
 let FORT_REGEN = 1, CAP_REGEN = 1;
 let CAP_NEED_FORTS = 2, FORT_CP = 50;
+/* v15J — โบนัสป้อม: ได้ทั้งกิลด์ที่ครองป้อม · ปรับได้จากหน้า admin · หน่วย % */
+let FB_INF = 10, FB_DEF = 10, FB_SPD = 15, FB_CARRY = 20, FB_CAV = 10, FB_TRAIN = 15, FB_CATA = 10, FB_LOY = 25;
+const FB_KEYS = ['inf', 'def', 'spd', 'carry', 'cav', 'train', 'cata', 'loy'];   /* ตามลำดับ FORTS: อุดร อีสาน บูรพา อาคเนย์ ทักษิณ หรดี ประจิม พายัพ */
+const FB_NAME = { inf:'ทหารราบโจมตี', def:'ป้องกันทุกเมือง', spd:'เดินทัพเร็วขึ้น', carry:'บรรทุกของปล้น', cav:'ทหารม้าโจมตี', train:'ฝึกทหารเร็วขึ้น', cata:'ปืนใหญ่แรงขึ้น', loy:'ความภักดีฟื้นเร็วขึ้น' };
+function fbPct(k){ return { inf:FB_INF, def:FB_DEF, spd:FB_SPD, carry:FB_CARRY, cav:FB_CAV, train:FB_TRAIN, cata:FB_CATA, loy:FB_LOY }[k] || 0; }
 const ONLINE_MS = 3 * 60000;
 const RES = ['wheat', 'wood', 'iron', 'clay'];
 const RTH = { wheat:'ข้าว', wood:'ไม้', iron:'เหล็ก', clay:'โคลน' };
@@ -432,7 +437,7 @@ function SJ(d){ return JSON.stringify(d, (k, v) => (k && k[0] === '_') ? undefin
 
 /* ---------- ฝึกทหาร ---------- */
 function eachSec(u, bl){ return Math.max(5, Math.round(u.time * Math.pow(0.9, bl - 1) / SPEED)); }
-function trainUnits(d, tribe, t, id, n, bk){
+function trainUnits(d, tribe, t, id, n, bk, tm){
   if (d.fort) throw ue('ฝึกทหารในป้อมไม่ได้ ให้ส่งกำลังหนุนมาประจำการแทน');
   const u = UNITS[id];
   if (!u || u.tribe !== tribe) throw ue('ไม่พบหน่วยนี้ในเผ่าของคุณ');
@@ -449,7 +454,7 @@ function trainUnits(d, tribe, t, id, n, bk){
   if (u.req && lvl(d, u.req[0]) < u.req[1]) throw ue('ต้องมี' + BD[u.req[0]].n + 'ระดับ ' + u.req[1]);
   for (const r of RES) if (d.res[r] + 1e-6 < u.cost[r] * n * mul) throw ue('ทรัพยากรไม่พอ');
   for (const r of RES) d.res[r] -= u.cost[r] * n * mul;
-  const each = eachSec(u, bl) * 1000;
+  const each = Math.max(5000, Math.round(eachSec(u, bl) * 1000 / (tm || 1)));   /* v15J โบนัสป้อม: ฝึกเร็วขึ้น */
   if (!d.train) d.train = {};
   const q = d.train[qk] || (d.train[qk] = []);
   const last = q[q.length - 1];
@@ -693,7 +698,7 @@ async function route(req, env){
       if (/[<>]/.test(nm)) throw ue('ห้ามใช้อักขระ < >');
       V.row.name = nm; V.dirty = true;
     },
-    '/train': ctx => { const V = findV(ctx, b.vid); trainUnits(V.d, ctx.P.tribe, ctx.t, String(b.u || ''), b.n, String(b.bld || '')); V.dirty = true; },
+    '/train': ctx => { const V = findV(ctx, b.vid); trainUnits(V.d, ctx.P.tribe, ctx.t, String(b.u || ''), b.n, String(b.bld || ''), fbMul(ctx.P.guild_id, 'train')); V.dirty = true; },
     '/train/cancel': ctx => { const V = findV(ctx, b.vid); const n = trainCancel(V.d, ctx.t, String(b.bld || ''), b.idx | 0); V.dirty = true; return { n }; },
     '/send': ctx => sendArmy(ctx, env, b),
     /* v14Z — เรียกทัพกลับภายใน 1 นาทีหลังออกเดินทาง */
@@ -776,6 +781,7 @@ function goldItem(ctx, b){
 
 /* ---------- โหลด → ทำรายการ → บันทึก ---------- */
 async function session(env, uid, act){
+  await fbLoad(env);
   try { await resolveDue(env, Date.now(), 10); } catch (e){ console.log('resolve', e && e.message); }
   for (let attempt = 0; attempt < 3; attempt++){
     const P = await env.DB.prepare('SELECT * FROM players WHERE uid=?').bind(uid).first();
@@ -859,7 +865,7 @@ function stateOf(ctx, err){
     player:{ uid:P.uid, name:P.name, gold:P.gold, cp:cpNow(P, VS, t), cpRate:cpPerDay(VS), tribe:P.tribe, zone:P.zone,
     builders:bCount(P, t), builderUntil:P.builder_until, protectUntil:P.protect_until, created:P.created,
     renameN:P.rename_n | 0, renameAt:P.rename_at || 0, oldName:P.old_name || null,
-    schedUntil:P.sched_until || 0, cpNext:CPN[nReal(VS, V => V.d) + 1] || 0, guild:P.guild_id || 0, grole:P.guild_role | 0, ck:{ today:thDay(t), last:P.ck_day | 0, n:P.ck_n | 0 }, tut:P.tut | 0 },
+    schedUntil:P.sched_until || 0, cpNext:CPN[nReal(VS, V => V.d) + 1] || 0, guild:P.guild_id || 0, grole:P.guild_role | 0, fb:fbHeld(P.guild_id), ck:{ today:thDay(t), last:P.ck_day | 0, n:P.ck_n | 0 }, tut:P.tut | 0 },
     msgUnread:ctx.msgUnread || 0,
     rooms:ctx.rooms || null,
     quest:questOut(P, ctx),
@@ -868,7 +874,7 @@ function stateOf(ctx, err){
       const d = V.d;
       return { id:V.row.id, x:V.row.x, y:V.row.y, name:V.row.name, first:!!d.first, bio:d.bio, fields:d.fields,
         city:d.city, wallLv:d.wallLv || 0, res:d.res, resAt:d.resAt, queue:d.queue, pop:population(d), caps:caps(d),
-        fort:d.fort | 0, cap:d.cap | 0, demo:demoOut(d), party:d.party || null, loy:Math.round(loyNow(d, t)), exp:{ slots:expSlots(d), used:d.expUsed | 0, chief:chiefCap(d) }, oa:d.oa || [], hero:heroOut(d, t), troops:d.troops || {}, train:d.train || {}, upkeep:tUp(d.troops) + (d._away || 0),
+        fort:d.fort | 0, cap:d.cap | 0, demo:demoOut(d), party:d.party || null, loy:Math.round(loyNow(d, t, fbMul(P.guild_id, 'loy'))), exp:{ slots:expSlots(d), used:d.expUsed | 0, chief:chiefCap(d) }, oa:d.oa || [], hero:heroOut(d, t), troops:d.troops || {}, train:d.train || {}, upkeep:tUp(d.troops) + (d._away || 0),
         rate:{ wheat:rate(d,'wheat'), wood:rate(d,'wood'), iron:rate(d,'iron'), clay:rate(d,'clay') } };
     }),
     moves:ctx.moves.filter(m => m.uid === P.uid).map(mvOut),
@@ -899,6 +905,7 @@ function vUpd(env, r, d, t){
   return env.DB.prepare('UPDATE villages SET data=?, pop=?, ver=ver+1, updated=? WHERE id=? AND ver=?').bind(SJ(d), population(d), t, r.id, r.ver);
 }
 async function resolveDue(env, t, limit){
+  await fbLoad(env, t);
   const rows = (await env.DB.prepare('SELECT * FROM moves WHERE arrive<=? AND lock<? ORDER BY arrive LIMIT ?').bind(t, t - 60000, limit).all()).results || [];
   for (const m of rows){
     if (m.tries >= 5){ await env.DB.prepare('DELETE FROM moves WHERE id=?').bind(m.id).run(); continue; }
@@ -2249,9 +2256,14 @@ async function oasisRelease(env, uid, b){
   return json({ ok:true, k, fixed: mine ? 0 : fixed }, 200, env);
 }
 
-function fight(at, aB, dt, dB, wall, mission, base, aX, dX){
+function fight(at, aB, dt, dB, wall, mission, base, aX, dX, fx){
   let ai = 0, ac = 0;
-  for (const k in at){ const u = UNITS[k]; if (!u) continue; const p = at[k] * u.atk; if (u.type === 'cav') ac += p; else ai += p; }
+  for (const k in at){
+    const u = UNITS[k]; if (!u) continue;
+    let p = at[k] * u.atk;
+    if (fx){ if (u.type === 'inf') p *= fx.inf || 1; else if (u.type === 'cav') p *= fx.cav || 1; }   /* v15J โบนัสป้อม */
+    if (u.type === 'cav') ac += p; else ai += p;
+  }
   const A = (ai + ac + (aX || 0)) * aB, cs = (ai + ac) > 0 ? ac / (ai + ac) : 0;
   let D = base + (dX || 0);
   for (const k in (dt || {})){ const u = UNITS[k]; if (u) D += dt[k] * (u.di * (1 - cs) + u.dc * cs); }
@@ -2330,7 +2342,7 @@ async function sendArmy(ctx, env, b){
     if (isFort(tx, ty) || (tx === 0 && ty === 0)) throw ue(fortClosed());
     if (!T.npc && !T.oasis) throw ue('ไม่มีเมืองที่พิกัดนี้');
   }
-  const spd = minS * (1 + 0.03 * lvl(d, 'trainground'));
+  const spd = minS * (1 + 0.03 * lvl(d, 'trainground')) * fbMul(ctx.P.guild_id, 'spd');
   const sec = Math.max(60, Math.round(Math.hypot(tx - V.row.x, ty - V.row.y) / spd * 3600 / TSPEED));
   for (const k in tr){ d.troops[k] -= tr[k]; if (d.troops[k] <= 0) delete d.troops[k]; }
   if (hj) d.hero.army = ctx.t;
@@ -2366,13 +2378,13 @@ async function doReturn(env, m){
   return res[0].meta.changes > 0;
 }
 
-async function oasisArrive(env, m, T, tr, smA, H, rep, at){
+async function oasisArrive(env, m, T, tr, smA, H, rep, at, fx){
   const DB = env.DB, k = m.tx + ',' + m.ty, O = T.oasis;
   const own = await DB.prepare('SELECT o.*, p.name AS pn FROM oasis o LEFT JOIN players p ON p.uid=o.uid WHERE o.k=?').bind(k).first();
   const nd = own ? 300 + O.pct * 8 : 200 + O.pct * 16;
   rep.d.name = own ? (own.pn || 'ผู้ครอบครอง') : 'สัตว์ป่า';
   rep.d.v = 'โอเอซิส +' + O.pct + '%';
-  const f = fight(tr, smA, {}, 1, 0, m.mission, nd, H ? H.atk : 0, 0);
+  const f = fight(tr, smA, {}, 1, 0, m.mission, nd, H ? H.atk : 0, 0, fx);
   const ka = kill(tr, f.la);
   rep.a.lost = ka.dead; rep.win = f.win; rep.pw = { a:f.A, d:f.D };
   heroAfter(H, f.la, f.win ? Math.round(nd / 10) : 0);
@@ -2416,6 +2428,8 @@ async function doArrive(env, m){
   const aV = await getV(env, m.from_vid), aP = await getP(env, m.uid);
   const smA = (aV ? smithyB(JSON.parse(aV.data)) : 1) * (H ? 1 + (H.off | 0) * 0.002 : 1);
   const hA = H ? H.atk : 0;
+  await fbLoad(env, t);
+  const agid = aP ? aP.guild_id : null, fxA = { inf:fbMul(agid, 'inf'), cav:fbMul(agid, 'cav') }, carryM = fbMul(agid, 'carry');   /* v15J โบนัสป้อมของกิลด์ผู้โจมตี */
   const rep = { mission:m.mission, at,
     a:{ name:aP ? aP.name : '?', v:aV ? aV.name : '?', x:m.fx, y:m.fy, sent:tr, lost:{} },
     d:{ name:RUIN_NAME, v:'', x:m.tx, y:m.ty, troops:null, lost:{} }, loot:null, win:false };
@@ -2444,7 +2458,7 @@ async function doArrive(env, m){
         for (const s of SG){ s._t = JSON.parse(s.troops || '{}'); for (const k in s._t) all[k] = (all[k] || 0) + s._t[k]; }
         rep.d.troops = Object.assign({}, all);
         const dh = heroHome(dd);
-        const f = fight(tr, smA, all, armouryB(dd), wall, m.mission, 10, hA, dh ? heroDefP(dh) : 0);
+        const f = fight(tr, smA, all, armouryB(dd) * fbMul(dP.guild_id, 'def'), wall, m.mission, 10, hA, dh ? heroDefP(dh) : 0, fxA);
         const ka = kill(tr, f.la), kd = kill(all, f.ld);
         left = ka.left; dd.troops = kill(dd.troops, f.ld).left;
         m._sx = SG.map(s => {
@@ -2456,7 +2470,7 @@ async function doArrive(env, m){
         heroAfter(H, f.la, expOf(kd.dead) * 2 + (f.win ? 5 + Math.floor(population(dd) / 10) : 0));
         if (dh) rep.d.hero = heroHit(dh, f.ld, expOf(ka.dead) * 2, at);
         if (f.win){
-          loot = takeLoot(dd.res, hideCap(dd), carryOf(left));
+          loot = takeLoot(dd.res, hideCap(dd), carryOf(left) * carryM);
           for (const x of RES) dd.res[x] -= loot[x];
           const rams = ramCount(left);
           if (m.mission === 'attack' && rams > 0 && wall > 0){
@@ -2464,7 +2478,7 @@ async function doArrive(env, m){
             if (drop > 0){ dd.wallLv = wall - drop; rep.wall = [wall, dd.wallLv]; }
           }
           const cats = cataCount(left);
-          if (m.mission === 'attack' && cats > 0) cataHit(dd, cats, rep);
+          if (m.mission === 'attack' && cats > 0) cataHit(dd, cats * fbMul(agid, 'cata'), rep);
         }
         rep.loot = loot;
       }
@@ -2480,7 +2494,7 @@ async function doArrive(env, m){
     }
   } else {
     const T = tile(m.tx, m.ty);
-    if (T.oasis) left = await oasisArrive(env, m, T, tr, smA, H, rep, at);
+    if (T.oasis) left = await oasisArrive(env, m, T, tr, smA, H, rep, at, fxA);
     else if (!T.npc) rep.miss = true;
     else {
       const k = m.tx + ',' + m.ty;
@@ -2493,11 +2507,11 @@ async function doArrive(env, m){
       rep.d.v = 'เมืองร้าง';
       if (m.mission === 'scout'){ rep.win = true; rep.intel = { res, troops:null, wall:0, npcDef:nd }; }
       else {
-        const f = fight(tr, smA, {}, 1, 0, m.mission, nd, hA, 0);
+        const f = fight(tr, smA, {}, 1, 0, m.mission, nd, hA, 0, fxA);
         const ka = kill(tr, f.la);
         left = ka.left; rep.a.lost = ka.dead; rep.win = f.win; rep.pw = { a:f.A, d:f.D };
         heroAfter(H, f.la, f.win ? Math.round(nd / 12) : 0);
-        if (f.win){ loot = takeLoot(res, 0, carryOf(left)); for (const x of RES) res[x] -= loot[x]; }
+        if (f.win){ loot = takeLoot(res, 0, carryOf(left) * carryM); for (const x of RES) res[x] -= loot[x]; }
         rep.loot = loot;
         st.push(env.DB.prepare('INSERT INTO npc(k,at,res) VALUES(?,?,?) ON CONFLICT(k) DO UPDATE SET at=excluded.at, res=excluded.res')
           .bind(k, at, JSON.stringify(res)));
@@ -2509,7 +2523,7 @@ async function doArrive(env, m){
   const heroBack = !!(H && !H.dead);
   const g = guardV ? GUARD : '', gb = guardV ? [guardV.id, guardV.ver + 1] : [];
   const alive = tcount(left) > 0 || heroBack;
-  const BL = backLeg(m, aV, left, at);
+  const BL = backLeg(m, aV, left, at, fbMul(agid, 'spd'));
   if (alive){
     st.push(env.DB.prepare('UPDATE moves SET state=?, troops=?, loot=?, hero=?, fx=?, fy=?, tx=?, ty=?, depart=?, arrive=?, lock=0, tries=0 WHERE id=?' + g)
       .bind('back', JSON.stringify(left), JSON.stringify(loot), heroBack ? JSON.stringify(H) : null,
@@ -2560,9 +2574,9 @@ function trainCancel(d, t, bk, idx){
 }
 
 /* ขากลับ: ครั้งสุดท้ายของโควตา → กลับเมืองเจ้าของตรงจากสนามรบ */
-function backLeg(m, aV, left, at){
+function backLeg(m, aV, left, at, sp){
   if (m.st_last && aV)
-    return { x:aV.x, y:aV.y, arrive:at + Math.max(60, Math.round(Math.hypot(aV.x - m.tx, aV.y - m.ty) / minSpd(left) * 3600 / TSPEED)) * 1000 };
+    return { x:aV.x, y:aV.y, arrive:at + Math.max(60, Math.round(Math.hypot(aV.x - m.tx, aV.y - m.ty) / (minSpd(left) * (sp || 1)) * 3600 / TSPEED)) * 1000 };
   return { x:m.fx, y:m.fy, arrive:at + (at - m.depart) };
 }
 
@@ -2639,6 +2653,7 @@ async function stationApi(p, b, env, uid){
   const me = await getP(env, uid);
   if (!me) throw ue('ยังไม่ได้ลงทะเบียน');
   if (me.banned) throw ue('บัญชีนี้ถูกระงับ');
+  await fbLoad(env, t);
 
   if (p === '/station/list'){
     try { await stationSweep(env); } catch (e){}
@@ -2666,7 +2681,7 @@ async function stationApi(p, b, env, uid){
     const st = [DB.prepare('DELETE FROM stations WHERE id=? AND raids=? AND troops=?').bind(s.id, s.raids, s.troops)];
     let sec = 0;
     if (tcount(tr) && A){
-      sec = Math.max(60, Math.round(Math.hypot(A.x - s.x, A.y - s.y) / minSpd(tr) * 3600 / TSPEED));
+      sec = Math.max(60, Math.round(Math.hypot(A.x - s.x, A.y - s.y) / (minSpd(tr) * fbMul(me.guild_id, 'spd')) * 3600 / TSPEED));
       st.push(DB.prepare('INSERT INTO moves(uid,from_vid,fx,fy,tx,ty,to_vid,to_uid,mission,troops,loot,depart,arrive,state,lock,tries) SELECT ?,?,?,?,?,?,NULL,NULL,?,?,?,?,?,?,0,0 WHERE changes()>0')
         .bind(uid, A.id, s.x, s.y, A.x, A.y, 'support', s.troops, '{}', t, t + sec * 1000, 'back'));
     }
@@ -2710,7 +2725,8 @@ async function stationApi(p, b, env, uid){
     }
     for (const k in send){ tr[k] -= send[k]; if (tr[k] <= 0) delete tr[k]; }
     const raids = s.raids + 1, last = raids >= s.quota ? 1 : 0;
-    const sec = Math.max(60, Math.round(Math.hypot(tx - s.x, ty - s.y) / minSpd(send) * 3600 / TSPEED));
+    const spM = fbMul(s.owner_uid === uid ? me.guild_id : await fbGid(env, s.owner_uid), 'spd');   /* v15J โบนัสป้อม: กิลด์เจ้าของทหาร */
+    const sec = Math.max(60, Math.round(Math.hypot(tx - s.x, ty - s.y) / (minSpd(send) * spM) * 3600 / TSPEED));
     const lootVid = s.host_uid === s.owner_uid ? s.host_vid : s.owner_vid;
     const MV = 'INSERT INTO moves(uid,from_vid,fx,fy,tx,ty,to_vid,to_uid,mission,troops,loot,depart,arrive,state,lock,tries,hero,st,st_last,loot_vid) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,NULL,?,?,? WHERE (SELECT raids FROM stations WHERE id=?)=?';
     const st = [
@@ -2720,7 +2736,7 @@ async function stationApi(p, b, env, uid){
     ];
     if (last){
       if (tcount(tr)){
-        const hs = Math.max(60, Math.round(Math.hypot(A.x - s.x, A.y - s.y) / minSpd(tr) * 3600 / TSPEED));
+        const hs = Math.max(60, Math.round(Math.hypot(A.x - s.x, A.y - s.y) / (minSpd(tr) * spM) * 3600 / TSPEED));
         st.push(DB.prepare(MV).bind(s.owner_uid, s.owner_vid, s.x, s.y, A.x, A.y, null, null, 'support', JSON.stringify(tr), '{}',
           t, t + hs * 1000, 'back', null, 1, null, s.id, raids));
       }
@@ -2760,9 +2776,9 @@ function expSlots(d){
 }
 
 function chiefCap(d){ const p = lvl(d, 'palace'); return p >= 20 ? 4 : p >= 15 ? 3 : p >= 10 ? 2 : p >= 5 ? 1 : 0; }
-function loyNow(d, t){
+function loyNow(d, t, m){
   const l = d.loy == null ? 100 : d.loy;
-  const r = 1 + 0.5 * Math.max(lvl(d, 'residence'), lvl(d, 'palace'));
+  const r = (1 + 0.5 * Math.max(lvl(d, 'residence'), lvl(d, 'palace'))) * (m || 1);   /* v15J โบนัสป้อม */
   return Math.max(0, Math.min(100, l + r * SPEED * Math.max(0, t - (d.loyAt || t)) / 3600000));
 }
 function unitHave(ctx, V, id){
@@ -2786,7 +2802,7 @@ async function trainEx(ctx, env, b){
     for (const s of (sr.results || [])) have += (JSON.parse(s.troops || '{}')[u.id] || 0);
     if (have + n > cap) throw ue('มีขุนพลได้สูงสุด ' + cap + ' นาย (พระราชวัง Lv.5/10/15/20 → 1/2/3/4) · นับรวมขุนพลที่ประจำการต่างเมืองด้วย');
   }
-  trainUnits(d, ctx.P.tribe, ctx.t, String(b.u || ''), b.n, String(b.bld || ''));
+  trainUnits(d, ctx.P.tribe, ctx.t, String(b.u || ''), b.n, String(b.bld || ''), fbMul(ctx.P.guild_id, 'train'));
   V.dirty = true;
 }
 
@@ -2849,7 +2865,7 @@ async function conquerCheck(env, m, dr, dd, dP, aP, left, rep, at){
   const ck = Object.keys(left).filter(k => UNITS[k] && UNITS[k].type === 'chief' && left[k] > 0);
   const nc = ck.reduce((s, k) => s + left[k], 0);
   if (!nc || !aP) return;
-  const DB = env.DB, l0 = loyNow(dd, at);
+  const DB = env.DB, l0 = loyNow(dd, at, fbMul(dP.guild_id, 'loy'));
   let why = null;
   if (lvl(dd, 'palace') > 0) why = 'เมืองหลวง (มีพระราชวัง) ยึดไม่ได้';
   else if (!dd.fort && dP.is_bot !== 2){
@@ -2869,6 +2885,7 @@ async function conquerCheck(env, m, dr, dd, dP, aP, left, rep, at){
   if (left[ck[0]] <= 0) delete left[ck[0]];
   dd.loy = 25; dd.loyAt = at; dd.troops = {}; dd.queue = []; dd.train = {}; dd.oa = []; dd.grudge = {};
   dd.expUsed = 0; dd.first = false; dd.hero = dd.fort ? null : heroNew(at);
+  if (dd.fort) FBX.at = 0;   /* v15J โบนัสป้อมเปลี่ยนมือ */
   if (dd.fort){ m._sx = m._sx || []; m._sx.push(DB.prepare("INSERT INTO msgs(conv,from_uid,to_uid,text,at,read,reported) SELECT 'r:world',?,NULL,?,?,1,0 WHERE (SELECT ver FROM villages WHERE id=?)=?").bind(FORT_UID, '📢 ' + aP.name + ' ยึด ' + dr.name + ' ได้แล้ว!', at, dr.id, dr.ver + 1)); }
   rep.loy = { a:Math.round(l0), b:0 }; rep.captured = true;
   const G = ' AND (SELECT ver FROM villages WHERE id=?)=?', gb = [dr.id, dr.ver + 1];
@@ -3305,6 +3322,26 @@ async function seasonState(env){
     holder:(await getMeta(env, 'holder')) || '', holdSince:+(await getMeta(env, 'hold_since')) || 0,
     holderName:(await getMeta(env, 'holder_name')) || '', winner:w ? JSON.parse(w) : null, n:+(await getMeta(env, 'season_n')) || 1 };
 }
+/* v15J — โบนัสป้อมของกิลด์ gid → { inf:1, ... } · แคช 15 วินาที (อ่านจากพิกัดป้อม 8 จุดเท่านั้น) */
+const FBX = { at:0, g:{} };
+async function fbLoad(env, t){
+  t = t || Date.now();
+  if (t - FBX.at < 15000) return;
+  FBX.at = t;
+  try {
+    const rows = (await env.DB.prepare('SELECT v.x, v.y, p.guild_id AS gid FROM villages v JOIN players p ON p.uid=v.uid WHERE v.uid<>? AND p.guild_id IS NOT NULL AND ' +
+      '(' + FORTS.map(() => '(v.x=? AND v.y=?)').join(' OR ') + ')').bind(FORT_UID, ...FORTS.flat()).all()).results || [];
+    const g = {};
+    for (const r of rows){
+      const i = FORTS.findIndex(f => f[0] === r.x && f[1] === r.y);
+      if (i >= 0) (g[r.gid] = g[r.gid] || {})[FB_KEYS[i]] = 1;
+    }
+    FBX.g = g;
+  } catch (e){}
+}
+function fbMul(gid, k){ return gid && FBX.g[gid] && FBX.g[gid][k] ? 1 + fbPct(k) / 100 : 1; }
+function fbHeld(gid){ return gid && FBX.g[gid] ? FB_KEYS.filter(k => FBX.g[gid][k]).map(k => ({ k, p:fbPct(k), n:FB_NAME[k] })) : []; }
+async function fbGid(env, uid){ const r = uid ? await env.DB.prepare('SELECT guild_id FROM players WHERE uid=?').bind(uid).first() : null; return r ? r.guild_id : null; }
 async function ensureFortOwner(env){
   const t = Date.now();
   await env.DB.prepare("INSERT OR IGNORE INTO players(uid,name,is_bot,tribe,zone,gold,cp,cp_at,prov,created,seen) VALUES(?,?,3,0,1,0,0,0,'fort',?,?)")
@@ -3387,11 +3424,13 @@ async function seasonTick(env){
 }
 async function seasonInfo(env){
   const t = Date.now(), S = await seasonState(env);
-  const rows = (await env.DB.prepare("SELECT v.x, v.y, v.name, v.data, p.name AS pn, p.is_bot, g.tag FROM villages v JOIN players p ON p.uid=v.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE json_extract(v.data,'$.fort')=1").all()).results || [];
+  await fbLoad(env, t);
+  const rows = (await env.DB.prepare("SELECT v.x, v.y, v.name, v.data, p.name AS pn, p.is_bot, p.guild_id AS gid, g.tag FROM villages v JOIN players p ON p.uid=v.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE json_extract(v.data,'$.fort')=1").all()).results || [];
   const forts = rows.map(r => {
-    const d = JSON.parse(r.data), npc = r.is_bot === 3;
+    const d = JSON.parse(r.data), npc = r.is_bot === 3, bi = FORTS.findIndex(f => f[0] === r.x && f[1] === r.y), bk = bi >= 0 ? FB_KEYS[bi] : null;
     return { x:r.x, y:r.y, name:r.name, cap:!!d.cap, owner:npc ? null : r.pn, tag:r.tag || null,
-      loy:Math.round(loyNow(d, t)), wall:d.wallLv | 0, garrison:npc ? tcount(d.troops) : null };
+      bk, bn:bk ? FB_NAME[bk] : null, bp:bk ? fbPct(bk) : 0,
+      loy:Math.round(loyNow(d, t, npc ? 1 : fbMul(r.gid, 'loy'))), wall:d.wallLv | 0, garrison:npc ? tcount(d.troops) : null };
   });
   return json(Object.assign({ ok:true, len:SEASON_DAYS, fortDay:FORT_DAY, capDay:CAP_DAY, hold:holdNeed(S.day), over:S.day > SEASON_DAYS,
     needForts:CAP_NEED_FORTS, fortCp:FORT_CP, speed:SPEED, tspeed:TSPEED, forts }, S), 200, env);
@@ -4188,12 +4227,14 @@ function bldAct(ctx, b, op){
 const TUNE_LIM = { botAtt:[0, 60], botHit:[0, 1], botRange:[5, 60], botPrey:[0.3, 10], botPreyWar:[0.3, 20],
   botPlayerW:[0, 10], cpBase:[0, 300], invGold:[0, 500], invFriend:[0, 300],
   botOn:[0, 1], botTarget:[0, 200], botEvery:[5, 60], botBatch:[5, 60],
-  fortRegen:[-10, 10], capRegen:[-10, 10], fortCp:[0, 500], capNeed:[0, 8] };
+  fortRegen:[-10, 10], capRegen:[-10, 10], fortCp:[0, 500], capNeed:[0, 8],
+  fbInf:[0, 100], fbDef:[0, 100], fbSpd:[0, 100], fbCarry:[0, 200], fbCav:[0, 100], fbTrain:[0, 100], fbCata:[0, 100], fbLoy:[0, 200] };
 function tuneCur(){
   return { botAtt:BOT_ATT_MAX, botHit:BOT_HIT_PLAYERS ? 1 : 0, botRange:BOT_RANGE, botPrey:BOT_PREY, botPreyWar:BOT_PREY_WAR,
     botPlayerW:BOT_PLAYER_W, cpBase:CP_BASE, invGold:INV_GOLD, invFriend:INV_FRIEND_GOLD,
     botOn:BOT_ON, botTarget:BOT_TARGET, botEvery:BOT_EVERY, botBatch:BOT_BATCH,
-    fortRegen:FORT_REGEN, capRegen:CAP_REGEN, fortCp:FORT_CP, capNeed:CAP_NEED_FORTS };
+    fortRegen:FORT_REGEN, capRegen:CAP_REGEN, fortCp:FORT_CP, capNeed:CAP_NEED_FORTS,
+    fbInf:FB_INF, fbDef:FB_DEF, fbSpd:FB_SPD, fbCarry:FB_CARRY, fbCav:FB_CAV, fbTrain:FB_TRAIN, fbCata:FB_CATA, fbLoy:FB_LOY };
 }
 const TUNE_DEF = tuneCur(), TUNE_C = { at:0 };
 function tuneSet(o){
@@ -4204,6 +4245,7 @@ function tuneSet(o){
   BOT_EVERY = [5, 10, 15, 20, 30, 60].reduce((a, b) => Math.abs(b - v.botEvery) < Math.abs(a - v.botEvery) ? b : a);
   FORT_REGEN = +v.fortRegen; CAP_REGEN = +v.capRegen;
   FORT_CP = Math.round(+v.fortCp); CAP_NEED_FORTS = Math.round(+v.capNeed);
+  FB_INF = +v.fbInf; FB_DEF = +v.fbDef; FB_SPD = +v.fbSpd; FB_CARRY = +v.fbCarry; FB_CAV = +v.fbCav; FB_TRAIN = +v.fbTrain; FB_CATA = +v.fbCata; FB_LOY = +v.fbLoy;
 }
 async function tuneLoad(env, t){
   if (t - TUNE_C.at < 60000) return;
