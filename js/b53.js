@@ -314,9 +314,36 @@ var B53 = (function(){
       gp('/guild/create', { name:$('gcN').value, tag:$('gcT').value, desc:$('gcD').value }, '🏯 ตั้งกิลด์สำเร็จ');
     });
   }
+  /* v15J — แท็บป้อมของกิลด์: ป้อมที่ครอง + โบนัส (ข้อมูลจาก /season) */
+  var FS = { at:0, r:null };
+  function fortTab(g){
+    function draw(sr){
+      var box = $('gFort'); if (!box) return;   /* ผู้เล่นสลับแท็บไปแล้ว */
+      var fs = ((sr && sr.forts) || []).filter(function(f){ return !f.cap; });
+      if (!fs.length){
+        box.innerHTML = '<div class="infobox">ป้อมทั้ง 8 แห่งยังไม่ปรากฏในแผนที่<br>เมื่อป้อมปรากฏ ให้ยึดป้อมเพื่อให้ทั้งกิลด์ได้โบนัส</div>';
+        return;
+      }
+      var mine = fs.filter(function(f){ return f.tag === g.tag; });
+      fs.sort(function(a, b){ return (b.tag === g.tag) - (a.tag === g.tag); });
+      box.innerHTML = '<div class="rbar"><span>🏰 ป้อมที่กิลด์ครอง</span><b>' + mine.length + ' / 8</b></div>' +
+        '<div class="infobox">ป้อมแต่ละแห่งให้โบนัสต่างกัน และ <b>ได้ทั้งกิลด์ที่ครองอยู่</b> หายไปเมื่อเสียป้อม</div>' +
+        fs.map(function(f){
+          var m = f.tag === g.tag;
+          return '<div class="gmem"' + (m ? '' : ' style="opacity:.62"') + '><div class="gmh"><b>' + (m ? '✅ ' : '🏰 ') + esc(f.name) +
+            ' (' + f.x + '|' + f.y + ')</b>' + (f.bk ? '<i style="color:#8fbf5f">+' + f.bp + '%</i>' : '') + '</div>' +
+            '<div class="gvl"><span class="gv">' + (f.bk ? '🎁 ' + esc(f.bn) : '') + '</span>' +
+            (f.owner ? '<span class="gv">🏯 ' + esc(f.gname || (f.tag ? '[' + f.tag + ']' : 'ไม่มีกิลด์')) + '</span><span class="gv">👤 ยึดโดย ' + esc(f.owner) + '</span>'
+              : '<span class="gv">🛡 ผู้พิทักษ์ · ยังไม่มีผู้ครอง</span>') + '</div></div>';
+        }).join('');
+    }
+    if (FS.r && Date.now() - FS.at < 20000) return draw(FS.r);
+    Api.get('/season', null, false).then(function(sr){ FS = { at:Date.now(), r:sr }; draw(sr); },
+      function(){ var b = $('gFort'); if (b) b.innerHTML = '<p class="stnone">โหลดข้อมูลป้อมไม่สำเร็จ</p>'; });
+  }
   function inGuild(r){
     var g = r.guild, me = r.me, off = me.role >= 1, lead = me.role >= 2, uid = myUid();
-    var T = [['mem', '👥 สมาชิก'], ['dip', '🤝 การทูต']];
+    var T = [['mem', '👥 สมาชิก'], ['fort', '🏰 ป้อม'], ['dip', '🤝 การทูต']];
     if (off){ T.splice(1, 0, ['req', '📨 คำขอ' + (r.reqs.length ? ' (' + r.reqs.length + ')' : '')]); T.push(['set', '⚙ จัดการ']); }
     if (!T.some(function(t){ return t[0] === GT; })) GT = 'mem';
     var h = '<h3>🏯 [' + esc(g.tag) + '] ' + esc(g.name) + '</h3>' +
@@ -362,7 +389,9 @@ var B53 = (function(){
     if (GT === 'set') h += '<h4>📝 คำอธิบายกิลด์</h4><textarea id="gsD" class="bugta" maxlength="300">' + esc(g.desc) + '</textarea>' +
       '<button class="btn-ok" id="gsGo">✔ บันทึก</button><div class="infobox">ที่นั่งในกิลด์ = 10 + 2 × เลเวลสถานทูตของหัวหน้า (สูงสุด 50)<br>' +
       'ถ้าหัวหน้าออกจากกิลด์ ตำแหน่งจะส่งต่อให้รองหัวหน้าหรือสมาชิกที่ออนไลน์ล่าสุด</div>';
+    if (GT === 'fort') h += '<div id="gFort"><p class="stnone">กำลังโหลด…</p></div>';
     UI.modal(h + CB());
+    if (GT === 'fort') fortTab(g);
 
     document.querySelectorAll('[data-gt]').forEach(function(b){ b.onclick = function(){ GT = b.dataset.gt; inGuild(r); }; });
     on('gChat', function(){ if (typeof Chat3 !== 'undefined') Chat3.open('g'); });
@@ -411,5 +440,6 @@ var B53 = (function(){
   }
   return { install:install, onState:onState, relOf:relOf, isMate:isMate, gVills:gVills, openParty:openParty,
     openMarket:openMarket, openGuild:openGuild,
-    rate:function(){ return ST.rate; }, myTag:function(){ return ST.tag; } };
+    rate:function(){ return ST.rate; }, myTag:function(){ return ST.tag; },
+    myGuildName:function(){ return (ST.ginfo && ST.ginfo.guild && ST.ginfo.guild.name) || ''; } };
 })();

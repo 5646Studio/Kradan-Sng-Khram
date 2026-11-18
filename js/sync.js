@@ -197,6 +197,7 @@ var Sync = (function(){
         if (v.uid === S.uid) return;
         var o = by[v.uid];
         if (!o){ o = by[v.uid] = { uid:v.uid, name:v.pn, tag:v.gt || null, gid:v.gid || 0, ruin:v.bot >= 2, fort:v.bot === 3, vills:[] }; L.push(o); }
+        if (v.gn) o.gname = v.gn;   /* v15K ชื่อกิลด์ของผู้ครองป้อม */
         idx[v.x + ',' + v.y] = { p:o, vi:o.vills.length };
         o.vills.push({ x:v.x, y:v.y, n:v.vn, p:v.pop });
       });

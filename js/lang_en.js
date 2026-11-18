@@ -284,5 +284,5 @@ var LANG_EN = {
   'ทหารในกองเสริมทัพไม่เหลือแล้ว':'No troops left in this reinforcement group',
   'กองนี้ใช้โควตาออกรบครบแล้ว':'This group has used all its sorties', 'จากกองเสริมทัพ':'from reinforcements',
   /* v15J — โบนัสป้อม */
-  'โบนัสกิลด์ที่ครอง':'Guild bonus held', 'กิลด์คุณได้โบนัสจากป้อม':'Your guild\'s fort bonuses', 'ยังไม่มี':'None yet', 'ยึดโดย':'Held by', 'โบนัสจากป้อมที่ครอง':'Bonuses from held forts', 'ทหารราบโจมตี':'Infantry attack', 'ป้องกันทุกเมือง':'Defense (all cities)', 'บรรทุกของปล้น':'Loot capacity', 'ทหารม้าโจมตี':'Cavalry attack', 'ฝึกทหารเร็วขึ้น':'Faster training', 'ปืนใหญ่แรงขึ้น':'Stronger catapults', 'ความภักดีฟื้นเร็วขึ้น':'Faster loyalty recovery'
+  'โบนัสกิลด์ที่ครอง':'Guild bonus held', 'กิลด์คุณได้โบนัสจากป้อม':'Your guild\'s fort bonuses', 'ยังไม่มี':'None yet', 'ยึดโดย':'Held by', 'ป้อมที่กิลด์ครอง':'Forts held by guild', 'ยังไม่มีผู้ครอง':'No holder yet', 'โหลดข้อมูลป้อมไม่สำเร็จ':'Could not load fort data', 'ไม่มีกิลด์':'No guild', 'ผู้พิทักษ์ · ยังไม่มีผู้ครอง':'Guardian · no holder yet', 'โบนัสจากป้อมที่ครอง':'Bonuses from held forts', 'ทหารราบโจมตี':'Infantry attack', 'ป้องกันทุกเมือง':'Defense (all cities)', 'บรรทุกของปล้น':'Loot capacity', 'ทหารม้าโจมตี':'Cavalry attack', 'ฝึกทหารเร็วขึ้น':'Faster training', 'ปืนใหญ่แรงขึ้น':'Stronger catapults', 'ความภักดีฟื้นเร็วขึ้น':'Faster loyalty recovery'
 };

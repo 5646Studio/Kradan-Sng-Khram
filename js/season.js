@@ -18,7 +18,7 @@ var Season = (function(){
   }
   function card(f){
     return '<div class="stcard"><div class="vh"><b>' + (f.cap ? '👑 ' : '🏰 ') + esc(f.name) + '</b><span>(' + f.x + '|' + f.y + ')</span></div>' +
-      '<div class="stline">' + (f.owner ? 'เจ้าของ: <b>' + esc(f.owner) + '</b>' + (f.tag ? ' [' + esc(f.tag) + ']' : '')
+      '<div class="stline">' + (f.owner ? '🏯 <b>' + esc(f.gname || (f.tag ? '[' + f.tag + ']' : 'ไม่มีกิลด์')) + '</b> · 👤 ยึดโดย <b>' + esc(f.owner) + '</b>'
         : '🛡 ผู้พิทักษ์ · ทหารเฝ้า ' + UI.fmt(f.garrison)) + ' · 🧱 Lv.' + f.wall + ' · 🏳️ ' + f.loy + '%</div>' +
       (f.bk ? '<div class="stline">🎁 โบนัสกิลด์ที่ครอง: <b style="color:#8fbf5f">' + esc(f.bn) + ' +' + f.bp + '%</b></div>' : '') +
       '<div class="grow2"><button class="btn-ok mini2" data-fs="' + f.x + ',' + f.y + '">⚔ ส่งทัพ</button>' +
