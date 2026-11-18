@@ -282,5 +282,7 @@ var LANG_EN = {
   'ฟีเจอร์นี้สำหรับผู้ที่มีสิทธิ์แผนการรบ':'This feature requires the battle plan pass',
   'กองเสริมทัพนี้ไม่อยู่แล้ว':'This reinforcement group no longer exists',
   'ทหารในกองเสริมทัพไม่เหลือแล้ว':'No troops left in this reinforcement group',
-  'กองนี้ใช้โควตาออกรบครบแล้ว':'This group has used all its sorties', 'จากกองเสริมทัพ':'from reinforcements'
+  'กองนี้ใช้โควตาออกรบครบแล้ว':'This group has used all its sorties', 'จากกองเสริมทัพ':'from reinforcements',
+  /* v15J — โบนัสป้อม */
+  'โบนัสกิลด์ที่ครอง':'Guild bonus held', 'กิลด์คุณได้โบนัสจากป้อม':'Your guild\'s fort bonuses', 'ยังไม่มี':'None yet', 'ทหารราบโจมตี':'Infantry attack', 'ป้องกันทุกเมือง':'Defense (all cities)', 'บรรทุกของปล้น':'Loot capacity', 'ทหารม้าโจมตี':'Cavalry attack', 'ฝึกทหารเร็วขึ้น':'Faster training', 'ปืนใหญ่แรงขึ้น':'Stronger catapults', 'ความภักดีฟื้นเร็วขึ้น':'Faster loyalty recovery'
 };

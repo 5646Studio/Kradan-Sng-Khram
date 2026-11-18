@@ -19,6 +19,7 @@ var Social = (function(){
   function onState(r){
     var P = r.player || {};
     Game.schedUntil = P.schedUntil || 0;
+    Game.fb = P.fb || [];   /* v15J โบนัสป้อมที่กิลด์ได้รับ */
     S.rnN = P.renameN | 0; S.rnAt = P.renameAt || 0;
     S.unread = r.msgUnread | 0;
     if (S.last >= 0 && S.unread > S.last){

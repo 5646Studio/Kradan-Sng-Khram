@@ -20,6 +20,7 @@ var Season = (function(){
     return '<div class="stcard"><div class="vh"><b>' + (f.cap ? '👑 ' : '🏰 ') + esc(f.name) + '</b><span>(' + f.x + '|' + f.y + ')</span></div>' +
       '<div class="stline">' + (f.owner ? 'เจ้าของ: <b>' + esc(f.owner) + '</b>' + (f.tag ? ' [' + esc(f.tag) + ']' : '')
         : '🛡 ผู้พิทักษ์ · ทหารเฝ้า ' + UI.fmt(f.garrison)) + ' · 🧱 Lv.' + f.wall + ' · 🏳️ ' + f.loy + '%</div>' +
+      (f.bk ? '<div class="stline">🎁 โบนัสกิลด์ที่ครอง: <b style="color:#8fbf5f">' + esc(f.bn) + ' +' + f.bp + '%</b></div>' : '') +
       '<div class="grow2"><button class="btn-ok mini2" data-fs="' + f.x + ',' + f.y + '">⚔ ส่งทัพ</button>' +
       '<button class="btn-use2 mini2" data-fm="' + f.x + ',' + f.y + '">🗺 ดูแผนที่</button></div></div>';
   }
@@ -38,9 +39,12 @@ var Season = (function(){
     else h += '<div class="dgrun">👑 เมืองหลวงโลกยังไม่มีเจ้าของ</div>';
     var cap = S.forts.filter(function(f){ return f.cap; }), fs = S.forts.filter(function(f){ return !f.cap; });
     if (cap.length) h += '<h4>👑 เมืองหลวงโลก</h4>' + cap.map(card).join('');
+    if (Game.fb && Game.fb.length) h += '<div class="infobox" style="line-height:1.7">🎁 <b>กิลด์คุณได้โบนัสจากป้อม</b><br>' +
+      Game.fb.map(function(b){ return '• ' + esc(b.n) + ' +' + b.p + '%'; }).join('<br>') + '</div>';
     if (fs.length) h += '<h4>🏰 ป้อมปราการ (' + fs.filter(function(f){ return f.owner; }).length + '/' + fs.length + ' มีเจ้าของ)</h4>' + fs.map(card).join('');
     h += '<div class="infobox" style="line-height:1.7">• วันที่ ' + S.fortDay + ' ป้อม 8 แห่งปรากฏ ยึดด้วยขุนพล (ต้องอยู่ในกิลด์ ไม่ใช้ CP)<br>' +
       '• ป้อมให้ +' + S.fortCp + ' CP/วัน · สร้างหรือฝึกทหารในป้อมไม่ได้ ให้ส่งกำลังหนุนไปประจำการ<br>' +
+      '• ป้อมแต่ละแห่งให้โบนัสต่างกัน และ <b>ได้ทั้งกิลด์ที่ครองอยู่</b> (หายไปทันทีเมื่อเสียป้อม)<br>' +
       '• วันที่ ' + S.capDay + ' เมืองหลวงโลก (0|0) ปรากฏ กิลด์ต้องมีป้อม ' + S.needForts + ' แห่งขึ้นไปจึงจะยึดได้<br>' +
       '• ครองเมืองหลวงครบ ' + S.hold + ' วันติดต่อกันชนะเซิร์ฟเวอร์<br>• หลังวันที่ ' + S.len + ' เกมยังไม่จบจนกว่าจะมีผู้ครองครบ แต่วันที่ต้องครองจะลดลง 1 วันทุก 5 วัน (ต่ำสุด 2 วัน) · ตอนนี้ต้องครอง <b>' + S.hold + '</b> วัน</div>' +
       '<button class="btn-cancel" onclick="UI.close()">ปิด</button>';

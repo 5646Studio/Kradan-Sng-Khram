@@ -231,14 +231,16 @@ var Guild = (function(){
       }
     } else {
       var members = memberList();
-      var forts = Conquest.fortsHeld();
+      var fbl = Game.fb, forts = fbl ? fbl.length : Conquest.fortsHeld();   /* v15J ออนไลน์ใช้โบนัสจากเซิร์ฟเวอร์ */
       h += '<div class="row"><span>สมาชิก</span><b>' + members.length +
         ' / ' + maxMembers() + '</b></div>';
       h += '<div class="row"><span>ประชากรรวม</span><b>' +
         UI.fmt(totalPop(g)) + '</b></div>';
       h += '<div class="row"><span>ป้อมที่กิลด์ยึดได้</span>' +
         '<b style="color:#ffcf40">' + forts + ' / 8</b></div>';
-      h += '<div class="row"><span>โบนัสกิลด์</span>' +
+      if (fbl) h += '<div class="row"><span>โบนัสกิลด์</span><b style="color:#8fbf5f">' + (forts ? '' : 'ยังไม่มี') + '</b></div>' +
+        fbl.map(function(b){ return '<div class="row"><span>🎁 ' + b.n + '</span><b style="color:#8fbf5f">+' + b.p + '%</b></div>'; }).join('');
+      else h += '<div class="row"><span>โบนัสกิลด์</span>' +
         '<b style="color:#8fbf5f">โจมตี +' + (forts*3) + '%</b></div>';
       h += '<div class="row"><span>ตำแหน่งของคุณ</span><b>' +
         (Game.guild.owner ? '👑 หัวหน้ากิลด์' : 'สมาชิก') + '</b></div>';

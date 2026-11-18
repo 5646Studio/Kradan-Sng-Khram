@@ -6,11 +6,14 @@
     tutorial:'🎓 บทแนะนำ', heal:'⛑ รักษา', potion:'🧪 ยา', npc:'⚖ พ่อค้าหลวง', guild:'🏯 ตั้งกิลด์', herolook:'🎨 ปั้นหน้า',
     demolish:'🔨 รื้อถอน', grant:'🛠 แอดมินให้', rush:'⚡ เร่ง', rushall:'⚡ เร่งทั้งหมด', builder:'🔨 ช่างคนที่ 3', spend:'💸 ใช้จ่าย' };
   var TL = { cpBase:'🎭 CP พื้นฐานต่อเมืองต่อวัน', fortCp:'🏰 CP จากการครองป้อม', capNeed:'👑 ต้องครองป้อมกี่แห่งจึงตีเมืองหลวงได้',
+    fbInf:'🏰 ป้อมอุดร · ทหารราบโจมตี +%', fbDef:'🏰 ป้อมอีสาน · ป้องกันทุกเมือง +%', fbSpd:'🏰 ป้อมบูรพา · เดินทัพเร็วขึ้น %',
+    fbCarry:'🏰 ป้อมอาคเนย์ · บรรทุกของปล้น +%', fbCav:'🏰 ป้อมทักษิณ · ทหารม้าโจมตี +%', fbTrain:'🏰 ป้อมหรดี · ฝึกทหารเร็วขึ้น %',
+    fbCata:'🏰 ป้อมประจิม · ปืนใหญ่แรงขึ้น +%', fbLoy:'🏰 ป้อมพายัพ · ความภักดีฟื้นเร็วขึ้น %',
     invGold:'🤝 ทองให้ผู้เชิญ', invFriend:'🤝 ทองให้เพื่อนที่ถูกเชิญ',
     botAtt:'⚔ บอทออกรบสูงสุดต่อรอบ (ขบวน)', botHit:'🎯 บอทบุกผู้เล่นจริง (1 = ใช่ · 0 = ไม่)',
     botRange:'📏 ระยะที่บอทมองหาเป้า (ช่อง)', botPrey:'🐟 บอทบุกผู้เล่นที่ใหญ่กว่าได้ถึง (เท่า)',
     botPreyWar:'🐺 บอทสายทหารบุกได้ถึง (เท่า)', botPlayerW:'🧲 น้ำหนักเป้าผู้เล่น' };
-  var TG_GAME = ['cpBase', 'fortCp', 'capNeed', 'invGold', 'invFriend'];
+  var TG_GAME = ['cpBase', 'fortCp', 'capNeed', 'fbInf', 'fbDef', 'fbSpd', 'fbCarry', 'fbCav', 'fbTrain', 'fbCata', 'fbLoy', 'invGold', 'invFriend'];
   var TG_BOT = ['botAtt', 'botHit', 'botRange', 'botPrey', 'botPreyWar', 'botPlayerW'];
   var ZN = { 1:'เขต 1 · ⛏ เหล็ก', 2:'เขต 2 · 🪵 ไม้', 3:'เขต 3 · 🌾 ข้าว', 4:'เขต 4 · 🧱 ดิน' };
   var loaded = {};
