@@ -665,7 +665,7 @@ var Renderer = (function(){
       Net.list().forEach(function(o){
         (o.vills || []).forEach(function(vv){
           if (vv.x < x0 || vv.x > x1 || vv.y < y0 || vv.y > y1) return;
-          if (World.fortAt(vv.x, vv.y)) return;   /* v15K ป้อมวาดแยกด้วยรูปป้อม */
+          if (World.fortAt(vv.x, vv.y) || World.isCapital(vv.x, vv.y)) return;   /* v15K ป้อม/เมืองหลวงวาดแยกด้วยรูปเฉพาะ */
           drawVillage(screenOf(vv.x, vv.y, ts), ts, (typeof B53 !== 'undefined' ? B53.relOf(o) : 'neutral'),
             label ? '👤 ' + o.name + (o.tag ? ' [' + o.tag + ']' : '') : '', false);
         });
@@ -736,7 +736,8 @@ var Renderer = (function(){
     var capH = Math.ceil(CAP_N / 2);
 if (capH >= x0 && -capH <= x1 && capH >= y0 && -capH <= y1) {
       var pc = screenOf(0, 0, ts);
-      var own2 = Game.capital.owner === 'me';
+      var HC = holdAt(0, 0);   /* v15L ผู้ครองเมืองหลวง: กิลด์ + คนที่ยึด */
+      var own2 = HC.held ? (HC.rel === 'own' || HC.rel === 'guild') : Game.capital.owner === 'me';
       var wim = Assets.get('wc_capital');
       if (wim){
         ctx.drawImage(wim, pc.x - ts*CAP_N/2, pc.y - ts*CAP_N/2, ts*CAP_N, ts*CAP_N);
@@ -746,6 +747,14 @@ if (capH >= x0 && -capH <= x1 && capH >= y0 && -capH <= y1) {
           ctx.textAlign = 'center';
           ctx.shadowColor = '#000'; ctx.shadowBlur = 5;
           ctx.fillText((own2 ? '✓ ' : '👑 ') + 'เมืองหลวง', pc.x,pc.y + ts*(CAP_N/2 + 0.12) );
+          if (HC.held){
+            var cy = pc.y + ts*(CAP_N/2 + 0.12) + Math.round(ts*0.2)*1.2;
+            ctx.font = 'bold ' + Math.round(ts*0.16) + 'px sans-serif';
+            ctx.fillText('🏯 ' + (HC.gn || (HC.tag ? '[' + HC.tag + ']' : 'ไม่มีกิลด์')), pc.x, cy);
+            ctx.fillStyle = '#fff';
+            ctx.font = Math.round(ts*0.14) + 'px sans-serif';
+            ctx.fillText('👤 ' + HC.by, pc.x, cy + Math.round(ts*0.16)*1.15);
+          }
           ctx.shadowBlur = 0;
         }
       } else {
@@ -764,7 +773,7 @@ if (capH >= x0 && -capH <= x1 && capH >= y0 && -capH <= y1) {
 
     Game.villages.forEach(function(v){
       if (v.x < x0 || v.x > x1 || v.y < y0 || v.y > y1) return;
-      if (World.fortAt(v.x, v.y)) return;   /* v15K ป้อมที่เรายึดวาดด้วยรูปป้อม */
+      if (World.fortAt(v.x, v.y) || World.isCapital(v.x, v.y)) return;   /* v15K ป้อม/เมืองหลวงที่เรายึดวาดด้วยรูปเฉพาะ */
       drawVillage(screenOf(v.x, v.y, ts), ts, 'own', label ? v.name : '', isCapital(v));
     });
      
@@ -823,11 +832,12 @@ if (capH >= x0 && -capH <= x1 && capH >= y0 && -capH <= y1) {
   }
 
   /* v15K — ใครครองป้อมนี้อยู่: ตัวเรา / ผู้เล่นอื่น (มีกิลด์) / ยังเป็นผู้พิทักษ์ */
-  function fortHold(f){
-    var mv = Game.villages.filter(function(v){ return v.x === f.x && v.y === f.y; })[0];
+  function fortHold(f){ return holdAt(f.x, f.y); }
+  function holdAt(x, y){
+    var mv = Game.villages.filter(function(v){ return v.x === x && v.y === y; })[0];
     if (mv) return { held:true, rel:'own', by:(Game.player && Game.player.name) || 'คุณ',
       gn:(typeof B53 !== 'undefined' && B53.myGuildName) ? B53.myGuildName() : '', tag:(typeof B53 !== 'undefined' && B53.myTag) ? B53.myTag() : '' };
-    var real = (typeof Net !== 'undefined' && Net.at) ? Net.at(f.x, f.y) : null;
+    var real = (typeof Net !== 'undefined' && Net.at) ? Net.at(x, y) : null;
     if (real && real.p && !real.p.fort && !real.p.ruin)
       return { held:true, rel:(typeof B53 !== 'undefined' && B53.relOf) ? B53.relOf(real.p) : 'neutral',
         by:real.p.name, gn:real.p.gname || '', tag:real.p.tag || '' };
@@ -1083,10 +1093,10 @@ if (capH >= x0 && -capH <= x1 && capH >= y0 && -capH <= y1) {
           '">' + (why ? '⛔ ' + why : '✓ ตั้งเมืองได้') + '</div>';
       }
 
-      var fxh = World.fortAt(t.x, t.y);
-      if (fxh && (own || real)){   /* v15K ป้อมที่มีคนครอง: โชว์กิลด์ + ผู้ยึด */
-        var fh = fortHold(fxh), fe = function(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, ''); };
-        h += '<div class="ti-line" style="color:' + (fh.rel === 'own' || fh.rel === 'guild' ? '#ffcf40' : '#ff9a9a') + '">🏰 <b>' + fe(fxh.name) +
+      var fxh = World.fortAt(t.x, t.y), capH = World.isCapital(t.x, t.y);
+      if ((fxh || capH) && (own || real)){   /* v15K ป้อม/เมืองหลวงที่มีคนครอง: โชว์กิลด์ + ผู้ยึด */
+        var fh = holdAt(t.x, t.y), fe = function(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, ''); };
+        h += '<div class="ti-line" style="color:' + (fh.rel === 'own' || fh.rel === 'guild' ? '#ffcf40' : '#ff9a9a') + '">' + (capH ? '👑 <b>เมืองหลวงโลก' : '🏰 <b>' + fe(fxh.name)) +
           '</b><br>🏯 ' + fe(fh.gn || (fh.tag ? '[' + fh.tag + ']' : 'ไม่มีกิลด์')) + ' · 👤 ' + fe(fh.by) + '</div>';
       }
       if (tile.buildable && !tile.oasis && !tile.npc && !own && !bot && !real && tile.layout){

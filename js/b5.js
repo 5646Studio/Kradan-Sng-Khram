@@ -1,6 +1,6 @@
 /* ============ B5 v14g — กองประจำการ / เสริมทัพ (ออนไลน์) ============ */
 var B5 = (function(){
-  var L = { mine:[], hosted:[] };
+  var L = { mine:[], hosted:[], coming:[] };
   function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
     return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
   function cnt(t){ var c = 0; for (var k in (t || {})) c += t[k] | 0; return c; }
@@ -27,6 +27,17 @@ var B5 = (function(){
       (!mine && s.cmd ? '<div class="suphint">เจ้าของทหารอนุญาตให้คุณสั่งการได้</div>' : '') + '</div>';
   }
 
+  /* v15K — ทัพเสริมที่กำลังเดินทางมา (เห็นจำนวนทหารเมื่อเมืองที่รับมีหอคอยเฝ้าระวัง) */
+  function comingCard(m){
+    var nowT = (typeof now === 'function') ? now() : Date.now(), rem = Math.max(0, (m.arrive - nowT) / 1000);
+    return '<div class="stcard ally"><div class="vh"><b>🚶 จาก ' + esc(m.ownerName) + ' · ' + esc(m.ownerVill) + '</b><span>→ ' + esc(m.hostName) + '</span></div>' +
+      '<div class="stline">' + (m.see
+        ? War.troopLine(m.troops || {}) + ' · รวม <b>' + UI.fmt(m.total || 0) + '</b> นาย'
+        : '🔒 ต้องมีหอคอยเฝ้าระวังในเมืองนี้ จึงจะเห็นจำนวนทหารที่มา') + '</div>' +
+      '<div class="suphint">🕒 ถึงใน ' + UI.dur(rem) + ' · ' + new Date(m.arrive).toLocaleString('th-TH',
+        { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) + '</div></div>';
+  }
+
   function open(){
     UI.modal('<h3>🛡 กองประจำการ</h3><p class="stnone">กำลังโหลด…</p>');
     Api.post('/station/list', {}).then(function(r){
@@ -40,6 +51,9 @@ var B5 = (function(){
         '<h4>🤝 กำลังหนุนในเมืองของเรา (' + r.hosted.length + ')</h4>' +
         (r.hosted.length ? r.hosted.map(function(s){ return card(s, false); }).join('')
           : '<p class="stnone">ยังไม่มีใครส่งกำลังหนุนมา</p>') +
+        '<h4>🚶 กำลังเดินทางมาเมืองของเรา (' + (r.coming || []).length + ')</h4>' +
+        ((r.coming || []).length ? r.coming.map(comingCard).join('')
+          : '<p class="stnone">ยังไม่มีกองหนุนที่กำลังเดินทางมา</p>') +
         '<button class="btn-ok" id="stNew">🛡 ส่งเสริมทัพ</button>' + closeBtn();
       UI.modal(h);
       document.getElementById('stNew').onclick = function(){ War.openSend(); };
