@@ -1049,3 +1049,6 @@ body.day #modalbox .mvgrid button{background:#fffaf0!important;color:#8a5a00!imp
   box-shadow:0 2px 0 #120c06;display:flex;align-items:center;justify-content:center;z-index:2}
 #modalbox .pf-head .pf-home:active{transform:translateY(1px)}
 .pf-trd{font-size:11px;color:#9a8a6a;text-align:center;margin:-4px 0 8px}
+
+/* ===== กรอบกำแพงจากชิ้นภาพ — ให้ช่องอาคารอยู่เหนือกำแพง ===== */
+#scene-village .slot{z-index:4}
