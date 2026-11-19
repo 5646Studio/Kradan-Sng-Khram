@@ -2,7 +2,8 @@
 var Assets = (function(){
   var img = {}, missing = {}, terr = {}, ready = false, pend = null;
   var DIR = { bd:'buildings/', fd:'fields/', sc:'scenes/', tr:'map/', ov:'map/',
-              oa:'map/', vl:'map/', ui:'ui/', wc:'map/', ft:'map/' };
+              oa:'map/', vl:'map/', ui:'ui/', wc:'map/', ft:'map/',
+              wall:'city/' };
   var EXT = ['png', 'webp'];
 
   function manifest(){
@@ -16,6 +17,9 @@ var Assets = (function(){
       for (var t = 1; t <= 4; t++) L.push('bd_' + b.key + '_' + t);
     });
     RES.forEach(function(r){ for (var t = 0; t <= 4; t++) L.push('fd_' + r + '_' + t); });
+    /* ชิ้นกำแพงรอบเมือง (assets/city/) */
+    ['wall_h_a','wall_h_b','wall_v_a','wall_v_b','wall_gate',
+     'wall_h_broken_a','wall_h_broken_b'].forEach(function(k){ L.push(k); });
     ['vl_own','vl_capital','vl_ally','vl_enemy','vl_neutral','vl_npc',
      'oa_wheat','oa_wood','oa_iron','oa_clay','oa_double',
      'ov_tree_small','ov_tree_cluster','ov_rock_small','ov_peak',

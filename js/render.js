@@ -458,14 +458,93 @@ var Art = (function(){
     if (!cache[ck]) cache[ck] = url(drawField(res, t, 100));
     return cache[ck];
   }
+  /* ---------- กรอบกำแพงจากชิ้นภาพ (assets/city/) ---------- */
+  var WALL_KEYS = ['wall_h_a','wall_h_b','wall_v_a','wall_v_b','wall_gate',
+                   'wall_h_broken_a','wall_h_broken_b'];
+  var WP = {            /* ขนาดไฟล์จริง (px) และส่วนหอที่วางซ้อนกัน */
+    hw:310, hh:160, hTower:82.5,    /* กำแพงแนวนอน · ความกว้างหอหัว/ท้าย */
+    vw:80,  vh:322, vTower:124,    /* กำแพงแนวตั้ง · ความสูงหอหัว/ท้าย */
+    sMax:0.55,                     /* สเกลสูงสุดของชิ้นแนวนอน (ปรับขนาดกำแพงที่นี่) */
+    rowMaxFrac:0.4                 /* แถวบน+ล่างสูงรวมไม่เกินสัดส่วนนี้ของหน้าเมือง */
+  };
+  function wallPiecesReady(){
+    for (var i = 0; i < WALL_KEYS.length; i++) if (!Assets.has(WALL_KEYS[i])) return false;
+    return true;
+  }
+  function drawWallPieces(level, W, H){
+    var d = Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
+    var c = cv(W * d, H * d), ctx = c.getContext('2d');
+    ctx.scale(d, d);
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    function im(k){ return Assets.get(k); }
+
+    var broken = level <= 0;
+    var step = WP.hw - WP.hTower;
+    /* เลือกจำนวนชิ้นต่อแถว (เลขคี่ เพื่อให้ประตูอยู่กึ่งกลาง) */
+    var sT = Math.min(WP.sMax, H * WP.rowMaxFrac / (2 * WP.hh));
+    var n = 1, best = 1e9;
+    for (var k = 1; k < 99; k += 2){
+      var diff = Math.abs(W / (k * step + WP.hTower) - sT);
+      if (diff < best){ best = diff; n = k; }
+    }
+    var s = W / (n * step + WP.hTower);       /* สเกลจริงของชิ้นแนวนอน */
+    var pw = WP.hw * s, ph = WP.hh * s;
+    var yBot = H - ph;
+
+    /* ---- ด้านซ้าย/ขวา (วาดก่อน ให้หอมุมของแถวบน-ล่างทับ) ---- */
+    if (!broken){
+      var sv = s * 0.78;
+      var yTop = 100 * s - (WP.vTower / 2) * sv;
+      var yEnd = H - 60 * s + (WP.vTower / 2) * sv;
+      var L = yEnd - yTop;
+      var vstep = WP.vh - WP.vTower;
+      var m = Math.max(1, Math.round((L / sv - WP.vTower) / vstep));
+      var sy = L / (m * vstep + WP.vTower);   /* ยืดแนวตั้งเล็กน้อยให้พอดี */
+      var vw = WP.vw * sv, vhh = WP.vh * sy;
+      var xl = 40 * s - (WP.vw / 2) * sv;
+      var xr = W - 40 * s - (WP.vw / 2) * sv;
+      for (var i = 0; i < m; i++){
+        var y = yTop + i * vstep * sy;
+        ctx.drawImage(im(i % 2 ? 'wall_v_b' : 'wall_v_a'), xl, y, vw, vhh);
+        ctx.drawImage(im(i % 2 ? 'wall_v_a' : 'wall_v_b'), xr, y, vw, vhh);
+      }
+    }
+
+    /* ---- แถวบน ---- */
+    for (var a = 0; a < n; a++){
+      var kt = broken ? (a % 2 ? 'wall_h_broken_b' : 'wall_h_broken_a')
+                      : (a % 2 ? 'wall_h_b' : 'wall_h_a');
+      ctx.drawImage(im(kt), a * step * s, 0, pw, ph);
+    }
+    /* ---- แถวล่าง (ประตูกึ่งกลาง) ---- */
+    var mid = (n - 1) / 2;
+    for (var b = 0; b < n; b++){
+      var kb;
+      if (broken) kb = b % 2 ? 'wall_h_broken_a' : 'wall_h_broken_b';
+      else if (b === mid) kb = 'wall_gate';
+      else kb = Math.abs(b - mid) % 2 ? 'wall_h_a' : 'wall_h_b';
+      ctx.drawImage(im(kb), b * step * s, yBot, pw, ph);
+    }
+    return c;
+  }
+
   function wallURL(level, w, h){
+    level = level | 0;
+    var W = Math.max(80, Math.round(w / 10) * 10);
+    var H = Math.max(80, Math.round(h / 10) * 10);
+    /* มีชิ้นภาพครบ → ประกอบกรอบจากภาพ */
+    if (wallPiecesReady()){
+      var pk = 'wp|' + (level <= 0 ? 0 : 1) + '|' + W + '|' + H;
+      if (!cache[pk]) cache[pk] = url(drawWallPieces(level, W, H));
+      if (cache[pk]) return cache[pk];
+    }
+    /* ภาพยังไม่โหลด/หาไม่เจอ → วาดกรอบแบบเดิม (Lv.0 ไม่มีกรอบ) */
+    if (level <= 0) return '';
     var t = Assets.tier(Math.max(1, level), 20);
-    var a = Assets.get('bd_wall_' + t);
-    if (a) return a.src;
-    var W = Math.max(80, Math.round(w/20)*20);
-    var H = Math.max(80, Math.round(h/20)*20);
-    var ck = 'w|' + t + '|' + W + '|' + H;
-    if (!cache[ck]) cache[ck] = url(drawWall(level, W, H));
+    var Wf = Math.max(80, Math.round(w / 20) * 20);
+    var Hf = Math.max(80, Math.round(h / 20) * 20);
+    var ck = 'w|' + t + '|' + Wf + '|' + Hf;
+    if (!cache[ck]) cache[ck] = url(drawWall(level, Wf, Hf));
     return cache[ck];
   }
   function clear(){ cache = {}; }

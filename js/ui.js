@@ -71,13 +71,12 @@ var UI = (function(){
 
     var h = '';
     /* ---- กำแพงเมือง (ภาพไม่รับคลิก กดได้เฉพาะป้าย) ---- */
+    var wallImg = Art.wallURL(wq ? wq.level : wl, bw, bh);
     h += '<div id="wallbox" class="' + (wq ? 'building ' : '') +
-      ((wl > 0 || wq) ? '' : 'none') + '">' +
-      ((wl > 0 || wq)
-        ? '<img src="' + Art.wallURL(wq ? wq.level : wl, bw, bh) + '" alt="">'
-        : '') + '</div>';
-        h += '<button id="walltag" class="wlv' + (wq ? ' building' : '') +
-      (wl > 0 ? '' : ' none') + '">' + (wq ? wq.level : wl) + '</button>';
+      (wallImg ? '' : 'none') + '">' +
+      (wallImg ? '<img src="' + wallImg + '" alt="">' : '') + '</div>';
+    h += '<button id="walltag" class="wlv' + (wq ? ' building' : '') + '">' +
+      (wq ? wq.level : wl) + '</button>';
 
     /* ---- อาคาร 21 ช่อง ---- */
     v.city.forEach(function(c, i){
