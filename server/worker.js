@@ -1682,7 +1682,7 @@ const CPN = [0, 0, 300, 750, 1350, 2100, 3000, 4100, 5300, 6600, 8000, 9500, 110
 
 /* ---------- ข้อมูลสาธารณะ (มีแท็กกิลด์) ---------- */
 async function world(env){
-  const r = await env.DB.prepare('SELECT v.id, v.x, v.y, v.name AS vn, v.pop, v.uid, p.name AS pn, p.is_bot AS bot, g.tag AS gt, p.guild_id AS gid, CASE WHEN ' + FORTS.map(f => '(v.x=' + (f[0] | 0) + ' AND v.y=' + (f[1] | 0) + ')').join(' OR ') + ' THEN g.name END AS gn FROM villages v JOIN players p ON p.uid=v.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE p.banned=0 LIMIT 5000').all();
+  const r = await env.DB.prepare('SELECT v.id, v.x, v.y, v.name AS vn, v.pop, v.uid, p.name AS pn, p.is_bot AS bot, g.tag AS gt, p.guild_id AS gid, CASE WHEN ' + FORTS.map(f => '(v.x=' + (f[0] | 0) + ' AND v.y=' + (f[1] | 0) + ')').join(' OR ') + ' OR (v.x=0 AND v.y=0) THEN g.name END AS gn FROM villages v JOIN players p ON p.uid=v.uid LEFT JOIN guilds g ON g.id=p.guild_id WHERE p.banned=0 LIMIT 5000').all();
     const oa = await env.DB.prepare('SELECT o.x, o.y, o.uid, o.vid, p.name AS pn FROM oasis o LEFT JOIN players p ON p.uid=o.uid').all();
   return json({ ok:true, now:Date.now(), v:r.results || [], oa:oa.results || [] }, 200, env);
 }
@@ -2664,7 +2664,18 @@ async function stationApi(p, b, env, uid){
     const f = s => ({ id:s.id, ownerVid:s.owner_vid, hostVid:s.host_vid, x:s.x, y:s.y, troops:JSON.parse(s.troops || '{}'),
       raids:s.raids, quota:s.quota, cmd:!!s.can_cmd, own:s.host_uid === s.owner_uid, no:num(s), since:s.since || 0,
       hostName:s.hn || RUIN_NAME, hostPlayer:s.hpn || RUIN_NAME, ownerName:s.opn || '?', ownerVill:s.ovn || '?' });
-    return ok({ mine:mine.map(f), hosted:host.map(f) });
+    /* v15K — ทัพเสริมที่กำลังเดินทางมาเมืองของเรา: เห็นรายการเสมอ · เห็นจำนวนทหารเมื่อเมืองที่รับมีหอคอยเฝ้าระวัง */
+    const cm = (await DB.prepare("SELECT m.id, m.troops, m.depart, m.arrive, p.name AS opn, ov.name AS ovn, hv.name AS hn, hv.data AS hd FROM moves m " +
+      "LEFT JOIN players p ON p.uid=m.uid LEFT JOIN villages ov ON ov.id=m.from_vid LEFT JOIN villages hv ON hv.id=m.to_vid " +
+      "WHERE m.to_uid=? AND m.uid<>? AND m.mission='support' AND m.state='go' ORDER BY m.arrive").bind(uid, uid).all()).results || [];
+    const coming = cm.map(m => {
+      let wl = 0, tr = null;
+      try { wl = lvl(JSON.parse(m.hd || '{}'), 'watchtower'); } catch (e){}
+      if (wl > 0){ try { tr = JSON.parse(m.troops || '{}'); } catch (e){ tr = {}; } }
+      return { id:m.id, ownerName:m.opn || '?', ownerVill:m.ovn || '?', hostName:m.hn || '?', depart:m.depart, arrive:m.arrive,
+        see:wl > 0, troops:tr, total:tr ? tcount(tr) : null };
+    });
+    return ok({ mine:mine.map(f), hosted:host.map(f), coming });
   }
   const s = await DB.prepare('SELECT * FROM stations WHERE id=?').bind(b.id | 0).first();
   if (!s) throw ue('ไม่พบกองทหารนี้');
