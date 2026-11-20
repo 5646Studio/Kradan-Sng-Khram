@@ -164,6 +164,49 @@
     });
   }
 
+  /* ---------- 💳 สวิตช์เปิด/ปิดเติมเงิน ---------- */
+  var SH = { ok:false, on:false };
+  function shCard(){
+    return '<b>💳 ระบบเติมเงิน</b>' +
+      '<div class="a2sw" id="shSw"><span id="shSwT">กำลังโหลด…</span><i></i></div>' +
+      '<div class="a2row"><span>💬 ข้อความถึงผู้เล่นตอนปิด</span><input id="shMsg" maxlength="200" placeholder="เช่น ปิดปรับปรุงระบบชำระเงินชั่วคราว" disabled></div>' +
+      '<button class="btn b1" id="shSave" disabled>💾 บันทึกข้อความ</button><div id="shM" class="a2m"></div>' +
+      '<p class="a2note">ปิดแล้วผู้เล่นสั่งซื้อใหม่ไม่ได้ · คนที่โอนเงินแล้วยังแนบสลิปได้ · ทีมงานยืนยันรับเงินได้ตามปกติ</p>';
+  }
+  function shPaint(){
+    if (!$('shSw')) return;
+    $('shSw').classList.toggle('on', SH.on);
+    $('shSwT').textContent = SH.on ? '🟢 เปิดให้เติมเงิน' : '🔴 ปิดการเติมเงิน (ผู้เล่นสั่งซื้อไม่ได้)';
+  }
+  function shLoad(){
+    Api.post('/admin/shop', { action:'info' }).then(function(r){
+      if (!$('shSw')) return;
+      if (!r || !r.ok){ SH.ok = false; $('shSwT').textContent = '⚠ โหลดไม่ได้ (deploy worker ล่าสุดแล้วหรือยัง)'; return; }
+      SH.ok = true; SH.on = !!r.on;
+      $('shMsg').disabled = false; $('shSave').disabled = false;
+      if (document.activeElement !== $('shMsg')) $('shMsg').value = r.msg || '';
+      shPaint();
+      if (r.on && !r.ppSet) say('shM', '⚠ ยังไม่ได้ตั้งค่า PROMPTPAY_ID ผู้เล่นจะสั่งซื้อไม่ได้', false);
+      else if (!r.manual) say('shM', 'ยังไม่เคยตั้งจากหน้านี้ · ตอนนี้ใช้ค่าตั้งต้นของเซิร์ฟเวอร์', true);
+    });
+  }
+  function shSet(on){
+    Api.post('/admin/shop', { action:'set', on:on, msg:($('shMsg').value || '').trim() }).then(function(r){
+      if (!r || !r.ok) return say('shM', '⚠ ' + esc((r && r.err) || 'บันทึกไม่สำเร็จ'), false);
+      SH.on = !!r.on; shPaint();
+      say('shM', (r.on ? '✔ เปิดการเติมเงินแล้ว' : '✔ ปิดการเติมเงินแล้ว') + ' (ผู้เล่นบางเครื่องอาจเห็นช้าสุด 15 วินาที)', true);
+    }, function(){ say('shM', '⚠ เชื่อมต่อเซิร์ฟเวอร์ไม่ได้', false); });
+  }
+  function shBind(){
+    $('shSw').onclick = function(){
+      if (!SH.ok) return;
+      var on = !SH.on;
+      if (!on && !confirm('ปิดการเติมเงิน?\nผู้เล่นจะสั่งซื้อใหม่ไม่ได้ (คนที่โอนแล้วยังแนบสลิปและรอรับทองได้)')) return;
+      shSet(on);
+    };
+    $('shSave').onclick = function(){ if (SH.ok) shSet(SH.on); };
+  }
+
   /* ---------- 🤖 ควบคุมบอท ---------- */
   function btCard(){
     return '<b>🤖 ควบคุมบอท</b>' +
@@ -550,6 +593,7 @@
     if (t === 'ov') loadStats();
     if (t === 'set'){ loadSpeed(); loadTune(); loadForts(); }
     if (t === 'bt'){ loadTune(); btLoad(); }
+    if (t === 'gd') shLoad();
   }
   function show(t){
     if (!$('p-' + t)) t = 'ov';
@@ -580,6 +624,7 @@
     var stC = mk('div', 'card', '<b>📈 สถิติสมดุล</b><div id="a2st" style="margin-top:6px;font-size:11.5px;color:#b9ac92">กำลังโหลด…</div>' +
       '<button class="btn b3" id="a2stRe">🔄 โหลดใหม่</button>');
     var spC = mk('div', 'card', spCard());
+    var shC = mk('div', 'card', shCard());
     var tuC = mk('div', 'card', '<b>🎛 ค่าเกม</b><p class="a2note">มีผลภายใน 1 นาที · ช่องว่าง = ใช้ค่าเริ่มต้น</p><div id="a2tu">กำลังโหลด…</div>' +
       '<button class="btn b1" id="a2tuSave">💾 บันทึกค่าเกม</button><button class="btn red" id="a2tuReset">↺ กลับค่าเริ่มต้นทั้งหมด</button><div id="a2tuMsg" class="a2m"></div>');
     var fpC = mk('div', 'card', fpCard());
@@ -594,7 +639,7 @@
     put(ovx, [sec('🖥 สถานะเซิร์ฟเวอร์'), C.status, C.season, sec('📈 สถิติ'), stC]);
     var pl = $('p-pl'); put(pl, [sec('📋 รายชื่อผู้เล่น')], pl.firstChild); put(pl, [sec('🧰 เครื่องมือผู้เล่น'), C.cp, C.multi]);
     var bg = $('p-bg'); put(bg, [sec('🐞 รายงานปัญหาจากผู้เล่น')], bg.firstChild); put(bg, [sec('📢 ประกาศถึงผู้เล่น'), C.ann]);
-    put($('p-gd'), [sec('🧾 สลิปรอตรวจ / คำสั่งซื้อ'), C.orders, sec('🎁 ส่งทอง'), gfC, C.grant, sec('📒 บัญชีและอื่น ๆ'), lgC, C.invite]);
+    put($('p-gd'), [sec('💳 เปิด/ปิดระบบเติมเงิน'), shC, sec('🧾 สลิปรอตรวจ / คำสั่งซื้อ'), C.orders, sec('🎁 ส่งทอง'), gfC, C.grant, sec('📒 บัญชีและอื่น ๆ'), lgC, C.invite]);
     if (C.ledger && C.ledger.classList.contains('card') && C.ledger !== C.orders && C.ledger !== C.grant){ $('p-gd').appendChild(C.ledger); C.ledger.classList.add('hide'); }
     else if ($('llist')){ $('llist').classList.add('hide'); LG_SOLO = true; }
     put(setp, [sec('⚡ ความเร็วเซิร์ฟเวอร์'), spC, sec('🎛 ค่าเกม'), tuC, sec('🏰 ป้อมและเมืองหลวง'), fpC]);
@@ -604,7 +649,7 @@
       if (!c.closest('.pane') && !c.closest('#gate') && !c.closest('#a2ovx') && !c.closest('#a2mod') && c.id !== 'a2srvBar') sys.appendChild(c);
     });
     /* 5) ผูกปุ่ม */
-    spBind(); gfBind(); fpBind(); btBind();
+    spBind(); gfBind(); fpBind(); btBind(); shBind();
     $('a2stRe').onclick = loadStats;
     $('a2tuSave').onclick = function(){ tuneSave('a2tuMsg'); };
     $('a2tubSave').onclick = function(){ tuneSave('a2tubMsg'); };
