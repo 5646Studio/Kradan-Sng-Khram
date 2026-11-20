@@ -626,7 +626,10 @@ async function route(req, env){
     items:ITEM_LIST, dungeons:DUNG, heroCfg:{ maxLv:HERO_MAX, tierReq:TIER_REQ }, checkin:CHECKIN }, 200, env);
 
   if (p === '/shop' && req.method === 'GET')
-    return json({ ok:true, enabled:env.PAYMENT_ENABLED === '1', packages:PACKAGES, mode:'promptpay' }, 200, env);
+  {
+    const sc = await shopCfg(env);
+    return json({ ok:true, enabled:sc.on, msg:sc.on ? '' : (sc.msg || 'ระบบเติมเงินปิดปรับปรุงชั่วคราว'), packages:PACKAGES, mode:'promptpay' }, 200, env);
+  }
   if (p === '/shop/webhook') return json({ ok:false, err:'ยังไม่ได้เชื่อมระบบชำระเงิน' }, 501, env);
 
   let claims;
@@ -1229,6 +1232,15 @@ async function admin(p, b, q, env, by){
       villages:await c('SELECT COUNT(*) n FROM villages'), moves:await c('SELECT COUNT(*) n FROM moves'),
       reports:await c('SELECT COUNT(*) n FROM reports'), msgs:await c('SELECT COUNT(*) n FROM msgs'),
       errors:(await DB.prepare('SELECT at, path, msg FROM errlog ORDER BY id DESC LIMIT 15').all()).results || [] }, 200, env);
+  }
+  if (p === '/admin/shop'){
+    if (b.action === 'set'){
+      const msg = String(b.msg || '').trim().slice(0, 200);
+      await setMeta(env, 'shop', JSON.stringify({ on:b.on ? 1 : 0, msg, at:t, by:uid }));
+      SC.at = 0;
+    }
+    const sc = await shopCfg(env, true);
+    return json({ ok:true, on:sc.on, msg:sc.msg, manual:sc.manual, envOn:env.PAYMENT_ENABLED === '1', ppSet:!!env.PROMPTPAY_ID }, 200, env);
   }
   if (p === '/admin/maint'){
     await setMeta(env, 'maint', b.on ? '1' : '0');
@@ -3530,8 +3542,23 @@ function ppPayload(target, amount){
     ppField('53', '764') + ppField('54', amount.toFixed(2)) + ppField('58', 'TH') + '6304';
   return s + crc16(s);
 }
+/* v15L — เปิด/ปิดเติมเงินจากหน้า admin: meta 'shop' = {on, msg} · ถ้ายังไม่เคยตั้ง ใช้ค่า env PAYMENT_ENABLED เดิม */
+const SC = { at:0, on:null, msg:'' };
+async function shopCfg(env, fresh){
+  const t = Date.now();
+  if (fresh || t - SC.at > 15000){
+    SC.at = t;
+    try {
+      const r = JSON.parse((await getMeta(env, 'shop')) || 'null');
+      SC.on = r ? !!r.on : null; SC.msg = r && r.msg ? String(r.msg) : '';
+    } catch (e){}
+  }
+  const manual = SC.on !== null;
+  return { on:manual ? SC.on : env.PAYMENT_ENABLED === '1', msg:SC.msg, manual };
+}
 async function shopOrder(env, uid, b){
-  if (env.PAYMENT_ENABLED !== '1') throw ue('ระบบเติมเงินยังไม่เปิดให้บริการ');
+  const sc = await shopCfg(env, true);
+  if (!sc.on) throw ue(sc.msg || (sc.manual ? 'ระบบเติมเงินปิดปรับปรุงชั่วคราว' : 'ระบบเติมเงินยังไม่เปิดให้บริการ'));
   if (!env.PROMPTPAY_ID) throw ue('ยังไม่ได้ตั้งค่าบัญชีรับเงิน');
   const pk = PACKAGES.find(x => x.id === b.pkg);
   if (!pk) throw ue('ไม่พบแพ็กเกจ');
