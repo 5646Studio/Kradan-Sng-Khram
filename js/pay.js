@@ -71,7 +71,7 @@ var Pay = (function(){
       var en = !!(r && r.enabled);
       var h = '<h3>💳 เติมทอง</h3><div class="infobox">' + (en
         ? 'จ่ายด้วย <b>QR พร้อมเพย์</b> แล้วแนบสลิป<br>ทองเข้าหลังทีมงานตรวจสลิป ปกติภายใน 24 ชม.'
-        : '🚧 ระบบเติมเงินยังไม่เปิดให้บริการ') + '</div>';
+        : '🔧 <b>' + esc((r && r.msg) || 'ระบบเติมเงินปิดปรับปรุงชั่วคราว') + '</b><br>ถ้าโอนเงินไปแล้ว แนบสลิปที่ 📜 ประวัติการซื้อได้ตามปกติ') + '</div>';
       ((r && r.packages) || []).forEach(function(p){
         h += '<div class="shopc"><b>💰 ' + esc(p.name) + '<i>' + UI.fmt(p.gold) + (p.bonus ? ' + โบนัส ' + UI.fmt(p.bonus) : '') +
           ' ทอง</i></b><span>' + p.price + ' ฿</span>' + (en ? '<button class="mini" data-pk="' + p.id + '">ซื้อ</button>' : '') + '</div>';
