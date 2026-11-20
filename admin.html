@@ -118,11 +118,6 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
       <input id="mtMsg" placeholder="ข้อความปิดปรับปรุง (ไม่บังคับ)">
       <button class="btn red" id="mtOn">🔧 ปิดปรับปรุง</button><button class="btn b1" id="mtOff">✔ เปิดให้เล่นตามปกติ</button>
       <div id="mtNote"></div></div>
-    <div class="card"><b>💳 ระบบเติมเงิน</b>
-      <div id="spBox" style="font-size:11.5px;color:#b9ac92;line-height:1.8;margin-top:6px">กำลังโหลด…</div>
-      <input id="spMsg" maxlength="200" placeholder="ข้อความที่ผู้เล่นเห็นตอนปิด เช่น ปิดปรับปรุงระบบชำระเงินชั่วคราว (ไม่บังคับ)">
-      <button class="btn red" id="spOff">⛔ ปิดการเติมเงิน</button><button class="btn b1" id="spOn">✔ เปิดการเติมเงิน</button>
-      <div id="spNote"></div></div>
     <div class="card"><b>🕵 บัญชีที่อาจเป็นคนเดียวกัน (7 วันล่าสุด)</b><div id="acBox" style="margin-top:6px"></div>
       <button class="btn b3" id="acRe">🔄 ตรวจ</button></div>
     <div class="card"><b>🤝 รางวัลเชิญเพื่อนที่รอตรวจ</b>
@@ -172,9 +167,9 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="js/firebase-config.js?v=14a"></script>
-<script src="js/admsrv.js?v=15L"></script>
-<script src="js/api.js?v=15L"></script>
-<script src="js/dialog.js?v=15L"></script>
+<script src="js/admsrv.js?v=15M"></script>
+<script src="js/api.js?v=15M"></script>
+<script src="js/dialog.js?v=15M"></script>
 <script>
 (function(){
   function $(i){ return document.getElementById(i); }
@@ -529,25 +524,6 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
   $('hsRe').onclick = hs; $('acRe').onclick = ac; $('auRe').onclick = au;
   $('mtOn').onclick = function(){ maint(true); };
   $('mtOff').onclick = function(){ maint(false); };
-  function sp(){
-    Api.post('/admin/shop', { action:'info' }).then(function(r){
-      if (!r.ok){ $('spBox').innerHTML = esc(r.err); return; }
-      $('spBox').innerHTML = (r.on ? '<b style="color:#7fd17f">✔ เปิดให้เติมเงิน</b>' : '<b style="color:#ff6b6b">⛔ ปิดการเติมเงินอยู่</b>') +
-        (r.manual ? '' : ' <i>(ยังไม่เคยตั้งจากหน้านี้ · ใช้ค่าตั้งต้นของเซิร์ฟเวอร์)</i>') +
-        (r.on && !r.ppSet ? '<br><b style="color:#ff6b6b">⚠ ยังไม่ได้ตั้งค่า PROMPTPAY_ID ผู้เล่นจะสั่งซื้อไม่ได้</b>' : '') +
-        (!r.on && r.msg ? '<br>ข้อความถึงผู้เล่น: ' + esc(r.msg) : '');
-      if (!$('spMsg').value) $('spMsg').value = r.msg || '';
-    });
-  }
-  function shopSet(onv){
-    if (!onv && !confirm('ปิดการเติมเงิน? ผู้เล่นจะสั่งซื้อใหม่ไม่ได้ (คนที่โอนแล้วยังแนบสลิปและรอรับทองได้)')) return;
-    Api.post('/admin/shop', { action:'set', on:onv, msg:$('spMsg').value.trim() }).then(function(r){
-      note('spNote', r.ok ? (onv ? '✔ เปิดการเติมเงินแล้ว' : '⛔ ปิดการเติมเงินแล้ว') + ' (มีผลทันที ผู้เล่นบางเครื่องอาจเห็นช้าสุด 15 วินาที)' : r.err, r.ok);
-      sp();
-    });
-  }
-  $('spOn').onclick = function(){ shopSet(true); };
-  $('spOff').onclick = function(){ shopSet(false); };
   $('bkGo').onclick = function(){
     var tb = $('bkT').value, all = [], b = this;
     b.disabled = true;
@@ -566,7 +542,7 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
       });
     })(0);
   };
-  hs(); sp(); ac(); iv(); au();
+  hs(); ac(); iv(); au();
   
   function paintLedger(r){
     var L = (r && r.list) || [];
@@ -661,7 +637,7 @@ input,select{width:100%;padding:10px;margin-top:6px;background:#1c1710;border:1p
   };
 })();
 </script>
-<script src="js/admin2.js?v=15L"></script> 
-<script src="js/numfix.js?v=15L"></script>
+<script src="js/admin2.js?v=15M"></script> 
+<script src="js/numfix.js?v=15M"></script>
 </body>
 </html>
