@@ -1236,7 +1236,7 @@ async function admin(p, b, q, env, by){
   if (p === '/admin/shop'){
     if (b.action === 'set'){
       const msg = String(b.msg || '').trim().slice(0, 200);
-      await setMeta(env, 'shop', JSON.stringify({ on:b.on ? 1 : 0, msg, at:t, by:uid }));
+      await setMeta(env, 'shop', JSON.stringify({ on:b.on ? 1 : 0, msg, at:t, by }));
       SC.at = 0;
     }
     const sc = await shopCfg(env, true);
