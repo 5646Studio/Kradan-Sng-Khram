@@ -22,6 +22,7 @@ var Social = (function(){
     Game.fb = P.fb || [];   /* v15J โบนัสป้อมที่กิลด์ได้รับ */
     S.rnN = P.renameN | 0; S.rnAt = P.renameAt || 0;
     S.unread = r.msgUnread | 0;
+    roomNew(r);
     if (S.last >= 0 && S.unread > S.last){
       toast('✉ มีข้อความใหม่ ' + S.unread + ' ข้อความ');
       if (document.getElementById('cBox')) load();
@@ -32,12 +33,26 @@ var Social = (function(){
   function badge(){
     var b = document.getElementById('msgbadge');
     if (!b) return;
-    b.textContent = S.unread > 99 ? '99+' : S.unread;
-    b.classList.toggle('hidden', !S.unread);
+    b.textContent = S.unread ? (S.unread > 99 ? '99+' : S.unread) : '•';
+    b.classList.toggle('hidden', !(S.unread || S.rNew));
+  }
+  /* v15O — จุดแดงเมื่อมีข้อความใหม่ในแชตโลก/กิลด์ (ไม่นับข้อความของตัวเอง) · กดปุ่มจดหมายแล้วจุดหาย */
+  function rKey(){ return 'sw_rseen_' + ((typeof Account !== 'undefined' && Account.currentId) ? Account.currentId() : 'x'); }
+  function roomNew(r){
+    var R = r && r.rooms; if (!R) return;
+    var cur = { w:R.wo | 0, g:R.go | 0 }, seen = null;
+    try { seen = JSON.parse(localStorage.getItem(rKey()) || 'null'); } catch (e){}
+    if (!seen){ seen = cur; try { localStorage.setItem(rKey(), JSON.stringify(cur)); } catch (e){} }
+    S.rCur = cur;
+    S.rNew = cur.w > (seen.w | 0) || cur.g > (seen.g | 0);
+  }
+  function ackRooms(){
+    if (S.rCur){ try { localStorage.setItem(rKey(), JSON.stringify(S.rCur)); } catch (e){} }
+    S.rNew = false; badge();
   }
 
   /* ---------- กล่องข้อความ ---------- */
-  function openInbox(){ if (typeof Chat3 !== 'undefined') return Chat3.open('dm'); return openInboxDM(); }
+  function openInbox(){ ackRooms(); if (typeof Chat3 !== 'undefined') return Chat3.open('dm'); return openInboxDM(); }
   function openInboxDM(){
     if (!on()) return UI.modal('<h3>✉ กล่องข้อความ</h3><div class="infobox">แชตใช้ได้ในโหมดออนไลน์เท่านั้น</div>' + closeBtn());
     stopTimer();

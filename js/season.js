@@ -3,9 +3,55 @@ var Season = (function(){
   var S = null, inst = false, D = 86400000;
   function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
     return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
+  /* ---------- v15O แถบนับถอยหลังผู้ครองเมืองหลวง (ปิดได้ · เปิดเกมใหม่หรือผู้ครองเปลี่ยนจะขึ้นอีก) ---------- */
+  var HB = { bar:null, st:null, closed:null, shown:false, off:0, tm:0 }, HBH = 24;
+  function hbTick(){
+    var b = HB.bar, st = HB.st;
+    if (!st || HB.closed === st.key){ hbShow(false); return; }
+    var left = st.end - (Date.now() + HB.off), t = b.querySelector('.t');
+    if (left <= 0) t.textContent = 'ใกล้ประกาศผู้ชนะ…';
+    else {
+      var s = Math.floor(left / 1000), d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+      function p(n){ return n < 10 ? '0' + n : '' + n; }
+      t.textContent = (d ? d + ' วัน ' : '') + p(h) + ':' + p(m) + ':' + p(x);
+    }
+    hbShow(true);
+  }
+  function hbShow(on){
+    if (on === HB.shown) return;
+    HB.shown = on;
+    HB.bar.style.display = on ? 'flex' : 'none';
+    document.body.classList.toggle('hashold', on);
+    try { window.dispatchEvent(new Event('resize')); } catch (e){}
+  }
+  function hbBuild(){
+    if (HB.bar) return;
+    var css = document.createElement('style');
+    css.textContent = '#hbar{position:fixed;left:0;right:0;top:calc(var(--topH,52px) + var(--loyH,0px));height:' + HBH + 'px;z-index:48;display:none;align-items:center;' +
+      'gap:6px;padding:0 6px 0 10px;background:linear-gradient(#2a1d0a,#1c1408);border-bottom:1px solid #c9a24a;color:#f3e6c8;font-size:11px;line-height:1}' +
+      '#hbar .m{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}' +
+      '#hbar .t{font-variant-numeric:tabular-nums;color:#ffdf70;font-weight:700}' +
+      '#hbar .x{width:20px;height:20px;border-radius:10px;border:0;background:#3a2a12;color:#e0cfa8;font-size:11px;cursor:pointer;flex:0 0 20px;padding:0}' +
+      'body.hashold #pages{top:calc(var(--topH,52px) + var(--loyH,0px) + ' + HBH + 'px)!important}';
+    document.head.appendChild(css);
+    var b = document.createElement('div'); b.id = 'hbar';
+    b.innerHTML = '<span class="m">👑 <span class="n"></span> ครองนครหลวง · เหลือ <span class="t"></span></span><button class="x" aria-label="ปิด">✕</button>';
+    b.querySelector('.x').onclick = function(e){ e.stopPropagation(); HB.closed = HB.st && HB.st.key; hbTick(); };
+    document.body.appendChild(b); HB.bar = b;
+    HB.tm = setInterval(hbTick, 1000);
+  }
+  function hbApply(r){
+    if (!document.body) return;
+    hbBuild();
+    if (!r || r.winner || r.over || !r.holder || !r.holdSince || !r.hold){ HB.st = null; hbTick(); return; }
+    HB.off = (r.now || Date.now()) - Date.now();
+    HB.st = { key:r.holder + '|' + r.holdSince, end:r.holdSince + r.hold * D };
+    HB.bar.querySelector('.n').textContent = r.holderName || '?';
+    hbTick();
+  }
   function load(cb){
     Api.get('/season', null, false).then(function(r){
-      if (r && r.ok){ S = r; S._at = Date.now(); CFG.SPEED = r.speed || 1; CFG.TSPEED = r.tspeed || CFG.SPEED; CFG.TOTAL_DAYS = r.len; CFG.FORT_OPEN_DAY = r.fortDay; CFG.CAPITAL_OPEN_DAY = r.capDay; CFG.CAPITAL_HOLD_DAYS = r.hold; }
+      if (r && r.ok){ try { hbApply(r); } catch (e){} S = r; S._at = Date.now(); CFG.SPEED = r.speed || 1; CFG.TSPEED = r.tspeed || CFG.SPEED; CFG.TOTAL_DAYS = r.len; CFG.FORT_OPEN_DAY = r.fortDay; CFG.CAPITAL_OPEN_DAY = r.capDay; CFG.CAPITAL_HOLD_DAYS = r.hold; }
       if (cb) cb(S);
     });
   }
