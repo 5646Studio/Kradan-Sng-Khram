@@ -817,6 +817,7 @@ async function session(env, uid, act){
     /* v15O — เลขข้อความล่าสุดที่ไม่ใช่ของตัวเอง (ใช้ขึ้นจุดแดงที่ปุ่มจดหมาย) */
     ctx.rooms.wo = ((await env.DB.prepare("SELECT id FROM msgs WHERE conv='r:world' AND from_uid<>? ORDER BY id DESC LIMIT 1").bind(uid).first()) || {}).id || 0;
     ctx.rooms.go = P.guild_id ? (((await env.DB.prepare('SELECT id FROM msgs WHERE conv=? AND from_uid<>? ORDER BY id DESC LIMIT 1').bind('r:g' + P.guild_id, uid).first()) || {}).id || 0) : 0;
+    ctx.ev = ((await evList(env)).slice(-1)[0] || {}).id || '';
     ctx.qReady = await questReady(env, ctx);
 
     return stateOf(ctx, err);
@@ -874,6 +875,7 @@ function stateOf(ctx, err){
     schedUntil:P.sched_until || 0, cpNext:CPN[nReal(VS, V => V.d) + 1] || 0, guild:P.guild_id || 0, grole:P.guild_role | 0, fb:fbHeld(P.guild_id), ck:{ today:thDay(t), last:P.ck_day | 0, n:P.ck_n | 0 }, tut:P.tut | 0 },
     msgUnread:ctx.msgUnread || 0,
     rooms:ctx.rooms || null,
+    ev:ctx.ev || '',
     quest:questOut(P, ctx),
 
     villages:VS.map(V => {
@@ -2912,7 +2914,23 @@ async function conquerCheck(env, m, dr, dd, dP, aP, left, rep, at){
   dd.loy = 25; dd.loyAt = at; dd.troops = {}; dd.queue = []; dd.train = {}; dd.oa = []; dd.grudge = {};
   dd.expUsed = 0; dd.first = false; dd.hero = dd.fort ? null : heroNew(at);
   if (dd.fort) FBX.at = 0;   /* v15J โบนัสป้อมเปลี่ยนมือ */
-  if (dd.fort){ m._sx = m._sx || []; m._sx.push(DB.prepare("INSERT INTO msgs(conv,from_uid,to_uid,text,at,read,reported) SELECT 'r:world',?,NULL,?,?,1,0 WHERE (SELECT ver FROM villages WHERE id=?)=?").bind(FORT_UID, '📢 ' + aP.name + ' ยึด ' + dr.name + ' ได้แล้ว!', at, dr.id, dr.ver + 1)); }
+  if (dd.fort){
+    const gr = aP.guild_id ? await DB.prepare('SELECT tag, name FROM guilds WHERE id=?').bind(aP.guild_id).first() : null;
+    const gl = gr ? '[' + gr.tag + '] ' + gr.name : '';
+    const CV = ' WHERE (SELECT ver FROM villages WHERE id=?)=?', cb = [dr.id, dr.ver + 1];
+    const UP = ' ON CONFLICT(k) DO UPDATE SET v=excluded.v';
+    m._sx = m._sx || [];
+    m._sx.push(DB.prepare("INSERT INTO msgs(conv,from_uid,to_uid,text,at,read,reported) SELECT 'r:world',?,NULL,?,?,1,0" + CV)
+      .bind(FORT_UID, '📢 ' + (gl ? gl + ' · ' : '') + aP.name + ' ยึด ' + dr.name + ' ได้แล้ว!', at, ...cb));
+    /* v15P — หน้าต่างประกาศถึงทุกคน */
+    m._sx.push(DB.prepare('INSERT INTO meta(k,v) SELECT ?,?' + CV)
+      .bind(evKey(at), JSON.stringify({ t:at, k:dd.cap ? 'cap' : 'fort', place:dr.name, who:aP.name, g:gl, from:dP.is_bot === 3 ? '' : dP.name }), ...cb));
+    if (dd.cap){   /* ยึดเมืองหลวง → เริ่มจับเวลาครองทันที (ไม่รอรอบ cron) */
+      const hk = aP.guild_id ? 'g' + aP.guild_id : 'u' + m.uid, hn = gl || aP.name;
+      [['holder', hk], ['hold_since', at], ['holder_name', hn], ['hold_said', 0], ['holder_by', JSON.stringify({ by:aP.name, g:gl, at })]]
+        .forEach(kv => m._sx.push(DB.prepare('INSERT INTO meta(k,v) SELECT ?,?' + CV + UP).bind(kv[0], String(kv[1]), ...cb)));
+    }
+  }
   rep.loy = { a:Math.round(l0), b:0 }; rep.captured = true;
   const G = ' AND (SELECT ver FROM villages WHERE id=?)=?', gb = [dr.id, dr.ver + 1];
   m._sx = (m._sx || []).concat([
@@ -3342,11 +3360,32 @@ async function serverStart(env){
   if (!s){ s = Date.now(); await setMeta(env, 'start', s); }
   return s;
 }
+/* v15P — ประกาศทั่วเซิร์ฟเวอร์ (หน้าต่างเด้งในเกม): เก็บใน meta คีย์ ev:<เวลา 13 หลัก>:<สุ่ม> · เขียนเฉพาะตอนเกิดเหตุ */
+const RESET_MS = 5 * 86400000;            /* ผู้ชนะประกาศแล้ว → รีเซ็ตเซิร์ฟเวอร์อัตโนมัติใน 5 วัน */
+const EVC = { at:0, list:[] };
+function evKey(at){ return 'ev:' + String(at).padStart(13, '0') + ':' + Math.random().toString(36).slice(2, 6); }
+async function evPush(env, o, at){
+  at = at || Date.now();
+  await env.DB.prepare('INSERT INTO meta(k,v) VALUES(?,?)').bind(evKey(at), JSON.stringify(Object.assign({ t:at }, o))).run();
+  EVC.at = 0;
+}
+async function evList(env){
+  const t = Date.now();
+  if (t - EVC.at < 15000) return EVC.list;
+  EVC.at = t;
+  try {
+    EVC.list = ((await env.DB.prepare("SELECT k, v FROM meta WHERE k LIKE 'ev:%' ORDER BY k DESC LIMIT 8").all()).results || []).reverse()
+      .map(r => { try { return Object.assign(JSON.parse(r.v), { id:r.k }); } catch (e){ return null; } }).filter(Boolean);
+  } catch (e){}
+  return EVC.list;
+}
 async function seasonState(env){
   const t = Date.now(), start = await serverStart(env), w = await getMeta(env, 'winner');
+  const win = w ? JSON.parse(w) : null;
+  if (win) win.resetAt = (win.at || t) + RESET_MS;
   return { start, now:t, day:Math.floor((t - start) / 86400000) + 1,
     holder:(await getMeta(env, 'holder')) || '', holdSince:+(await getMeta(env, 'hold_since')) || 0,
-    holderName:(await getMeta(env, 'holder_name')) || '', winner:w ? JSON.parse(w) : null, n:+(await getMeta(env, 'season_n')) || 1 };
+    holderName:(await getMeta(env, 'holder_name')) || '', winner:win, n:+(await getMeta(env, 'season_n')) || 1 };
 }
 /* v15J — โบนัสป้อมของกิลด์ gid → { inf:1, ... } · แคช 15 วินาที (อ่านจากพิกัดป้อม 8 จุดเท่านั้น) */
 const FBX = { at:0, g:{} };
@@ -3431,12 +3470,24 @@ async function fortWhy(env, dd, aP){
   return n < CAP_NEED_FORTS ? 'กิลด์ต้องครองป้อมอย่างน้อย ' + CAP_NEED_FORTS + ' แห่ง (ตอนนี้ ' + n + ')' : null;
 }
 async function declareWin(env, name, how, t){
-  await setMeta(env, 'winner', JSON.stringify({ name, how, at:t }));
-  await worldSay(env, '🏆 ' + name + ' ชนะเซิร์ฟเวอร์ ' + 'แล้ว! ขอแสดงความยินดี', t);
+  let hb = {};
+  try { hb = JSON.parse((await getMeta(env, 'holder_by')) || 'null') || {}; } catch (e){}
+  const w = { name, how, at:t, by:how === 'hold' ? (hb.by || '') : '', g:how === 'hold' ? (hb.g || '') : '' };
+  await setMeta(env, 'winner', JSON.stringify(w));
+  await worldSay(env, '🏆 ' + name + ' ชนะเซิร์ฟเวอร์ ' + 'แล้ว! ขอแสดงความยินดี · เซิร์ฟเวอร์จะรีเซ็ตอัตโนมัติใน 5 วัน', t);
+  await evPush(env, { k:'win', name, by:w.by, g:w.g, how, resetAt:t + RESET_MS }, t);
 }
 async function seasonTick(env){
   const t = Date.now(), S = await seasonState(env);
-  if (S.winner) return;
+  if (S.winner){
+    /* v15P — ครบ 5 วันหลังมีผู้ชนะ → รีเซ็ตเซิร์ฟเวอร์อัตโนมัติ (ยกเลิกได้โดยล้างผู้ชนะในหน้า admin) */
+    if (t >= S.winner.resetAt){
+      const r = await newSeason(env);
+      await evPush(env, { k:'reset', n:r.n }, Date.now());
+    }
+    return;
+  }
+  try { await env.DB.prepare("DELETE FROM meta WHERE k LIKE 'ev:%' AND k < ?").bind('ev:' + String(t - 2 * 86400000).padStart(13, '0')).run(); } catch (e){}
   if (S.day >= FORT_DAY && !(await getMeta(env, 'forts_on'))) await spawnForts(env, false, t);
   if (S.day >= CAP_DAY && !(await getMeta(env, 'cap_on'))) await spawnForts(env, true, t);
   if (S.day >= FORT_DAY) await regenForts(env, t);
@@ -3446,7 +3497,10 @@ async function seasonTick(env){
   if (hk !== S.holder){
     await setMeta(env, 'holder', hk); await setMeta(env, 'hold_since', hk ? t : 0); await setMeta(env, 'holder_name', hn);
     await setMeta(env, 'hold_said', 0);
-    if (hk) await worldSay(env, '👑 ' + hn + ' ต้องรักษาไว้ ' + holdNeed(S.day) + ' วัน', t);
+    if (hk){
+      await worldSay(env, '👑 ' + hn + ' ต้องรักษาไว้ ' + holdNeed(S.day) + ' วัน', t);
+      await evPush(env, { k:'cap', hold:1, place:CAP_NAME, who:'', g:hn }, t);   /* เปลี่ยนผู้ครองโดยไม่ได้ยึด เช่น ย้ายกิลด์ */
+    }
   } else if (hk){
     if (t - S.holdSince >= holdNeed(S.day) * 86400000) return await declareWin(env, hn, 'hold', t);
     /* v15O — ประกาศในแชตโลกทุก 1 ชม. ว่าใครครองอยู่ เหลือเวลาเท่าไร (เขียน 1 แถว/ชม.) */
@@ -3471,7 +3525,7 @@ async function seasonInfo(env){
       loy:Math.round(loyNow(d, t, npc ? 1 : fbMul(r.gid, 'loy'))), wall:d.wallLv | 0, garrison:npc ? tcount(d.troops) : null };
   });
   return json(Object.assign({ ok:true, len:SEASON_DAYS, fortDay:FORT_DAY, capDay:CAP_DAY, hold:holdNeed(S.day), over:S.day > SEASON_DAYS,
-    needForts:CAP_NEED_FORTS, fortCp:FORT_CP, speed:SPEED, tspeed:TSPEED, forts }, S), 200, env);
+    needForts:CAP_NEED_FORTS, fortCp:FORT_CP, speed:SPEED, tspeed:TSPEED, forts, ev:await evList(env) }, S), 200, env);
 }
 
 /* =====================================================================
@@ -3753,7 +3807,8 @@ async function newSeason(env){
    'DELETE FROM offers', 'DELETE FROM pushq', 'DELETE FROM stations', 'DELETE FROM plans', 'DELETE FROM oasis', 'DELETE FROM npc',
    'DELETE FROM guild_req', 'DELETE FROM guild_rel', 'DELETE FROM guilds', 'DELETE FROM players WHERE is_bot=1',
    'UPDATE players SET guild_id=NULL, guild_role=0, cp=0, quest=0, sched_until=0',
-   "DELETE FROM meta WHERE k IN ('forts_on','cap_on','winner','holder','hold_since','holder_name')"
+   "DELETE FROM meta WHERE k IN ('forts_on','cap_on','winner','holder','hold_since','holder_name','holder_by','hold_said')",
+   "DELETE FROM meta WHERE k LIKE 'ev:%'"
   ].forEach(s => st.push(DB.prepare(s)));
   const M = 'INSERT INTO meta(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v';
   st.push(DB.prepare(M).bind('start', String(t)), DB.prepare(M).bind('season_n', String(n + 1)));
