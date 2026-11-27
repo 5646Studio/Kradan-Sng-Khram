@@ -16,7 +16,13 @@ var UI = (function(){
   }
 
   function modal(h){
-    document.getElementById('modalbox').innerHTML = h;
+    if (!document.getElementById('mxxcss')){   /* v15P — ปุ่ม ✕ มุมขวาบนของทุกหน้าต่าง */
+      var st = document.createElement('style'); st.id = 'mxxcss';
+      st.textContent = '#modalbox .mxx{position:sticky;top:0;float:right;z-index:5;width:32px!important;height:32px!important;margin:0 0 4px 8px!important;padding:0!important;' +
+        'border-radius:16px!important;border:1px solid #6a5530!important;background:#2a2016!important;color:#e0cfa8!important;font-size:15px!important;line-height:30px;cursor:pointer}';
+      document.head.appendChild(st);
+    }
+    document.getElementById('modalbox').innerHTML = '<button class="mxx" aria-label="ปิด" onclick="UI.close()">✕</button>' + h;
     var m = document.getElementById('modal');
     m.classList.remove('hidden');
     m.style.pointerEvents = 'none';
@@ -66,33 +72,58 @@ var UI = (function(){
 
     var wl = v.wallLv || 0, wq = queueOf(v, 'wall', 0);
     var rect = el.getBoundingClientRect();
+    /* v15N — ผังข้าวหลามตัด (CityIso) · ไม่มีไฟล์ cityiso.js หรือหน้ายังไม่วัดขนาด → ใช้ผังเดิม */
+    var iso = (typeof CityIso !== 'undefined') && rect.width > 50 && rect.height > 50;
+    var st = iso ? CityIso.stage(rect.width, rect.height) : null, PX = function(n){ return Math.round(n * 10) / 10; };
     var bw = Math.max(120, rect.width * 0.94);
     var bh = Math.max(120, rect.height * 0.93);
 
     var h = '';
     /* ---- กำแพงเมือง (ภาพไม่รับคลิก กดได้เฉพาะป้าย) ---- */
-    var wallImg = Art.wallURL(wq ? wq.level : wl, bw, bh);
-    h += '<div id="wallbox" class="' + (wq ? 'building ' : '') +
-      (wallImg ? '' : 'none') + '">' +
-      (wallImg ? '<img src="' + wallImg + '" alt="">' : '') + '</div>';
-    h += '<button id="walltag" class="wlv' + (wq ? ' building' : '') + '">' +
-      (wq ? wq.level : wl) + '</button>';
+    if (iso){
+      var wu = (wl > 0 || wq) ? CityIso.wallURL(wq ? wq.level : wl, st.w, st.h) : null;
+      h += '<div id="wallbox" class="' + (wq ? 'building ' : '') + (wu ? '' : 'none') + '" style="inset:auto;transform:none;margin:0;' +
+        'position:absolute;left:' + PX(st.x) + 'px;top:' + PX(st.y - (wu ? wu.pad : 0)) + 'px;width:' + PX(st.w) + 'px;height:' +
+        PX(st.h + (wu ? wu.pad : 0)) + 'px;pointer-events:none;z-index:2">' +
+        (wu ? '<img src="' + wu.src + '" alt="" style="width:100%;height:100%;display:block;max-width:none">' : '') + '</div>';
+      var fp = CityIso.front();
+      h += '<button id="walltag" class="wlv' + (wq ? ' building' : '') + (wl > 0 ? '' : ' none') +
+        '" style="left:' + PX((st.x + fp.x * st.w) / rect.width * 100) + '%;top:' + PX((st.y + fp.y * st.h + 18) / rect.height * 100) +
+        '%;right:auto;bottom:auto;transform:translate(-50%,-50%);z-index:600">' + (wq ? wq.level : wl) + '</button>';
+    } else {
+      h += '<div id="wallbox" class="' + (wq ? 'building ' : '') +
+        ((wl > 0 || wq) ? '' : 'none') + '">' +
+        ((wl > 0 || wq)
+          ? '<img src="' + Art.wallURL(wq ? wq.level : wl, bw, bh) + '" alt="">'
+          : '') + '</div>';
+      h += '<button id="walltag" class="wlv' + (wq ? ' building' : '') +
+        (wl > 0 ? '' : ' none') + '">' + (wq ? wq.level : wl) + '</button>';
+    }
 
     /* ---- อาคาร 21 ช่อง ---- */
     v.city.forEach(function(c, i){
       if (i >= 21) return;
       var p = CITY_POS[i] || { x:50, y:46 };
       var q = queueOf(v, 'city', i);
+      /* ผังข้าวหลามตัด: ตำแหน่ง/ขนาดคำนวณจากกรอบข้าวหลามตัด · ซ้อนตามความลึก (ล่างทับบน) */
+      var ib = '', ie = '';
+      if (iso){
+        var ip = CityIso.pos(i), zi = 10 + Math.round(ip.y * 400), sb = PX(st.w * CityIso.LAYOUT.size), se = PX(st.w * 0.055);
+        p = { x:PX((st.x + ip.x * st.w) / rect.width * 100), y:PX((st.y + ip.y * st.h) / rect.height * 100) };
+        ib = ';width:' + sb + 'px;height:' + sb + 'px;transform:translate(-50%,-80%);z-index:' + zi;
+        ie = ';width:' + se + 'px;height:' + se + 'px;transform:translate(-50%,-50%);z-index:' + zi;
+      }
       if (!c.b){
-        h += '<div class="slot empty" style="left:' + p.x + '%;top:' + p.y +
-          '%" data-c="' + i + '" title="ช่องว่าง ' + (i+1) +
+        h += '<div class="slot empty" style="left:' + p.x + '%;top:' + p.y + '%' + ie +
+          '" data-c="' + i + '" title="ช่องว่าง ' + (i+1) +
           '"><span class="dot"></span></div>';
       } else {
         var b = BUILDINGS[c.b];
         h += '<div class="slot' + (q ? ' building' : '') + '" style="left:' + p.x +
-          '%;top:' + p.y + '%" data-c="' + i + '" title="' + b.name +
+          '%;top:' + p.y + '%' + ib + '" data-c="' + i + '" title="' + b.name +
           ' Lv.' + c.level + '">' +
-          '<img src="' + Art.buildingURL(b.key, c.level, b.max) + '" alt="">' +
+          '<img src="' + Art.buildingURL(b.key, c.level, b.max) + '" alt=""' +
+          (iso ? ' style="width:100%;height:100%;object-fit:contain;display:block;pointer-events:none"' : '') + '>' +
           '<span class="lv">' + (q ? q.level : c.level) + '</span></div>';
       }
     });
