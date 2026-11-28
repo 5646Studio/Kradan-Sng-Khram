@@ -41,7 +41,7 @@ var Season = (function(){
       '#swann{position:fixed;inset:0;z-index:9600;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;padding:16px}' +
       '#swann .in{position:relative;width:min(92vw,400px);padding:24px 16px 16px;border:2px solid #c9a24a;border-radius:16px;background:linear-gradient(#2a1d0a,#17100a);' +
         'color:#f3e6c8;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.7)}' +
-      '#swann .x{position:absolute;top:8px;right:8px;width:34px;height:34px;border-radius:17px;border:1px solid #6a5530;background:#3a2a12;color:#e0cfa8;font-size:16px;cursor:pointer;padding:0}' +
+      '#swann .x{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:13px;border:1px solid #6a5530;background:#3a2a12;color:#e0cfa8;font-size:13px;cursor:pointer;padding:0}' +
       '#swann .ic{font-size:44px;line-height:1.1}#swann h3{margin:6px 0 8px;color:#ffcf40;font-size:17px}' +
       '#swann .bd{font-size:13.5px;line-height:1.75}#swann .cd{margin:12px 0 4px;font-size:12px;color:#b9ac92}' +
       '#swann .cd b{display:block;margin-top:2px;font-size:19px;color:#ffdf70;font-variant-numeric:tabular-nums}' +

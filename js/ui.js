@@ -16,13 +16,14 @@ var UI = (function(){
   }
 
   function modal(h){
-    if (!document.getElementById('mxxcss')){   /* v15P — ปุ่ม ✕ มุมขวาบนของทุกหน้าต่าง */
+    if (!document.getElementById('mxxcss')){   /* v15Q — ปุ่ม ✕ เล็ก มุมขวาบนของทุกหน้าต่าง (ไม่กินที่ ค้างอยู่ตอนเลื่อน) */
       var st = document.createElement('style'); st.id = 'mxxcss';
-      st.textContent = '#modalbox .mxx{position:sticky;top:0;float:right;z-index:5;width:32px!important;height:32px!important;margin:0 0 4px 8px!important;padding:0!important;' +
-        'border-radius:16px!important;border:1px solid #6a5530!important;background:#2a2016!important;color:#e0cfa8!important;font-size:15px!important;line-height:30px;cursor:pointer}';
+      st.textContent = '#modalbox .mxw{position:sticky;top:0;height:0;z-index:5;text-align:right;overflow:visible}' +
+        '#modalbox .mxx{display:inline-block!important;position:relative;top:0;right:0;width:24px!important;height:24px!important;margin:0!important;padding:0!important;' +
+        'border-radius:12px!important;border:1px solid #6a5530!important;background:#2a2016!important;color:#e0cfa8!important;font-size:12px!important;line-height:22px;cursor:pointer}';
       document.head.appendChild(st);
     }
-    document.getElementById('modalbox').innerHTML = '<button class="mxx" aria-label="ปิด" onclick="UI.close()">✕</button>' + h;
+    document.getElementById('modalbox').innerHTML = '<div class="mxw"><button class="mxx" aria-label="ปิด" onclick="UI.close()">✕</button></div>' + h;
     var m = document.getElementById('modal');
     m.classList.remove('hidden');
     m.style.pointerEvents = 'none';
